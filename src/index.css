@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@keyframes text-wave-linear {
+  to {
+    background-position: 200% center;
+  }
+}
+
+.animate-wave-text {
+  background-image: linear-gradient(
+    to right,
+    #1e3a8a 0%,
+    #0ea5e9 25%,
+    #3b82f6 50%,
+    #0ea5e9 75%,
+    #1e3a8a 100%
+  );
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: text-wave-linear 4s linear infinite;
+}
