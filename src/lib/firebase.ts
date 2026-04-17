@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -11,11 +11,12 @@ const firebaseConfig = {
   appId: "1:825909851431:web:add4be35e13e113d096502"
 };
 
-// Firebase-ஐத் தொடங்குதல்
-const app = initializeApp(firebaseConfig);
+// ஏற்கனவே App தொடங்கப்பட்டிருந்தால் அதையே பயன்படுத்தவும் (பிழையைத் தவிர்க்க இது அவசியம்)
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// மாணவர் சேர்க்கை மற்றும் லாகின் செய்ய இவை அவசியம்
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+// மற்ற பக்கங்களில் பயன்படுத்த இவற்றை Export செய்கிறோம்
+const auth = getAuth(app);
+const db = getFirestore(app);
 
+export { auth, db };
 export default app;
