@@ -1,9 +1,7 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyB_IFx9D75KnocfGLGH9sBDIaa3T0pTRn0",
   authDomain: "agaram-dhines-online-academy.firebaseapp.com",
@@ -13,5 +11,12 @@ const firebaseConfig = {
   appId: "1:825909851431:web:add4be35e13e113d096502"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// ஏற்கனவே App தொடங்கப்பட்டிருந்தால் அதையே பயன்படுத்தவும் (Error-ஐத் தவிர்க்க இது மிக அவசியம்)
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+// மற்ற பக்கங்களில் (Login, Database) பயன்படுத்த இவை அவசியம்
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+export { auth, db };
+export default app;
