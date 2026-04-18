@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithGoogle, auth } from "../lib/firebase";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
-import { GraduationCap, Globe, LogIn, Mail, Shield, MessageCircle, Users, Play, Facebook, Twitter, Instagram, Apple, PlayCircle, Award, BookOpen, Home as HomeIcon, Video, UserPlus, Phone, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { GraduationCap, Globe, LogIn, Mail, Shield, MessageCircle, Users, Play, Facebook, Twitter, Instagram, Apple, PlayCircle, Award, BookOpen, Home as HomeIcon, Video, UserPlus, Phone, ChevronLeft, ChevronRight, X, Menu } from "lucide-react";
 import { getStudents, getStaffs, getAdminSettings, getPasswordRequests, savePasswordRequests, getAnnouncements, saveStudents, saveStaffs } from "../lib/db";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import Chatbot from "../components/Chatbot";
 import QrScanner from "../components/QrScanner";
 import { CursorTrail } from "../components/CursorTrail";
@@ -31,6 +31,7 @@ export default function Home() {
   
   const [activeNav, setActiveNav] = useState('Home');
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
     { id: 'Home', name: 'Home', link: '#' },
@@ -317,7 +318,7 @@ export default function Home() {
                 <BookOpen className="text-white" size={24} />
               </div>
             )}
-            <span className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-800 to-indigo-800 tracking-tight">
+            <span className="text-lg md:text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-800 to-indigo-800 tracking-tight">
               {settings?.instituteName || "Agaram Dhines Academy"}
             </span>
           </div>
@@ -364,13 +365,46 @@ export default function Home() {
             })}
           </nav>
           
-          <button 
-            onClick={() => window.open("https://www.agaramdhines.lk/lp-profile/", "_blank")}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 py-2 rounded-full font-medium text-sm hover:shadow-md hover:shadow-blue-500/20 transition-all hover:-translate-y-0.5"
-          >
-            Sign Up Free
-          </button>
+          <div className="flex items-center gap-2 sm:gap-4">
+            <button 
+              onClick={() => window.open("https://www.agaramdhines.lk/lp-profile/", "_blank")}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1.5 text-[10px] sm:px-5 sm:py-2 sm:text-sm rounded-full font-medium hover:shadow-md hover:shadow-blue-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap"
+            >
+              Sign Up Free
+            </button>
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden p-1 sm:p-2 text-gray-600 hover:text-blue-600 transition-colors"
+            >
+              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile Menu Overlay */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="md:hidden absolute top-24 left-0 w-full bg-[#1e1e24] shadow-2xl py-4 flex flex-col z-40 border-t border-gray-800"
+            >
+              {navItems.map((item) => (
+                <a
+                  key={item.id}
+                  href={item.link}
+                  target={item.link.startsWith('http') ? '_blank' : '_self'}
+                  rel={item.link.startsWith('http') ? 'noreferrer' : ''}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="text-gray-300 font-semibold px-6 py-3 hover:bg-gray-800 hover:text-green-400 transition-colors border-b border-gray-800/50"
+                >
+                  {item.name}
+                </a>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* Hero Section */}
