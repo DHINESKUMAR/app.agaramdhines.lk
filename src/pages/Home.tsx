@@ -418,13 +418,10 @@ export default function Home() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className="text-3xl md:text-5xl font-extrabold tracking-tight mb-6 leading-tight animate-wave-text pb-2 uppercase"
+            className="text-3xl md:text-5xl font-extrabold tracking-tight mb-10 leading-tight animate-wave-text pb-2 uppercase"
           >
             WELCOME TO {settings?.instituteName || "AGARAM DHINES ONLINE ACADEMY"}
           </motion.h1>
-          <p className="text-xl text-gray-500 mb-10 max-w-2xl mx-auto leading-relaxed">
-            தமிழ் மற்றும் ஆங்கில மொழி மூல வகுப்புகள்
-          </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 flex-wrap">
             <button 
@@ -615,71 +612,74 @@ export default function Home() {
             </div>
 
             {/* Students Card */}
-            <div className="bg-white rounded-3xl p-8 shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 flex flex-col items-center text-center group relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>
-              <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                <GraduationCap size={40} className="text-blue-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Students</h3>
-              <p className="text-gray-500 mb-8 flex-1">Access your classes, homework, exam results, and zoom links.</p>
+            <div className="relative rounded-3xl p-[3px] shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col items-center text-center group overflow-hidden bg-white/50">
+              <div className="absolute inset-[-100%] bg-[conic-gradient(from_0deg,transparent_0_120deg,#3b82f6_150deg,transparent_150deg_300deg,#ec4899_330deg)] animate-[spin_8s_linear_infinite]" />
               
-              {!showStudentLogin ? (
-                <div className="w-full flex flex-col gap-3">
-                  <button 
-                    onClick={() => { setShowStudentLogin(true); setShowAdminLogin(false); setShowStaffLogin(false); }}
-                    className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-md shadow-blue-200"
-                  >
-                    Login as Student
-                  </button>
-                  <button 
-                    onClick={() => setShowQrScanner(true)}
-                    className="w-full py-3 bg-indigo-50 text-indigo-700 font-bold rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200 flex items-center justify-center gap-2"
-                  >
-                    <QrCode size={20} /> Scan ID Card to Login
-                  </button>
+              <div className="relative w-full h-full bg-white rounded-[calc(1.5rem-3px)] p-8 flex flex-col z-10">
+                <div className="w-20 h-20 mx-auto bg-blue-50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                  <GraduationCap size={40} className="text-blue-600" />
                 </div>
-              ) : (
-                <form onSubmit={handleStudentLogin} className="w-full flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4">
-                  <input
-                    type="text"
-                    placeholder="Student Username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 bg-gray-50 text-center text-sm"
-                  />
-                  <div className="relative w-full">
-                    <input
-                      type={showStudentPassword ? "text" : "password"}
-                      placeholder="Password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 bg-gray-50 text-center text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowStudentPassword(!showStudentPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                <h3 className="text-2xl font-bold text-gray-900 mb-3">Students</h3>
+                <p className="text-gray-500 mb-8 flex-1">Access your classes, homework, exam results, and zoom links.</p>
+                
+                {!showStudentLogin ? (
+                  <div className="w-full flex flex-col gap-3">
+                    <button 
+                      onClick={() => { setShowStudentLogin(true); setShowAdminLogin(false); setShowStaffLogin(false); }}
+                      className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-md shadow-blue-200"
                     >
-                      {showStudentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      Login as Student
+                    </button>
+                    <button 
+                      onClick={() => setShowQrScanner(true)}
+                      className="w-full py-3 bg-indigo-50 text-indigo-700 font-bold rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200 flex items-center justify-center gap-2"
+                    >
+                      <QrCode size={20} /> Scan ID Card to Login
                     </button>
                   </div>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => setShowStudentLogin(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm">Cancel</button>
-                    <button type="submit" className="flex-1 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors text-sm">Login</button>
-                  </div>
-                  <button 
-                    type="button" 
-                    onClick={() => setShowQrScanner(true)} 
-                    className="w-full py-2 bg-indigo-50 text-indigo-700 font-bold rounded-lg hover:bg-indigo-100 transition-colors text-sm flex items-center justify-center gap-2 border border-indigo-200"
-                  >
-                    <QrCode size={18} /> Scan ID Card to Login
-                  </button>
-                  <div className="flex justify-between mt-2">
-                    <button type="button" onClick={() => handleForgotPassword("student")} className="text-sm text-blue-600 hover:underline">Forgot Password?</button>
-                    <button type="button" onClick={() => navigate("/reset-password")} className="text-sm text-blue-600 hover:underline">Reset Password</button>
-                  </div>
-                </form>
-              )}
+                ) : (
+                  <form onSubmit={handleStudentLogin} className="w-full flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4">
+                    <input
+                      type="text"
+                      placeholder="Student Username"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 bg-gray-50 text-center text-sm"
+                    />
+                    <div className="relative w-full">
+                      <input
+                        type={showStudentPassword ? "text" : "password"}
+                        placeholder="Password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 bg-gray-50 text-center text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowStudentPassword(!showStudentPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        {showStudentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setShowStudentLogin(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm">Cancel</button>
+                      <button type="submit" className="flex-1 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors text-sm">Login</button>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowQrScanner(true)} 
+                      className="w-full py-2 bg-indigo-50 text-indigo-700 font-bold rounded-lg hover:bg-indigo-100 transition-colors text-sm flex items-center justify-center gap-2 border border-indigo-200"
+                    >
+                      <QrCode size={18} /> Scan ID Card to Login
+                    </button>
+                    <div className="flex justify-between mt-2">
+                      <button type="button" onClick={() => handleForgotPassword("student")} className="text-sm text-blue-600 hover:underline">Forgot Password?</button>
+                      <button type="button" onClick={() => navigate("/reset-password")} className="text-sm text-blue-600 hover:underline">Reset Password</button>
+                    </div>
+                  </form>
+                )}
+              </div>
             </div>
 
             {/* Employees Card */}
