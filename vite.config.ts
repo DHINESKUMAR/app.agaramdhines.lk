@@ -25,13 +25,13 @@ export default defineConfig(({mode}) => {
           categories: ['education', 'productivity'],
           icons: [
             {
-              src: 'logo.png',
+              src: '/logo.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any maskable'
             },
             {
-              src: 'logo.png',
+              src: '/logo.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any maskable'
@@ -39,14 +39,14 @@ export default defineConfig(({mode}) => {
           ],
           screenshots: [
             {
-              src: 'logo.png',
+              src: '/logo.png',
               sizes: '512x512',
               type: 'image/png',
               form_factor: 'wide',
               label: 'Agaram Dhines Academy Home'
             },
             {
-              src: 'logo.png',
+              src: '/logo.png',
               sizes: '512x512',
               type: 'image/png',
               form_factor: 'narrow',
