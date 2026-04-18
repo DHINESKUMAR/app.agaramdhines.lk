@@ -12,6 +12,10 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        injectRegister: 'auto',
+        devOptions: {
+          enabled: true
+        },
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'logo.png'],
         manifest: {
           id: '/?source=pwa',
@@ -22,6 +26,7 @@ export default defineConfig(({mode}) => {
           background_color: '#ffffff',
           display: 'standalone',
           orientation: 'portrait',
+          start_url: '/',
           categories: ['education', 'productivity'],
           icons: [
             {
@@ -40,22 +45,23 @@ export default defineConfig(({mode}) => {
           screenshots: [
             {
               src: '/logo.png',
-              sizes: '512x512',
-              type: 'image/png',
-              form_factor: 'wide',
-              label: 'Agaram Dhines Academy Home'
-            },
-            {
-              src: '/logo.png',
-              sizes: '512x512',
+              sizes: '1080x1920',
               type: 'image/png',
               form_factor: 'narrow',
               label: 'Agaram Dhines Academy App View'
+            },
+            {
+              src: '/logo.png',
+              sizes: '1920x1080',
+              type: 'image/png',
+              form_factor: 'wide',
+              label: 'Agaram Dhines Academy Home'
             }
           ]
         },
         workbox: {
-          maximumFileSizeToCacheInBytes: 5000000 // 5 MB
+          maximumFileSizeToCacheInBytes: 5000000, // 5 MB
+          globPatterns: ['**/*.{js,css,html,ico,png,svg}']
         }
       })
     ],

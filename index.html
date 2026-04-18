@@ -7,11 +7,21 @@
     <title>Agaram Dhines Online Academy</title>
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
-    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="description" content="Agaram Dhines Online Academy App">
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- PWABuilder Service Worker Detection Script -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(reg => console.log('SW registered successfully', reg))
+            .catch(err => console.log('SW registration failed', err));
+        });
+      }
+    </script>
   </body>
 </html>
 
