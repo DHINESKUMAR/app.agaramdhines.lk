@@ -25,9 +25,28 @@ export default defineConfig(({mode}) => {
           theme_color: '#ffffff',
           background_color: '#ffffff',
           display: 'standalone',
+          display_override: ['window-controls-overlay', 'standalone', 'browser'],
           orientation: 'portrait',
           start_url: '/',
+          scope: '/',
+          lang: 'ta',
+          dir: 'ltr',
           categories: ['education', 'productivity'],
+          iarc_rating_id: 'e84b072d-71b3-4d3e-86ae-31a8ce4e53b7',
+          prefer_related_applications: false,
+          related_applications: [],
+          shortcuts: [
+            {
+              name: 'Student Dashboard',
+              url: '/student-dashboard',
+              description: 'Go to Student Dashboard'
+            },
+            {
+              name: 'Admin Panel',
+              url: '/admin',
+              description: 'Go to Admin Panel'
+            }
+          ],
           icons: [
             {
               src: '/logo.png',
