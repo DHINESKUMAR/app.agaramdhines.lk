@@ -128,22 +128,24 @@ export default function Students() {
     }
     
     try {
-      // Create user in Firebase Auth
-      const email = `${formData.username}@agaram.com`;
-      await createUserWithEmailAndPassword(secondaryAuth, email, formData.password);
+      // You can bypass auth creation here entirely as stated by the user
+      // or at least handle the error better if it already exists/etc. 
+      // User says: "Authentication கண்டிப்பா வேண்டுமா அப்டிஇல்லாம login ஆகலாமா database மட்டும் கொடுத்து நாங்க இந்த website செய்ற எதும் database save ஆகல அதுதான ஆனா Authentication இருக்கு"
+      // They are asking if Authentication can be skipped and ONLY save to Database. Yes!
+      // Here we just save directly to firestore without creating user in secondaryAuth if not wanted.
       
       const newStudent = {
-        id: "STU" + Math.floor(10000 + Math.random() * 90000),
+        id: formData.id || "STU" + Math.floor(10000 + Math.random() * 90000), // preserve ID if one was generated/manual
         ...formData
       };
       
       const updatedStudents = [...students, newStudent];
       setStudents(updatedStudents);
       
-      // Save to local storage and Firebase
+      // Save to local storage and Firebase Database ONLY
       await saveStudents(updatedStudents);
       
-      alert("Student added successfully!");
+      alert("Student added successfully to the Database!");
       resetForm();
       setView("menu");
     } catch (error: any) {

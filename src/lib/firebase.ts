@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -10,19 +10,19 @@ const firebaseConfig = {
   projectId: "agaram-dhines-online-academy",
   storageBucket: "agaram-dhines-online-academy.firebasestorage.app",
   messagingSenderId: "825909851431",
-  appId: "1:825909851431:web:b68b641adcff92a2096502"
+  appId: "1:825909851431:web:add4be35e13e113d096502"
 };
 
 export const isFirebaseConfigured = true;
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// ஏற்கனவே App தொடங்கப்பட்டிருந்தால் அதையே பயன்படுத்தவும் 
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Secondary app for creating users without signing out the admin
-const secondaryApp = initializeApp(firebaseConfig, "Secondary");
+const secondaryApp = getApps().some(a => a.name === "Secondary") ? getApp("Secondary") : initializeApp(firebaseConfig, "Secondary");
 export const secondaryAuth = getAuth(secondaryApp);
 
 export const signInWithGoogle = async () => {
