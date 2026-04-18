@@ -34,7 +34,25 @@ export default defineConfig(({mode}) => {
           categories: ['education', 'productivity'],
           iarc_rating_id: 'e84b072d-71b3-4d3e-86ae-31a8ce4e53b7',
           prefer_related_applications: false,
-          related_applications: [],
+          related_applications: [
+            {
+              platform: 'webapp',
+              url: 'https://app-agaramdhines-lk.vercel.app/manifest.webmanifest'
+            }
+          ],
+          scope_extensions: [
+            { origin: 'https://app-agaramdhines-lk.vercel.app' }
+          ],
+          file_handlers: [
+            {
+              action: '/',
+              accept: {
+                'application/pdf': ['.pdf'],
+                'image/png': ['.png'],
+                'image/jpeg': ['.jpg', '.jpeg']
+              }
+            }
+          ],
           shortcuts: [
             {
               name: 'Student Dashboard',
