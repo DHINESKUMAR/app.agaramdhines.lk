@@ -66,6 +66,7 @@ export default function StudentDashboard() {
   const [adminSettings, setAdminSettings] = useState<any>(null);
   const [activeMeetingUrl, setActiveMeetingUrl] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(false);
   const [hoveredDay, setHoveredDay] = useState<{subject: string, day: number} | null>(null);
 
   // Helper to get a color based on subject name
@@ -452,8 +453,14 @@ export default function StudentDashboard() {
       setIsFullscreen(!!document.fullscreenElement);
     };
 
+    const handleResize = () => {
+      setIsLandscape(window.innerWidth > window.innerHeight);
+    };
+
     if (activeMeetingUrl) {
       requestWakeLock();
+      handleResize(); // initial check
+      window.addEventListener('resize', handleResize);
       document.addEventListener('visibilitychange', handleVisibilityChange);
       document.addEventListener('fullscreenchange', handleFullscreenChange);
       document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
@@ -463,6 +470,7 @@ export default function StudentDashboard() {
       if (wakeLock) {
         wakeLock.release().catch(console.error);
       }
+      window.removeEventListener('resize', handleResize);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
@@ -476,7 +484,7 @@ export default function StudentDashboard() {
   if (activeMeetingUrl) {
     return (
       <div className="fixed inset-0 z-[9999] bg-black flex flex-col" id="zoom-container">
-        {!isFullscreen && (
+        {(!isFullscreen && !isLandscape) && (
           <div className="bg-gray-900 text-white p-4 flex justify-between items-center">
             <h2 className="text-lg font-bold flex items-center">
               <Video size={20} className="mr-2 text-blue-400" />
@@ -489,17 +497,15 @@ export default function StudentDashboard() {
                     const elem = document.getElementById('zoom-container');
                     if (elem) {
                       if (!document.fullscreenElement) {
+                        // User gesture needed
                         if (elem.requestFullscreen) {
                           await elem.requestFullscreen({ navigationUI: "hide" });
-                        } else if ((elem as any).webkitRequestFullscreen) { /* Safari */
+                        } else if ((elem as any).webkitRequestFullscreen) {
                           await (elem as any).webkitRequestFullscreen();
-                        } else if ((elem as any).msRequestFullscreen) { /* IE11 */
-                          await (elem as any).msRequestFullscreen();
                         }
                       }
                     }
                     
-                    // Try to lock orientation if supported
                     const screenOrientation: any = window.screen && window.screen.orientation;
                     if (screenOrientation && screenOrientation.lock) {
                       if (!document.fullscreenElement) {
@@ -508,7 +514,6 @@ export default function StudentDashboard() {
                     }
                   } catch (err) {
                     console.error("Rotation/Fullscreen failed:", err);
-                    // Fallback for iOS/Safari which often blocks orientation lock
                     alert("Please rotate your device physically to view in landscape mode.");
                   }
                 }}
@@ -541,7 +546,7 @@ export default function StudentDashboard() {
           </div>
         )}
 
-        {isFullscreen && (
+        {(isFullscreen || isLandscape) && (
           <button 
             onClick={() => {
               if (document.fullscreenElement) {
@@ -554,16 +559,20 @@ export default function StudentDashboard() {
               if (window.screen && window.screen.orientation && window.screen.orientation.unlock) {
                 window.screen.orientation.unlock();
               }
+              // If only in landscape (not fullscreen via API), just leave class when clicking X
+              if (!document.fullscreenElement) {
+                setActiveMeetingUrl(null);
+              }
             }}
-            className="absolute top-4 right-4 z-[10000] bg-black/50 hover:bg-black/80 text-white p-3 rounded-full backdrop-blur-sm transition-all"
-            title="Exit Fullscreen"
+            className="absolute top-4 right-4 z-[10000] bg-black/50 hover:bg-red-600/90 text-white p-3 rounded-full backdrop-blur-sm transition-all"
+            title={document.fullscreenElement ? "Exit Fullscreen" : "Leave Class"}
           >
-            <X size={24} />
+            {document.fullscreenElement ? <X size={24} /> : <LogOut size={24} />}
           </button>
         )}
 
-        {/* Added pb-12 only when not in fullscreen to push the Zoom toolbar up so it doesn't overlap with mobile system navigation */}
-        <div className={`flex-1 w-full h-full ${!isFullscreen ? 'pb-12' : ''} bg-black relative`}>
+        {/* Added pb-12 only when not in fullscreen/landscape to push the Zoom toolbar up */}
+        <div className={`flex-1 w-full h-full ${(!isFullscreen && !isLandscape) ? 'pb-12' : ''} bg-black relative`}>
           <iframe 
             src={activeMeetingUrl} 
             className="w-full h-full border-none"
