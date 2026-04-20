@@ -761,7 +761,7 @@ export default function StudentDashboard() {
                 <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-indigo-100 transition-colors">
                   <Link size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base">My Courses</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base">Recording</span>
               </div>
 
               <div
@@ -1273,7 +1273,7 @@ export default function StudentDashboard() {
                     <FileText size={20} className="text-white" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">My Courses</h2>
+                    <h2 className="text-xl font-bold">Recording</h2>
                     <p className="text-indigo-100 text-xs font-medium">Access your learning materials</p>
                   </div>
                 </div>
@@ -1290,7 +1290,7 @@ export default function StudentDashboard() {
                 <iframe 
                   src="https://www.agaramdhines.lk/courses/" 
                   className="absolute inset-0 w-full h-full border-0" 
-                  title="My Courses"
+                  title="Recording"
                 />
               </div>
             </div>
