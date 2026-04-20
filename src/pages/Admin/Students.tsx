@@ -16,6 +16,7 @@ export default function Students() {
   const [filterClass, setFilterClass] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [importing, setImporting] = useState(false);
+  const [bulkImportGrade, setBulkImportGrade] = useState("");
   const [docModal, setDocModal] = useState<{ type: "idcard" | "certificate" | null, student: any }>({ type: null, student: null });
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -267,27 +268,41 @@ export default function Students() {
         let errorCount = 0;
 
         for (const row of normalizedData) {
-          const gradeKey = Object.keys(row).find(k => k.includes('grade') || k.includes('class'));
-          const nameKey = Object.keys(row).find(k => k === 'name');
-          const usernameKey = Object.keys(row).find(k => k === 'username');
-          const passwordKey = Object.keys(row).find(k => k === 'password');
-          const rollNoKey = Object.keys(row).find(k => k.includes('roll'));
-          const subjectsKey = Object.keys(row).find(k => k.includes('subject'));
+          const gradeKey = Object.keys(row).find(k => k.includes('grade') || k.includes('class') || k.includes('தரம்') || k.includes('வகுப்பு'));
+          const nameKey = Object.keys(row).find(k => k.includes('name') || k.includes('பெயர்'));
+          const usernameKey = Object.keys(row).find(k => k.includes('username') || k.includes('user') || k.includes('பயனர்'));
+          const passwordKey = Object.keys(row).find(k => k.includes('password') || k.includes('pass') || k.includes('கடவுச்சொல்'));
+          const rollNoKey = Object.keys(row).find(k => k.includes('roll') || k.includes('பதிவு'));
+          const subjectsKey = Object.keys(row).find(k => k.includes('subject') || k.includes('பாடம்'));
 
-          if (!gradeKey || !nameKey || !usernameKey || !passwordKey) {
-            alert("File must contain columns: Grade, Name, Username, Password");
+          if (!nameKey || !usernameKey || !passwordKey) {
+            alert("File must contain columns for Name, Username, and Password");
             setImporting(false);
             return;
           }
 
-          const grade = String(row[gradeKey] || "").trim();
+          const grade = gradeKey && String(row[gradeKey]).trim() ? String(row[gradeKey]).trim() : bulkImportGrade;
+          
+          if (!grade) {
+            errorCount++;
+            console.error("Skipping row, grade is missing for", name);
+            continue;
+          }
           const name = String(row[nameKey] || "").trim();
           const username = String(row[usernameKey] || "").trim();
           const password = String(row[passwordKey] || "").trim();
           const rollNo = rollNoKey ? String(row[rollNoKey] || "").trim() : "";
           const subjectsStr = subjectsKey ? String(row[subjectsKey] || "").trim() : "";
           
-          const subjects = subjectsStr ? subjectsStr.split(';').map(s => s.trim()).filter(Boolean) : [];
+          let subjects = subjectsStr ? subjectsStr.split(/[,;]/).map(s => s.trim()).filter(Boolean) : [];
+          
+          // Auto-assign default subjects of the grade if no subjects provided in Excel
+          if (subjects.length === 0 && grade) {
+            const classObj = classes.find(c => c.name === grade);
+            if (classObj && classObj.subjects) {
+              subjects = classObj.subjects;
+            }
+          }
 
           if (!name || !username || !password) {
             errorCount++;
@@ -410,13 +425,29 @@ export default function Students() {
             <h3 className="font-semibold text-blue-800 mb-2">File Format Requirements:</h3>
             <p className="text-sm text-blue-700 mb-2">Your CSV or Excel file must include the following headers in the first row:</p>
             <ul className="list-disc list-inside text-sm text-blue-700 space-y-1">
-              <li><strong>Grade</strong> (e.g., தரம் 01)</li>
+              <li><strong>Grade</strong> (Optional if selected below)</li>
               <li><strong>Name</strong></li>
               <li><strong>Username</strong></li>
               <li><strong>Password</strong></li>
               <li><strong>Roll No</strong> (Optional)</li>
-              <li><strong>Subjects</strong> (Optional, separated by semicolons ;)</li>
+              <li><strong>Subjects</strong> (Optional. If left blank, default subjects for the selected class will be auto-assigned. To add custom, separate by commas or semicolons.)</li>
             </ul>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Default Class / Grade (If missing in Excel)
+            </label>
+            <select
+              value={bulkImportGrade}
+              onChange={(e) => setBulkImportGrade(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">-- Select Class --</option>
+              {classes.map(c => (
+                <option key={c.id} value={c.name}>{c.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>
