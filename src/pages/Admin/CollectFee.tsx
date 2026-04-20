@@ -521,9 +521,21 @@ export default function CollectFee() {
               <button 
                 onClick={() => {
                   const content = document.getElementById('receipt-content');
-                  const printWindow = window.open('', '_blank');
-                  if (printWindow && content) {
-                    printWindow.document.write(`
+                  
+                  let printIframe = document.getElementById('receipt-print-iframe') as HTMLIFrameElement;
+                  if (!printIframe) {
+                    printIframe = document.createElement('iframe');
+                    printIframe.id = 'receipt-print-iframe';
+                    printIframe.style.position = 'absolute';
+                    printIframe.style.top = '-9999px';
+                    printIframe.style.left = '-9999px';
+                    document.body.appendChild(printIframe);
+                  }
+                  
+                  const printDoc = printIframe.contentWindow?.document;
+                  if (printDoc && content) {
+                    printDoc.open();
+                    printDoc.write(`
                       <html>
                         <head>
                           <title>Fee Receipt - ${receiptData.studentName}</title>
@@ -567,8 +579,13 @@ export default function CollectFee() {
                         </body>
                       </html>
                     `);
-                    printWindow.document.close();
-                    printWindow.print();
+                    printDoc.close();
+                    setTimeout(() => {
+                      printIframe.contentWindow?.focus();
+                      printIframe.contentWindow?.print();
+                    }, 500);
+                  } else if (!printDoc) {
+                    alert('Unable to print. Please check your security settings.');
                   }
                 }}
                 className="flex-1 py-2.5 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"

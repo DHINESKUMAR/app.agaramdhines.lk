@@ -24,10 +24,24 @@ export default function Students() {
     const content = printRef.current;
     if (!content) return;
     
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    let printIframe = document.getElementById('student-print-iframe') as HTMLIFrameElement;
+    if (!printIframe) {
+      printIframe = document.createElement('iframe');
+      printIframe.id = 'student-print-iframe';
+      printIframe.style.position = 'absolute';
+      printIframe.style.top = '-9999px';
+      printIframe.style.left = '-9999px';
+      document.body.appendChild(printIframe);
+    }
     
-    printWindow.document.write(`
+    const printDoc = printIframe.contentWindow?.document;
+    if (!printDoc) {
+      alert('Unable to print document. Please check your browser security settings.');
+      return;
+    }
+    
+    printDoc.open();
+    printDoc.write(`
       <html>
         <head>
           <title>Print ${docModal.type}</title>
@@ -46,16 +60,15 @@ export default function Students() {
           <div class="print-container">
             ${content.innerHTML}
           </div>
-          <script>
-            setTimeout(() => {
-              window.print();
-              window.close();
-            }, 500);
-          </script>
         </body>
       </html>
     `);
-    printWindow.document.close();
+    printDoc.close();
+    
+    setTimeout(() => {
+      printIframe.contentWindow?.focus();
+      printIframe.contentWindow?.print();
+    }, 1000);
   };
 
   useEffect(() => {

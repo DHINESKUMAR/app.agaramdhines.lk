@@ -57,9 +57,29 @@ export default function BulkDocuments() {
     // Give React time to render the hidden print area
     setTimeout(() => {
       const content = printRef.current;
-      const printWindow = window.open('', '_blank');
-      if (printWindow && content) {
-        printWindow.document.write(`
+      if (!content) {
+        setIsGenerating(false);
+        setPrintMode(null);
+        return;
+      }
+
+      // Instead of window.open, use a hidden iframe to avoid popup blockers in Electron/Nativefier
+      let printIframe = document.getElementById('bulk-print-iframe') as HTMLIFrameElement;
+      if (!printIframe) {
+        printIframe = document.createElement('iframe');
+        printIframe.id = 'bulk-print-iframe';
+        printIframe.style.position = 'absolute';
+        printIframe.style.top = '-9999px';
+        printIframe.style.left = '-9999px';
+        printIframe.title = 'Print Frame';
+        document.body.appendChild(printIframe);
+      }
+
+      const printDoc = printIframe.contentWindow?.document;
+      
+      if (printDoc) {
+        printDoc.open();
+        printDoc.write(`
           <html>
             <head>
               <title>Bulk Print ${mode === 'idcard' ? 'ID Cards' : 'Certificates'}</title>
@@ -78,16 +98,19 @@ export default function BulkDocuments() {
             </body>
           </html>
         `);
-        printWindow.document.close();
+        printDoc.close();
+        
+        // Wait for Tailwind scripts to inject styles before printing
         setTimeout(() => {
-          printWindow.print();
+          printIframe.contentWindow?.focus();
+          printIframe.contentWindow?.print();
           setIsGenerating(false);
           setPrintMode(null);
         }, 1500);
       } else {
         setIsGenerating(false);
         setPrintMode(null);
-        alert("Please allow popups to print documents.");
+        alert("Unable to generate print document. Please check your browser's security settings.");
       }
     }, 500);
   };
