@@ -483,15 +483,10 @@ export default function AdminDashboard() {
       {isChatModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 sm:p-6">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden relative">
-            <div className="absolute top-2 right-2 z-10">
-              <button 
-                onClick={() => setIsChatModalOpen(false)}
-                className="p-2 bg-white/80 hover:bg-red-100 text-gray-600 hover:text-red-600 rounded-full backdrop-blur-sm transition-colors shadow-sm"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <LiveChat currentUser={{ id: "admin-1", name: "Admin", role: "Admin" }} />
+            <LiveChat 
+              currentUser={{ id: "admin-1", name: "Admin", role: "Admin" }} 
+              onClose={() => setIsChatModalOpen(false)}
+            />
           </div>
         </div>
       )}

@@ -3,7 +3,7 @@ import { getChatMessages, saveChatMessages, getStudents, getStaffs, getClasses }
 import { Send, User, Shield, GraduationCap, Clock, MessageCircle, Image as ImageIcon, Mic, Video, X, Square, BookOpen, Check, CheckCheck, ArrowLeft } from "lucide-react";
 import WhatsAppIcon from "./WhatsAppIcon";
 
-export default function LiveChat({ currentUser }: { currentUser: { id: string, name: string, role: string, grade?: string } }) {
+export default function LiveChat({ currentUser, onClose }: { currentUser: { id: string, name: string, role: string, grade?: string }, onClose?: () => void }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [activeChat, setActiveChat] = useState("global");
@@ -349,7 +349,7 @@ export default function LiveChat({ currentUser }: { currentUser: { id: string, n
       {/* Main Chat Area */}
       <div className={`${!showSidebar ? 'flex' : 'hidden'} md:flex flex-1 flex-col bg-slate-50/30`}>
         {/* Chat Header */}
-        <div className="bg-white px-6 py-4 border-b border-slate-200 flex items-center justify-between shadow-sm z-10">
+        <div className="bg-white px-4 md:px-6 py-3 border-b border-slate-200 flex items-center justify-between shadow-sm z-10">
           <div className="flex items-center gap-3">
             <button 
               className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
@@ -377,6 +377,16 @@ export default function LiveChat({ currentUser }: { currentUser: { id: string, n
               </p>
             </div>
           </div>
+          
+          {onClose && (
+            <button 
+              onClick={onClose}
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 rounded-lg transition-colors border border-slate-200 hover:border-red-200"
+            >
+              <ArrowLeft size={16} />
+              <span className="text-sm font-semibold">Back</span>
+            </button>
+          )}
         </div>
 
         {/* Messages Area */}
