@@ -51,7 +51,11 @@ export default function ExamMarks() {
 
   const filteredStudents = students.filter(s => 
     (!selectedGrade || s.grade === selectedGrade) &&
-    (!searchTerm || s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.includes(searchTerm))
+    (!searchTerm || 
+      s.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      s.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.rollNo?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
   const handleMarkChange = (studentId: string, field: 'obtained' | 'total' | 'remarks', value: string) => {

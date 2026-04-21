@@ -749,7 +749,9 @@ export default function Students() {
       const matchesClass = filterClass ? s.grade === filterClass : true;
       const matchesSearch = searchQuery 
         ? s.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-          s.id?.toLowerCase().includes(searchQuery.toLowerCase())
+          s.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          s.rollNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          s.username?.toLowerCase().includes(searchQuery.toLowerCase())
         : true;
       return matchesClass && matchesSearch;
     });

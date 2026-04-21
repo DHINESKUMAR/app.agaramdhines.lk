@@ -23,7 +23,8 @@ export default function BulkDocuments() {
     const matchesGrade = selectedGrade ? s.grade === selectedGrade : true;
     const matchesSearch = searchQuery 
       ? s.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        s.id?.toLowerCase().includes(searchQuery.toLowerCase())
+        s.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.rollNo?.toLowerCase().includes(searchQuery.toLowerCase())
       : true;
     return matchesGrade && matchesSearch;
   });

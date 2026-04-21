@@ -53,8 +53,10 @@ export default function CollectFee() {
   const filteredStudents = (searchQuery || selectedGrade)
     ? students.filter(s => {
         const matchesSearch = searchQuery 
-          ? s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-            (s.student_id && s.student_id.toLowerCase().includes(searchQuery.toLowerCase()))
+          ? s.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+            s.student_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            s.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            s.rollNo?.toLowerCase().includes(searchQuery.toLowerCase())
           : true;
         const matchesGrade = selectedGrade ? s.grade === selectedGrade : true;
         return matchesSearch && matchesGrade;
