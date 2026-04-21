@@ -824,6 +824,7 @@ export default function Students() {
                 </div>
                 <p className="text-gray-500 text-sm mt-2">{student.id}</p>
                 <p className="font-bold uppercase text-sm mt-1">{student.name}</p>
+                <p className="text-indigo-600 text-xs font-semibold mt-1 px-2 py-0.5 bg-indigo-50 rounded-full inline-block">{student.grade}</p>
                 <div className="mt-2 w-full">
                   <button 
                     onClick={() => handleToggleZoomBlock(student)}
