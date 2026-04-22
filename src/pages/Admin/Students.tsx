@@ -106,6 +106,8 @@ export default function Students() {
     image: ""
   });
 
+  const [updateProgress, setUpdateProgress] = useState(-1);
+
   const resetForm = () => {
     setFormData({
       grade: "",
@@ -184,6 +186,13 @@ export default function Students() {
       return;
     }
     
+    setUpdateProgress(0);
+    // Simulate loading to 100
+    for(let i = 1; i <= 100; i += 2) {
+      await new Promise(resolve => setTimeout(resolve, 30));
+      setUpdateProgress(i);
+    }
+    
     try {
       const updatedStudents = students.map(s => 
         s.id === editingStudentId ? { ...s, ...formData } : s
@@ -191,13 +200,16 @@ export default function Students() {
       setStudents(updatedStudents);
       await saveStudents(updatedStudents);
       
+      setUpdateProgress(100);
       alert("Student updated successfully!");
       resetForm();
       setEditingStudentId(null);
       setView("view");
+      setUpdateProgress(-1);
     } catch (error: any) {
       console.error("Error updating student:", error);
       alert("Error updating student: " + error.message);
+      setUpdateProgress(-1);
     }
   };
 
@@ -781,9 +793,25 @@ export default function Students() {
           <div className="pt-4 flex justify-center">
             <button
               type="submit"
-              className="bg-pink-600 text-white px-8 py-2 rounded-md hover:bg-pink-700 transition-colors font-medium"
+              disabled={updateProgress >= 0}
+              className={`text-white px-8 py-2 rounded-md transition-all duration-300 font-medium relative overflow-hidden flex justify-center items-center ${
+                updateProgress >= 0 ? "bg-amber-500 w-48" : "bg-pink-600 hover:bg-pink-700 w-48"
+              }`}
             >
-              {view === "edit" ? "Update Student" : "Save"}
+              {/* Progress Background */}
+              {updateProgress >= 0 && (
+                <div 
+                  className="absolute left-0 top-0 bottom-0 bg-emerald-500 transition-all duration-300"
+                  style={{ width: `${updateProgress}%` }}
+                />
+              )}
+              
+              {/* Button Text */}
+              <span className="relative z-10 font-bold whitespace-nowrap">
+                {updateProgress >= 0 
+                  ? `Saving... ${updateProgress}%`
+                  : (view === "edit" ? "Update Student" : "Save")}
+              </span>
             </button>
           </div>
         </form>
