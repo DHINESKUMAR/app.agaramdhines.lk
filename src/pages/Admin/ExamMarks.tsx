@@ -49,14 +49,19 @@ export default function ExamMarks() {
     });
   }, []);
 
-  const filteredStudents = students.filter(s => 
-    (!selectedGrade || s.grade === selectedGrade) &&
+  const filteredStudents = students.filter(s => {
+    // Determine the student's subjects. If empty, fall back to class subjects safely so older data doesn't break, 
+    // but the intention is they must have the subject attached to appear.
+    const studentSubjects = s.subjects && s.subjects.length > 0 ? s.subjects : (classes.find(c => c.name === s.grade)?.subjects || []);
+    
+    return (!selectedGrade || s.grade === selectedGrade) &&
+    (!selectedSubject || studentSubjects.includes(selectedSubject)) &&
     (!searchTerm || 
       s.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
       s.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.rollNo?.toLowerCase().includes(searchTerm.toLowerCase())
     )
-  );
+  });
 
   const handleMarkChange = (studentId: string, field: 'obtained' | 'total' | 'remarks', value: string) => {
     setMarksInput(prev => ({

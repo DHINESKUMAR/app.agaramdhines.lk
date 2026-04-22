@@ -1,5 +1,5 @@
 import { db, isFirebaseConfigured } from './firebase';
-import { collection, doc, getDocs, getDoc, setDoc, writeBatch, query, where } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, setDoc, writeBatch, query, where, deleteDoc } from 'firebase/firestore';
 
 // Helper to get data from Firebase with localStorage fallback
 const getData = async (key: string, defaultValue: any) => {
@@ -56,11 +56,23 @@ const saveData = async (key: string, data: any) => {
   if (isFirebaseConfigured) {
     try {
       if (Array.isArray(data)) {
+        // Query existing documents beforehand to calculate deletions
+        const snapshot = await getDocs(collection(db, key));
+        const existingIds = new Set(snapshot.docs.map((d: any) => d.id));
+
         // Use individual setDoc calls instead of batch to avoid size limits
         const promises = data.map(item => {
-          const docRef = doc(collection(db, key), item.id || Math.random().toString());
+          const id = item.id || Math.random().toString();
+          existingIds.delete(id); // remove from deletion list
+          const docRef = doc(collection(db, key), id);
           return setDoc(docRef, item);
         });
+
+        // Delete any documents that are no longer in the provided array
+        existingIds.forEach(idToRemove => {
+          promises.push(deleteDoc(doc(db, key, idToRemove)));
+        });
+
         await Promise.all(promises);
       } else {
         const docRef = doc(db, 'singletons', key);

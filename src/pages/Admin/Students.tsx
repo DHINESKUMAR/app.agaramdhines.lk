@@ -296,12 +296,12 @@ export default function Students() {
 
           const grade = gradeKey && String(row[gradeKey]).trim() ? String(row[gradeKey]).trim() : bulkImportGrade;
           
+          const name = String(row[nameKey] || "").trim();
           if (!grade) {
             errorCount++;
             console.error("Skipping row, grade is missing for", name);
             continue;
           }
-          const name = String(row[nameKey] || "").trim();
           const username = String(row[usernameKey] || "").trim();
           const password = String(row[passwordKey] || "").trim();
           const rollNo = rollNoKey ? String(row[rollNoKey] || "").trim() : "";

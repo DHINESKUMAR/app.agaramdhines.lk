@@ -915,51 +915,31 @@ export default function StudentDashboard() {
                 </div>
                 My Subjects
               </h2>
-              <p className="text-slate-500 mb-8 ml-13">Enroll in subjects and view class details.</p>
+              <p className="text-slate-500 mb-8 ml-13">View your class details and schedules.</p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Find all unique subjects offered for this grade from classes */}
                 {(classes.find(c => c.name === studentData.grade)?.subjects || []).map((subjectName: any) => {
                   const isEnrolled = enrolledClasses.includes(subjectName);
-                  const staffForSubject = staffs.filter(s => s.assignedClasses?.some((c: any) => c.grade === studentData.grade && c.subject === subjectName));
+                  const staffForSubject = staffs.filter((s: any) => s.assignedClasses?.some((c: any) => c.grade === studentData.grade && c.subject === subjectName));
                   const subjectTimetable = timetable.filter(t => t.subject === subjectName);
                   const subjectZoomLinks = zoomLinks.filter(z => z.subject === subjectName);
                   
+                  // Only display subjects the student is enrolled in, or if enrolledClasses is completely empty (fallback for older students)
+                  if (!isEnrolled && enrolledClasses.length > 0) return null;
+
                   return (
-                    <div key={subjectName} className={`p-5 rounded-2xl shadow-sm border transition-all duration-200 ${isEnrolled ? 'bg-indigo-50/50 border-indigo-200' : 'bg-white border-slate-200 hover:border-indigo-300'}`}>
+                    <div key={subjectName} className={`p-5 rounded-2xl shadow-sm border transition-all duration-200 bg-indigo-50/50 border-indigo-200`}>
                       <div className="flex justify-between items-start mb-4">
                         <div>
                           <h3 className="font-bold text-lg text-slate-800">{subjectName}</h3>
                           <p className="text-sm text-slate-500 font-medium mt-1 flex items-center gap-1">
-                            <User size={14} /> <span className="text-indigo-600">{staffForSubject.map(s => s.name).join(', ') || 'TBA'}</span>
+                            <User size={14} /> <span className="text-indigo-600">{staffForSubject.map((s: any) => s.name).join(', ') || 'TBA'}</span>
                           </p>
                         </div>
-                        <button
-                          onClick={async () => {
-                            let newEnrolled = [...enrolledClasses];
-                            if (isEnrolled) {
-                              newEnrolled = newEnrolled.filter(s => s !== subjectName);
-                            } else {
-                              newEnrolled.push(subjectName);
-                            }
-                            setEnrolledClasses(newEnrolled);
-                            
-                            // Save to db
-                            const allStudents = await getStudents();
-                            const updatedStudents = allStudents.map((s: any) => 
-                              s.id === studentData.id ? { ...s, subjects: newEnrolled } : s
-                            );
-                            await saveStudents(updatedStudents);
-                            studentData.subjects = newEnrolled;
-                          }}
-                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${isEnrolled ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-                        >
-                          {isEnrolled ? 'Enrolled ✓' : 'Enroll +'}
-                        </button>
                       </div>
                       
                       <div className="space-y-4 text-sm text-slate-600">
-                        {isEnrolled && (
                           <>
                             <div className="mt-4 pt-4 border-t border-slate-200/60">
                               <p className="font-bold text-slate-800 mb-3 flex items-center gap-2"><Calendar size={16} className="text-indigo-500"/> Timetable</p>
@@ -1048,7 +1028,6 @@ export default function StudentDashboard() {
                               </div>
                             )}
                           </>
-                        )}
                       </div>
                     </div>
                   );

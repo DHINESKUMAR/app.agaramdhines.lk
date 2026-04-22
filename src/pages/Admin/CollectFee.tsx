@@ -23,6 +23,7 @@ export default function CollectFee() {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
+  const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
 
   useEffect(() => {
     getStudents().then(data => setStudents(data || []));
@@ -89,22 +90,44 @@ export default function CollectFee() {
   };
 
   const processPayment = async (transactionId?: string) => {
-    const newFee = {
-      id: Date.now().toString(),
-      studentId: selectedStudent.student_id || selectedStudent.id,
-      studentName: selectedStudent.name,
-      grade: selectedStudent.grade,
-      month: paymentData.month,
-      amount: paymentData.amount,
-      method: paymentData.method,
-      date: paymentData.date,
-      transactionId: transactionId || `TXN-${Math.floor(Math.random() * 1000000)}`,
-      timestamp: new Date().toISOString()
-    };
-
     try {
       const existingFees = await getFees() || [];
-      const updatedFees = [...existingFees, newFee];
+      let updatedFees;
+      let currentFee;
+
+      if (editingFeeId) {
+        // Edit existing fee
+        updatedFees = existingFees.map((fee: any) => {
+          if (fee.id === editingFeeId) {
+            currentFee = {
+              ...fee,
+              month: paymentData.month,
+              amount: paymentData.amount,
+              method: paymentData.method,
+              date: paymentData.date,
+            };
+            return currentFee;
+          }
+          return fee;
+        });
+        setEditingFeeId(null);
+      } else {
+        // Create new fee
+        currentFee = {
+          id: Date.now().toString(),
+          studentId: selectedStudent.student_id || selectedStudent.id,
+          studentName: selectedStudent.name,
+          grade: selectedStudent.grade,
+          month: paymentData.month,
+          amount: paymentData.amount,
+          method: paymentData.method,
+          date: paymentData.date,
+          transactionId: transactionId || `TXN-${Math.floor(Math.random() * 1000000)}`,
+          timestamp: new Date().toISOString()
+        };
+        updatedFees = [...existingFees, currentFee];
+      }
+
       await saveFees(updatedFees);
       setAllFees(updatedFees);
 
@@ -117,7 +140,7 @@ export default function CollectFee() {
       );
       await saveStudents(updatedStudents);
 
-      setReceiptData(newFee);
+      setReceiptData(currentFee);
       setShowReceipt(true);
       
       // Reset form
@@ -142,6 +165,21 @@ export default function CollectFee() {
       const mockTxnId = `ONL-${Math.floor(Math.random() * 100000000)}`;
       processPayment(mockTxnId);
     }, 2000);
+  };
+
+  const handleEditFee = (fee: any) => {
+    setEditingFeeId(fee.id);
+    setPaymentData({
+      amount: fee.amount.toString(),
+      method: fee.method,
+      date: fee.date,
+      month: fee.month
+    });
+  };
+
+  const handleLoadReceipt = (fee: any) => {
+    setReceiptData(fee);
+    setShowReceipt(true);
   };
 
   return (
@@ -356,8 +394,25 @@ export default function CollectFee() {
                       className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-md shadow-sm transition-colors flex items-center gap-2"
                     >
                       <CreditCard size={20} />
-                      {paymentData.method === "Online" ? "Pay Online" : "Submit Payment"}
+                      {paymentData.method === "Online" && !editingFeeId ? "Pay Online" : editingFeeId ? "Update Payment" : "Submit Payment"}
                     </button>
+                    {editingFeeId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingFeeId(null);
+                          setPaymentData({
+                            amount: "",
+                            method: "Cash",
+                            date: new Date().toISOString().split('T')[0],
+                            month: new Date().toISOString().slice(0, 7)
+                          });
+                        }}
+                        className="ml-3 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-md shadow-sm transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    )}
                   </div>
                 </form>
               )}
@@ -376,6 +431,7 @@ export default function CollectFee() {
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
@@ -385,6 +441,10 @@ export default function CollectFee() {
                             <td className="px-4 py-2 text-sm text-gray-500">{fee.date}</td>
                             <td className="px-4 py-2 text-sm font-medium text-green-600">₹{fee.amount}</td>
                             <td className="px-4 py-2 text-sm text-gray-500">{fee.method}</td>
+                            <td className="px-4 py-2 text-sm text-right space-x-2">
+                              <button onClick={() => handleEditFee(fee)} className="text-blue-600 hover:text-blue-800 font-medium">Edit</button>
+                              <button onClick={() => handleLoadReceipt(fee)} className="text-indigo-600 hover:text-indigo-800 font-medium ml-2">Receipt</button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
