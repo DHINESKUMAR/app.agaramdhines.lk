@@ -555,22 +555,24 @@ export default function Students() {
             </label>
             <select 
               value={formData.grade}
-              onChange={(e) => setFormData({...formData, grade: e.target.value, subjects: []})}
+              onChange={(e) => setFormData({...formData, grade: e.target.value})}
               className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
             >
               <option value="">Select Class</option>
-              {classes.length > 0 ? (
-                classes.map((cls) => (
-                  <option key={cls.id} value={cls.name}>
-                    {cls.name}
-                  </option>
-                ))
-              ) : (
-                GRADES.map((grade) => (
-                  <option key={grade} value={grade}>
-                    {grade}
-                  </option>
-                ))
+              {classes.map((cls) => (
+                <option key={cls.id} value={cls.name}>
+                  {cls.name}
+                </option>
+              ))}
+              {GRADES.filter(g => !classes.some(c => c.name === g)).map((grade) => (
+                <option key={grade} value={grade}>
+                  {grade}
+                </option>
+              ))}
+              {formData.grade && !classes.some(c => c.name === formData.grade) && !GRADES.includes(formData.grade) && (
+                <option key={formData.grade} value={formData.grade}>
+                  {formData.grade}
+                </option>
               )}
             </select>
           </div>
@@ -807,7 +809,8 @@ export default function Students() {
     }, {} as Record<string, number>);
 
     return (
-      <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6">
+      <>
+        <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
           <div className="flex items-center">
             <button
@@ -845,19 +848,16 @@ export default function Students() {
                 className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white w-full sm:w-auto"
               >
                 <option value="">All Classes ({students.length})</option>
-                {classes.length > 0 ? (
-                  classes.map((cls) => (
-                    <option key={cls.id} value={cls.name}>
-                      {cls.name} ({studentCountByClass[cls.name] || 0})
-                    </option>
-                  ))
-                ) : (
-                  GRADES.map((grade) => (
-                    <option key={grade} value={grade}>
-                      {grade} ({studentCountByClass[grade] || 0})
-                    </option>
-                  ))
-                )}
+                {classes.map((cls) => (
+                  <option key={cls.id} value={cls.name}>
+                    {cls.name} ({studentCountByClass[cls.name] || 0})
+                  </option>
+                ))}
+                {GRADES.filter(g => !classes.some(c => c.name === g)).map((grade) => (
+                  <option key={grade} value={grade}>
+                    {grade} ({studentCountByClass[grade] || 0})
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -879,6 +879,13 @@ export default function Students() {
                 <p className="text-gray-500 text-sm mt-2">{student.id}</p>
                 <p className="font-bold uppercase text-sm mt-1">{student.name}</p>
                 <p className="text-indigo-600 text-xs font-semibold mt-1 px-2 py-0.5 bg-indigo-50 rounded-full inline-block">{student.grade}</p>
+                
+                {student.subjects && student.subjects.length > 0 && (
+                  <div className="mt-2 text-xs text-gray-500 bg-gray-50 p-1.5 rounded border border-gray-100 w-full" title={student.subjects.join(", ")}>
+                    <span className="font-semibold">{student.subjects.length}</span> Subjects Assigned
+                  </div>
+                )}
+                
                 <div className="mt-2 w-full">
                   <button 
                     onClick={() => handleToggleZoomBlock(student)}
@@ -1056,88 +1063,7 @@ export default function Students() {
           </div>
         )}
       </div>
-    );
-  }
 
-  if (view === "view-id-pin") {
-    return (
-      <div className="p-6">
-        <div className="flex items-center mb-6">
-          <button
-            onClick={() => setView("menu")}
-            className="mr-4 text-gray-600 hover:text-gray-900"
-          >
-            ← Back
-          </button>
-          <h2 className="text-xl font-bold text-gray-800">Student IDs & PINs</h2>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student ID</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QR Code</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PIN/Password</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {students.map((student) => (
-                  <tr key={student.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{student.id}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div id={`qr-${student.id}`} className="bg-white p-1 inline-block">
-                        <QRCodeSVG value={student.id} size={40} />
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{student.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.grade}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.rollNo || '-'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.username}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-blue-600">{student.password}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => handleDownloadQrImage(student.id, student.name)}
-                          className="text-indigo-600 hover:text-indigo-900 flex items-center gap-1 bg-indigo-50 px-2 py-1 rounded"
-                          title="Download Image"
-                        >
-                          <Download size={14} /> IMG
-                        </button>
-                        <button 
-                          onClick={() => handleDownloadQrPdf(student.id, student.name)}
-                          className="text-emerald-600 hover:text-emerald-900 flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded"
-                          title="Download PDF"
-                        >
-                          <Download size={14} /> PDF
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {students.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">
-                      No students found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <>
       {showBulkSubjectModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col my-8">
@@ -1164,7 +1090,10 @@ export default function Students() {
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Select Grade</option>
-                    {GRADES.map((grade) => (
+                    {classes.map((cls) => (
+                      <option key={cls.id} value={cls.name}>{cls.name}</option>
+                    ))}
+                    {GRADES.filter(g => !classes.some(c => c.name === g)).map((grade) => (
                       <option key={grade} value={grade}>{grade}</option>
                     ))}
                   </select>
@@ -1312,7 +1241,89 @@ export default function Students() {
           </div>
         </div>
       )}
+      </>
+    );
+  }
 
+  if (view === "view-id-pin") {
+    return (
+      <div className="p-6">
+        <div className="flex items-center mb-6">
+          <button
+            onClick={() => setView("menu")}
+            className="mr-4 text-gray-600 hover:text-gray-900"
+          >
+            ← Back
+          </button>
+          <h2 className="text-xl font-bold text-gray-800">Student IDs & PINs</h2>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QR Code</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PIN/Password</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {students.map((student) => (
+                  <tr key={student.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{student.id}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div id={`qr-${student.id}`} className="bg-white p-1 inline-block">
+                        <QRCodeSVG value={student.id} size={40} />
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{student.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.grade}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.rollNo || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.username}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-blue-600">{student.password}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleDownloadQrImage(student.id, student.name)}
+                          className="text-indigo-600 hover:text-indigo-900 flex items-center gap-1 bg-indigo-50 px-2 py-1 rounded"
+                          title="Download Image"
+                        >
+                          <Download size={14} /> IMG
+                        </button>
+                        <button 
+                          onClick={() => handleDownloadQrPdf(student.id, student.name)}
+                          className="text-emerald-600 hover:text-emerald-900 flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded"
+                          title="Download PDF"
+                        >
+                          <Download size={14} /> PDF
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {students.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">
+                      No students found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
       {/* Hidden QR Download Templates */}
       <div className="fixed top-0 left-0 -z-50 opacity-0 pointer-events-none">
         {students.map(student => (
