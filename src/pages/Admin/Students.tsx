@@ -13,6 +13,7 @@ export default function Students() {
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [students, setStudents] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
+  const [allSubjects, setAllSubjects] = useState<any[]>([]);
   const [filterClass, setFilterClass] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [importing, setImporting] = useState(false);
@@ -71,9 +72,18 @@ export default function Students() {
     }, 1000);
   };
 
+  const [showBulkSubjectModal, setShowBulkSubjectModal] = useState(false);
+  const [bulkSubjectData, setBulkSubjectData] = useState<{
+    grade: string;
+    subject: string;
+    action: 'add' | 'remove';
+    studentIds: string[];
+  }>({ grade: "", subject: "", action: 'add', studentIds: [] });
+
   useEffect(() => {
     getStudents().then(setStudents);
     getClasses().then(setClasses);
+    import('../../lib/db').then(({ getSubjects }) => getSubjects().then(setAllSubjects));
   }, [view]);
 
   // Form state
@@ -121,9 +131,7 @@ export default function Students() {
     "தரம் 11", "தரம் 12", "தரம் 13"
   ];
 
-  const availableSubjects = formData.grade 
-    ? classes.find(c => c.name === formData.grade)?.subjects || []
-    : [];
+  const availableSubjects = allSubjects.map(s => s.name);
 
   const handleSubjectToggle = (subject: string) => {
     setFormData(prev => {
@@ -202,6 +210,42 @@ export default function Students() {
     } catch (error: any) {
       console.error("Error updating student:", error);
       alert("Error updating student: " + error.message);
+    }
+  };
+
+  const handleBulkSubjectSubmit = async () => {
+    if (!bulkSubjectData.subject || bulkSubjectData.studentIds.length === 0) {
+      alert("Please select a subject and at least one student.");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const allStudents = await getStudents();
+      const updatedStudents = allStudents.map((s: any) => {
+        if (bulkSubjectData.studentIds.includes(s.id)) {
+          let updatedSubjects = [...(s.subjects || [])];
+          if (bulkSubjectData.action === 'add') {
+            if (!updatedSubjects.includes(bulkSubjectData.subject)) {
+              updatedSubjects.push(bulkSubjectData.subject);
+            }
+          } else if (bulkSubjectData.action === 'remove') {
+            updatedSubjects = updatedSubjects.filter(sub => sub !== bulkSubjectData.subject);
+          }
+          return { ...s, subjects: updatedSubjects };
+        }
+        return s;
+      });
+
+      await saveStudents(updatedStudents);
+      setStudents(updatedStudents);
+      alert(`Applied subject ${bulkSubjectData.action} to ${bulkSubjectData.studentIds.length} students.`);
+      setShowBulkSubjectModal(false);
+    } catch(err) {
+      console.error(err);
+      alert("Error applying bulk subject updates.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -711,7 +755,7 @@ export default function Students() {
                 ))
               ) : (
                 <p className="text-sm text-gray-500 col-span-2">
-                  {formData.grade ? "No subjects assigned to this class." : "Please select a class first to see available subjects."}
+                  No subjects available in the system yet. Please create subjects in Admin Settings.
                 </p>
               )}
             </div>
@@ -774,6 +818,15 @@ export default function Students() {
             <h2 className="text-xl font-bold text-gray-800">View Students</h2>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-4">
+            <button
+               onClick={() => {
+                 setBulkSubjectData(prev => ({...prev, grade: filterClass}));
+                 setShowBulkSubjectModal(true);
+               }}
+               className="bg-indigo-600 text-white rounded-md px-3 py-1.5 text-sm whitespace-nowrap hover:bg-indigo-700"
+            >
+               Bulk Assign Subjects
+            </button>
             <div className="flex items-center space-x-2 w-full sm:w-auto">
               <input
                 type="text"
@@ -1084,6 +1137,181 @@ export default function Students() {
 
   return (
     <>
+      {showBulkSubjectModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col my-8">
+            <div className="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-xl">
+              <h3 className="text-xl font-bold text-gray-800">Bulk Subject Assignment</h3>
+              <button 
+                onClick={() => setShowBulkSubjectModal(false)} 
+                className="text-gray-500 hover:bg-gray-200 p-1.5 rounded-full transition-colors"
+                disabled={loading}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 flex-1 overflow-y-auto w-full">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Grade / Class</label>
+                  <select
+                    value={bulkSubjectData.grade}
+                    onChange={(e) => {
+                      setBulkSubjectData(prev => ({ ...prev, grade: e.target.value, studentIds: [] }));
+                    }}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select Grade</option>
+                    {GRADES.map((grade) => (
+                      <option key={grade} value={grade}>{grade}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Subject</label>
+                  <select
+                    value={bulkSubjectData.subject}
+                    onChange={(e) => setBulkSubjectData(prev => ({ ...prev, subject: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select a subject...</option>
+                    {allSubjects.map(sub => (
+                      <option key={sub.name} value={sub.name}>{sub.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Action to Perform</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer p-3 border rounded-md border-emerald-200 bg-emerald-50 hover:bg-emerald-100 flex-1">
+                    <input 
+                      type="radio" 
+                      name="bulkAction" 
+                      value="add"
+                      checked={bulkSubjectData.action === 'add'}
+                      onChange={() => setBulkSubjectData(prev => ({ ...prev, action: 'add' }))}
+                      className="text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="font-semibold text-emerald-800">Add Subject to Students</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer p-3 border rounded-md border-red-200 bg-red-50 hover:bg-red-100 flex-1">
+                    <input 
+                      type="radio" 
+                      name="bulkAction" 
+                      value="remove"
+                      checked={bulkSubjectData.action === 'remove'}
+                      onChange={() => setBulkSubjectData(prev => ({ ...prev, action: 'remove' }))}
+                      className="text-red-600 focus:ring-red-500"
+                    />
+                    <span className="font-semibold text-red-800">Remove Subject from Students</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="border border-gray-200 rounded-md overflow-hidden">
+                <div className="bg-gray-100 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+                  <span className="font-medium text-sm text-gray-700">
+                    Select Students {bulkSubjectData.grade && `in ${bulkSubjectData.grade}`}
+                  </span>
+                  
+                  {bulkSubjectData.grade && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const gradeStudents = students.filter(s => s.grade === bulkSubjectData.grade);
+                        if (bulkSubjectData.studentIds.length === gradeStudents.length) {
+                          // deselect all
+                          setBulkSubjectData(prev => ({...prev, studentIds: []}));
+                        } else {
+                          // select all
+                          setBulkSubjectData(prev => ({...prev, studentIds: gradeStudents.map(s => s.id)}));
+                        }
+                      }}
+                      className="text-sm text-indigo-600 font-semibold hover:underline"
+                    >
+                      {bulkSubjectData.studentIds.length === students.filter(s => s.grade === bulkSubjectData.grade).length && students.filter(s => s.grade === bulkSubjectData.grade).length > 0
+                        ? "Deselect All" 
+                        : "Select All"}
+                    </button>
+                  )}
+                </div>
+                
+                <div className="max-h-[30vh] overflow-y-auto p-2">
+                  {!bulkSubjectData.grade ? (
+                    <div className="p-4 text-center text-gray-500 text-sm">Please select a grade first.</div>
+                  ) : students.filter(s => s.grade === bulkSubjectData.grade).length === 0 ? (
+                    <div className="p-4 text-center text-gray-500 text-sm">No students found in this grade.</div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {students.filter(s => s.grade === bulkSubjectData.grade).map(student => {
+                        const isSelected = bulkSubjectData.studentIds.includes(student.id);
+                        const hasSubject = (student.subjects || []).includes(bulkSubjectData.subject);
+                        
+                        return (
+                          <label 
+                            key={student.id} 
+                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                              isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            <input 
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                setBulkSubjectData(prev => {
+                                  const ids = new Set(prev.studentIds);
+                                  if (e.target.checked) ids.add(student.id);
+                                  else ids.delete(student.id);
+                                  return { ...prev, studentIds: Array.from(ids) };
+                                });
+                              }}
+                              className="w-4 h-4 text-indigo-600 rounded"
+                            />
+                            <div className="flex-1 truncate">
+                              <div className="text-sm font-semibold truncate">{student.name}</div>
+                              <div className="text-xs text-gray-500 flex gap-2">
+                                <span>{student.rollNo || student.id}</span>
+                                {bulkSubjectData.subject && (
+                                  hasSubject ? (
+                                    <span className="text-emerald-600 font-medium">· Has Subject</span>
+                                  ) : (
+                                    <span className="text-gray-400">· Pending</span>
+                                  )
+                                )}
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-gray-200 bg-gray-50 flex justify-end gap-3 rounded-b-xl shrink-0">
+              <button 
+                onClick={() => setShowBulkSubjectModal(false)}
+                className="px-5 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 font-medium"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkSubjectSubmit}
+                disabled={loading || !bulkSubjectData.subject || bulkSubjectData.studentIds.length === 0}
+                className="px-5 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-bold disabled:opacity-50 flex items-center gap-2"
+              >
+                {loading ? "Applying..." : "Apply Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hidden QR Download Templates */}
       <div className="fixed top-0 left-0 -z-50 opacity-0 pointer-events-none">
         {students.map(student => (

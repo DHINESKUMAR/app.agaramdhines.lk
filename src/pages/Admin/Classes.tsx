@@ -18,6 +18,7 @@ export default function Classes() {
   const [availableSubjects, setAvailableSubjects] = useState<any[]>([]);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [editingClassId, setEditingClassId] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -41,7 +42,20 @@ export default function Classes() {
       setSearchParams({ tab: 'new' });
     } else {
       setSearchParams({});
+      setEditingClassId(null);
+      setFormData({ name: '', monthlyTuitionFees: '', classTeacherId: '', subjects: [] });
     }
+  };
+
+  const handleEditClick = (cls: any) => {
+    setEditingClassId(cls.id);
+    setFormData({
+      name: cls.name,
+      monthlyTuitionFees: cls.monthlyTuitionFees || '',
+      classTeacherId: cls.classTeacherId || '',
+      subjects: cls.subjects || []
+    });
+    handleTabChange('new');
   };
 
   useEffect(() => {
@@ -59,18 +73,27 @@ export default function Classes() {
       return;
     }
     
-    const newClass = {
-      id: Date.now().toString(),
-      ...formData
-    };
+    let updatedClasses;
+    if (editingClassId) {
+      updatedClasses = classes.map(c => 
+        c.id === editingClassId ? { ...c, ...formData } : c
+      );
+      setToast({ message: "Class updated successfully!", type: 'success' });
+    } else {
+      const newClass = {
+        id: Date.now().toString(),
+        ...formData
+      };
+      updatedClasses = [...classes, newClass];
+      setToast({ message: "Class added successfully!", type: 'success' });
+    }
     
-    const updatedClasses = [...classes, newClass];
     setClasses(updatedClasses);
     await saveClasses(updatedClasses);
     
-    setToast({ message: "Class added successfully!", type: 'success' });
     setTimeout(() => setToast(null), 3000);
     setFormData({ name: '', monthlyTuitionFees: '', classTeacherId: '', subjects: [] });
+    setEditingClassId(null);
     handleTabChange('all');
   };
 
@@ -164,7 +187,7 @@ export default function Classes() {
         {activeTab === 'new' && (
           <>
             <span className="mx-2">|</span>
-            <span className="text-gray-800 font-medium">Add New Class</span>
+            <span className="text-gray-800 font-medium">{editingClassId ? "Edit Class" : "Add New Class"}</span>
           </>
         )}
       </div>
@@ -185,7 +208,7 @@ export default function Classes() {
                     )}
                   </div>
                   <div className="flex space-x-2 absolute top-4 right-4">
-                    <button className="text-blue-500 hover:text-blue-700">
+                    <button onClick={() => handleEditClick(cls)} className="text-blue-500 hover:text-blue-700">
                       <Edit2 size={16} />
                     </button>
                     <button onClick={() => handleDelete(cls.id)} className="text-red-500 hover:text-red-700">
@@ -308,7 +331,7 @@ export default function Classes() {
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-3xl mx-auto">
           <div className="text-center mb-8">
-            <h2 className="text-xl font-bold text-gray-800">Add New Class</h2>
+            <h2 className="text-xl font-bold text-gray-800">{editingClassId ? "Edit Class Details" : "Add New Class"}</h2>
             <div className="flex items-center justify-center text-xs mt-2 space-x-4">
               <div className="flex items-center text-blue-600">
                 <div className="w-4 h-1.5 bg-blue-600 rounded-full mr-1"></div>
