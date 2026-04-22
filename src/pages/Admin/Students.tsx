@@ -73,6 +73,7 @@ export default function Students() {
   };
 
   const [showBulkSubjectModal, setShowBulkSubjectModal] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [bulkSubjectData, setBulkSubjectData] = useState<{
     grade: string;
     subject: string;
