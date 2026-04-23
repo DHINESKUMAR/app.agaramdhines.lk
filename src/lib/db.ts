@@ -89,7 +89,8 @@ export const getAdminSettings = () => getData('adminSettings', {
   password: "0756452527Dd",
   email: "Ddhinesnivas111@gmail.com",
   profileImage: "https://picsum.photos/seed/admin/100/100",
-  instituteName: "DINESHKUMAR AGARAM DHINES"
+  instituteName: "DINESHKUMAR AGARAM DHINES",
+  websiteViews: "15,243"
 });
 export const saveAdminSettings = (settings: any) => saveData('adminSettings', settings);
 
