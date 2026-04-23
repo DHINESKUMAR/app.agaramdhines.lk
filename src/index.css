@@ -3,6 +3,20 @@
 html, body {
   overflow-x: hidden;
   width: 100%;
+  -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+     -khtml-user-select: none; /* Konqueror HTML */
+       -moz-user-select: none; /* Old versions of Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently supported by Chrome, Edge, Opera and Firefox */
+}
+
+/* Allow selection in input and text areas */
+input, textarea {
+  -webkit-user-select: text; /* Safari */
+     -moz-user-select: text; /* Firefox */
+      -ms-user-select: text; /* IE10+/Edge */
+          user-select: text; /* Standard */
 }
 
 @keyframes text-wave-linear {

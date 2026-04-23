@@ -2,14 +2,39 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#ffffff">
     <title>Agaram Dhines Online Academy</title>
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
     <meta name="description" content="Agaram Dhines Online Academy App">
+    
+    <!-- Code Protection Script -->
+    <script>
+      // Disable Right Click
+      document.addEventListener('contextmenu', event => event.preventDefault());
+
+      // Disable specific keyboard shortcuts (F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+S)
+      document.onkeydown = function(e) {
+        if(e.keyCode == 123) {
+           return false;
+        }
+        if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) {
+           return false;
+        }
+        if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) {
+           return false;
+        }
+        if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) {
+           return false;
+        }
+        if(e.ctrlKey && e.keyCode == 'S'.charCodeAt(0)) {
+           return false;
+        }
+      }
+    </script>
   </head>
-  <body>
+  <body ondragstart="return false">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <!-- PWABuilder Service Worker Detection Script -->
