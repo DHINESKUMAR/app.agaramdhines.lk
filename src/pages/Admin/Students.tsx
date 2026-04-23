@@ -80,6 +80,7 @@ export default function Students() {
     action: 'add' | 'remove';
     studentIds: string[];
   }>({ grade: "", subject: "", action: 'add', studentIds: [] });
+  const [bulkSearchQuery, setBulkSearchQuery] = useState("");
 
   useEffect(() => {
     getStudents().then(setStudents);
@@ -1170,82 +1171,137 @@ export default function Students() {
               </div>
 
               <div className="border border-gray-200 rounded-md overflow-hidden">
-                <div className="bg-gray-100 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+                <div className="bg-gray-100 px-4 py-3 border-b border-gray-200 flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-3">
                   <span className="font-medium text-sm text-gray-700">
                     Select Students {bulkSubjectData.grade && `in ${bulkSubjectData.grade}`}
                   </span>
                   
                   {bulkSubjectData.grade && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const gradeStudents = students.filter(s => s.grade === bulkSubjectData.grade);
-                        if (bulkSubjectData.studentIds.length === gradeStudents.length) {
-                          // deselect all
-                          setBulkSubjectData(prev => ({...prev, studentIds: []}));
-                        } else {
-                          // select all
-                          setBulkSubjectData(prev => ({...prev, studentIds: gradeStudents.map(s => s.id)}));
-                        }
-                      }}
-                      className="text-sm text-indigo-600 font-semibold hover:underline"
-                    >
-                      {bulkSubjectData.studentIds.length === students.filter(s => s.grade === bulkSubjectData.grade).length && students.filter(s => s.grade === bulkSubjectData.grade).length > 0
-                        ? "Deselect All" 
-                        : "Select All"}
-                    </button>
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <input
+                        type="text"
+                        placeholder="Search By Name/RollNo/User..."
+                        value={bulkSearchQuery}
+                        onChange={(e) => setBulkSearchQuery(e.target.value)}
+                        className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500 flex-1 sm:w-56"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const query = bulkSearchQuery.toLowerCase();
+                          const gradeStudents = students.filter(s => {
+                            if (s.grade !== bulkSubjectData.grade) return false;
+                            if (!query) return true;
+                            return (
+                              s.name?.toLowerCase().includes(query) ||
+                              s.rollNo?.toLowerCase().includes(query) ||
+                              s.username?.toLowerCase().includes(query)
+                            );
+                          });
+                          
+                          const allFilteredSelected = gradeStudents.length > 0 && gradeStudents.every(s => bulkSubjectData.studentIds.includes(s.id));
+                          
+                          if (allFilteredSelected) {
+                            // deselect all filtered
+                            const filteredIds = gradeStudents.map(s => s.id);
+                            setBulkSubjectData(prev => ({
+                              ...prev, 
+                              studentIds: prev.studentIds.filter(id => !filteredIds.includes(id))
+                            }));
+                          } else {
+                            // select all filtered
+                            const filteredIds = gradeStudents.map(s => s.id);
+                            setBulkSubjectData(prev => {
+                              const newIds = new Set([...prev.studentIds, ...filteredIds]);
+                              return { ...prev, studentIds: Array.from(newIds) };
+                            });
+                          }
+                        }}
+                        className="text-sm text-indigo-600 font-semibold hover:underline whitespace-nowrap"
+                      >
+                        {(() => {
+                           const query = bulkSearchQuery.toLowerCase();
+                           const gradeStudents = students.filter(s => {
+                             if (s.grade !== bulkSubjectData.grade) return false;
+                             if (!query) return true;
+                             return (
+                               s.name?.toLowerCase().includes(query) ||
+                               s.rollNo?.toLowerCase().includes(query) ||
+                               s.username?.toLowerCase().includes(query)
+                             );
+                           });
+                           const allFilteredSelected = gradeStudents.length > 0 && gradeStudents.every(s => bulkSubjectData.studentIds.includes(s.id));
+                           return allFilteredSelected ? "Deselect All" : "Select All";
+                        })()}
+                      </button>
+                    </div>
                   )}
                 </div>
                 
                 <div className="max-h-[30vh] overflow-y-auto p-2">
                   {!bulkSubjectData.grade ? (
                     <div className="p-4 text-center text-gray-500 text-sm">Please select a grade first.</div>
-                  ) : students.filter(s => s.grade === bulkSubjectData.grade).length === 0 ? (
-                    <div className="p-4 text-center text-gray-500 text-sm">No students found in this grade.</div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {students.filter(s => s.grade === bulkSubjectData.grade).map(student => {
-                        const isSelected = bulkSubjectData.studentIds.includes(student.id);
-                        const hasSubject = (student.subjects || []).includes(bulkSubjectData.subject);
-                        
+                  ) : (() => {
+                      const query = bulkSearchQuery.toLowerCase();
+                      const filteredInBulk = students.filter(s => {
+                        if (s.grade !== bulkSubjectData.grade) return false;
+                        if (!query) return true;
                         return (
-                          <label 
-                            key={student.id} 
-                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                              isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            <input 
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => {
-                                setBulkSubjectData(prev => {
-                                  const ids = new Set(prev.studentIds);
-                                  if (e.target.checked) ids.add(student.id);
-                                  else ids.delete(student.id);
-                                  return { ...prev, studentIds: Array.from(ids) };
-                                });
-                              }}
-                              className="w-4 h-4 text-indigo-600 rounded"
-                            />
-                            <div className="flex-1 truncate">
-                              <div className="text-sm font-semibold truncate">{student.name}</div>
-                              <div className="text-xs text-gray-500 flex gap-2">
-                                <span>{student.rollNo || student.id}</span>
-                                {bulkSubjectData.subject && (
-                                  hasSubject ? (
-                                    <span className="text-emerald-600 font-medium">· Has Subject</span>
-                                  ) : (
-                                    <span className="text-gray-400">· Pending</span>
-                                  )
-                                )}
-                              </div>
-                            </div>
-                          </label>
+                          s.name?.toLowerCase().includes(query) ||
+                          s.rollNo?.toLowerCase().includes(query) ||
+                          s.username?.toLowerCase().includes(query)
                         );
-                      })}
-                    </div>
-                  )}
+                      });
+                      
+                      if (filteredInBulk.length === 0) {
+                        return <div className="p-4 text-center text-gray-500 text-sm">No students found matching your search.</div>;
+                      }
+                      
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {filteredInBulk.map(student => {
+                            const isSelected = bulkSubjectData.studentIds.includes(student.id);
+                            const hasSubject = (student.subjects || []).includes(bulkSubjectData.subject);
+                            
+                            return (
+                              <label 
+                                key={student.id} 
+                                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                                  isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50'
+                                }`}
+                              >
+                                <input 
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    setBulkSubjectData(prev => {
+                                      const ids = new Set(prev.studentIds);
+                                      if (e.target.checked) ids.add(student.id);
+                                      else ids.delete(student.id);
+                                      return { ...prev, studentIds: Array.from(ids) };
+                                    });
+                                  }}
+                                  className="w-4 h-4 text-indigo-600 rounded"
+                                />
+                                <div className="flex-1 truncate">
+                                  <div className="text-sm font-semibold truncate">{student.name}</div>
+                                  <div className="text-xs text-gray-500 flex gap-2">
+                                    <span>{student.rollNo || student.id}</span>
+                                    {bulkSubjectData.subject && (
+                                      hasSubject ? (
+                                        <span className="text-emerald-600 font-medium">· Has Subject</span>
+                                      ) : (
+                                        <span className="text-gray-400">· Pending</span>
+                                      )
+                                    )}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      );
+                  })()}
                 </div>
               </div>
             </div>
