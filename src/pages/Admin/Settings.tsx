@@ -11,8 +11,7 @@ export default function Settings() {
     password: "",
     email: "",
     profileImage: "",
-    instituteName: "DINESHKUMAR AGARAM DHINES",
-    websiteViews: "15,243"
+    instituteName: "DINESHKUMAR AGARAM DHINES"
   });
   const [showPassword, setShowPassword] = useState(false);
   const [successMessage, setSuccessMessage] = useState(false);
@@ -140,19 +139,6 @@ export default function Settings() {
           />
         </div>
         
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Total Website Views (Fake count)
-          </label>
-          <input
-            type="text"
-            value={settings.websiteViews || ""}
-            onChange={(e) => setSettings({...settings, websiteViews: e.target.value})}
-            placeholder="e.g. 15,243"
-            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Admin Username

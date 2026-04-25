@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Users, Briefcase, DollarSign, TrendingUp, Gift, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Globe } from "lucide-react";
+import { Users, Briefcase, DollarSign, TrendingUp, Gift, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
 import { getStudents, getStaffs, getFees, getIncomeExpense, getTimeTable, getAdminSettings } from "../../lib/db";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
@@ -15,7 +15,6 @@ export default function AdminHome() {
   const [pieData, setPieData] = useState<any[]>([]);
   const [timetable, setTimetable] = useState<any[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [websiteViews, setWebsiteViews] = useState("15,243");
 
   useEffect(() => {
     const loadData = async () => {
@@ -25,10 +24,6 @@ export default function AdminHome() {
       const incomeExpense = await getIncomeExpense() || [];
       const tt = await getTimeTable() || [];
       const adminSettingData = await getAdminSettings();
-      
-      if (adminSettingData && adminSettingData.websiteViews) {
-        setWebsiteViews(adminSettingData.websiteViews);
-      }
       
       setTimetable(tt);
       
@@ -102,7 +97,7 @@ export default function AdminHome() {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Students */}
         <div className="bg-[#6b5b95] rounded-xl p-5 text-white shadow-sm relative overflow-hidden">
           <div className="flex justify-between items-start mb-4">
@@ -160,21 +155,6 @@ export default function AdminHome() {
           <div className="flex justify-between items-end text-xs text-white/70">
             <span>This Month</span>
             <span>Auto-clears monthly</span>
-          </div>
-        </div>
-
-        {/* Website Views (Fake count) */}
-        <div className="bg-[#48b5c4] rounded-xl p-5 text-white shadow-sm relative overflow-hidden">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <p className="text-sm font-medium text-white/80 mb-1">Website Views</p>
-              <Globe size={20} className="text-white/60" />
-            </div>
-            <h3 className="text-4xl font-bold">{websiteViews || "15,243"}</h3>
-          </div>
-          <div className="flex justify-between items-end text-xs text-white/70 mt-2">
-            <span>Overall Traffic</span>
-            <span>Live Data</span>
           </div>
         </div>
       </div>
