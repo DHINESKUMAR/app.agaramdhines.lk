@@ -153,6 +153,13 @@ export default function Students() {
       return;
     }
     
+    setUpdateProgress(0);
+    // Simulate loading to 100
+    for(let i = 1; i <= 100; i += 2) {
+      await new Promise(resolve => setTimeout(resolve, 30));
+      setUpdateProgress(i);
+    }
+    
     try {
       // You can bypass auth creation here entirely as stated by the user
       // or at least handle the error better if it already exists/etc. 
@@ -171,12 +178,15 @@ export default function Students() {
       // Save to local storage and Firebase Database ONLY
       await saveStudents(updatedStudents);
       
+      setUpdateProgress(100);
       alert("Student added successfully to the Database!");
       resetForm();
       setView("menu");
+      setUpdateProgress(-1);
     } catch (error: any) {
       console.error("Error creating student:", error);
       alert("Error creating student: " + error.message);
+      setUpdateProgress(-1);
     }
   };
 
