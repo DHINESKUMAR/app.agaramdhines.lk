@@ -18,7 +18,7 @@ export default function Students() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [importing, setImporting] = useState(false);
   const [bulkImportGrade, setBulkImportGrade] = useState("");
-  const [docModal, setDocModal] = useState<{ type: "idcard" | "certificate" | null, student: any }>({ type: null, student: null });
+  const [docModal, setDocModal] = useState<{ type: "idcard" | "certificate" | "details" | null, student: any }>({ type: null, student: null });
   const printRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = () => {
@@ -130,10 +130,17 @@ export default function Students() {
   };
 
   const GRADES = [
-    "தரம் 01", "தரம் 02", "தரம் 03", "தரம் 04", "தரம் 05", 
+    "தரம் 1", "தரம் 2", "தரம் 3", "தரம் 4", "தரம் 5", 
     "தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", 
     "தரம் 11", "தரம் 12", "தரம் 13"
   ];
+
+  const getGradeSortValue = (name: string) => {
+    const match = name.match(/\d+/);
+    return match ? parseInt(match[0]) : 999;
+  };
+
+  const sortedClasses = [...classes].sort((a, b) => getGradeSortValue(a.name) - getGradeSortValue(b.name));
 
   const availableSubjects = allSubjects.map(s => s.name);
 
@@ -554,16 +561,16 @@ export default function Students() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Default Class / Grade (If missing in Excel)
             </label>
-            <select
-              value={bulkImportGrade}
-              onChange={(e) => setBulkImportGrade(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">-- Select Class --</option>
-              {classes.map(c => (
-                <option key={c.id} value={c.name}>{c.name}</option>
-              ))}
-            </select>
+              <select
+                value={bulkImportGrade}
+                onChange={(e) => setBulkImportGrade(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">-- Select Class --</option>
+                {sortedClasses.map(c => (
+                  <option key={c.id} value={c.name}>{c.name}</option>
+                ))}
+              </select>
           </div>
 
           <div>
@@ -617,12 +624,12 @@ export default function Students() {
               className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
             >
               <option value="">Select Class</option>
-              {classes.map((cls) => (
+              {sortedClasses.map((cls) => (
                 <option key={cls.id} value={cls.name}>
                   {cls.name}
                 </option>
               ))}
-              {GRADES.filter(g => !classes.some(c => c.name === g)).map((grade) => (
+              {GRADES.filter(g => !classes.some(c => c.name === g)).sort((a,b) => getGradeSortValue(a) - getGradeSortValue(b)).map((grade) => (
                 <option key={grade} value={grade}>
                   {grade}
                 </option>
@@ -929,12 +936,12 @@ export default function Students() {
               >
                 <option value="">All Classes ({students.length})</option>
                 <option value="unassigned" className="text-red-600 font-bold">Unassigned ({unassignedCount})</option>
-                {classes.map((cls) => (
+                {sortedClasses.map((cls) => (
                   <option key={cls.id} value={cls.name}>
                     {cls.name} ({studentCountByClass[cls.name] || 0})
                   </option>
                 ))}
-                {GRADES.filter(g => !classes.some(c => c.name === g)).map((grade) => (
+                {GRADES.filter(g => !classes.some(c => c.name === g)).sort((a,b) => getGradeSortValue(a) - getGradeSortValue(b)).map((grade) => (
                   <option key={grade} value={grade}>
                     {grade} ({studentCountByClass[grade] || 0})
                   </option>
@@ -991,7 +998,13 @@ export default function Students() {
                   >
                     Cert
                   </button>
-                  <button className="p-1 hover:bg-gray-100 rounded text-gray-600" title="View">👁️</button>
+                  <button 
+                    onClick={() => setDocModal({ type: "details", student })}
+                    className="p-1 hover:bg-gray-100 rounded text-gray-600" 
+                    title="View"
+                  >
+                    👁️
+                  </button>
                   <button 
                     onClick={() => handleEditClick(student)}
                     className="p-1 hover:bg-gray-100 rounded text-blue-600" 
@@ -1017,7 +1030,9 @@ export default function Students() {
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto flex flex-col">
               <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
-                <h3 className="font-bold text-gray-800 capitalize">{docModal.type === 'idcard' ? 'Student ID Card' : 'Course Certificate'}</h3>
+                <h3 className="font-bold text-gray-800 capitalize">
+                  {docModal.type === 'idcard' ? 'Student ID Card' : docModal.type === 'certificate' ? 'Course Certificate' : 'Student Details'}
+                </h3>
                 <div className="flex gap-2">
                   <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium">
                     <Printer size={16} /> Print
@@ -1041,7 +1056,7 @@ export default function Students() {
                             <img src={docModal.student.image} alt={docModal.student.name} className="w-full h-full object-cover rounded-full" />
                           ) : (
                             <div className="w-full h-full bg-gray-200 rounded-full flex items-center justify-center text-3xl font-bold text-gray-500">
-                              {docModal.student.name.charAt(0)}
+                              {docModal.student.name.charAt(0).toUpperCase()}
                             </div>
                           )}
                         </div>
@@ -1086,7 +1101,7 @@ export default function Students() {
                         <p className="text-[10px] text-white/80 font-medium tracking-wider uppercase">Agaram Dhines Academy</p>
                       </div>
                     </div>
-                  ) : (
+                  ) : docModal.type === 'certificate' ? (
                     /* Certificate Template */
                     <div className="w-[800px] h-[565px] relative overflow-hidden bg-white border-[12px] border-double border-indigo-900 p-8 flex flex-col items-center text-center">
                       <div className="absolute top-0 left-0 w-32 h-32 border-t-4 border-l-4 border-yellow-500 m-4"></div>
@@ -1137,6 +1152,86 @@ export default function Students() {
                         </div>
                       </div>
                     </div>
+                  ) : (
+                    /* Details Template */
+                    <div className="w-full max-w-2xl bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                      <div className="bg-indigo-600 p-6 flex items-center gap-6">
+                        <div className="w-24 h-24 bg-white rounded-full p-1 shadow-md">
+                          {docModal.student.image ? (
+                            <img src={docModal.student.image} alt={docModal.student.name} className="w-full h-full object-cover rounded-full" />
+                          ) : (
+                            <div className="w-full h-full bg-gray-200 rounded-full flex items-center justify-center text-3xl font-bold text-gray-500">
+                              {docModal.student.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-white">
+                          <h2 className="text-2xl font-bold">{docModal.student.name}</h2>
+                          <p className="opacity-90">{docModal.student.grade}</p>
+                          <span className="inline-block mt-2 px-2 py-1 bg-white/20 rounded text-xs font-medium">
+                            {docModal.student.id}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                          <h4 className="font-bold text-gray-900 border-b pb-1 text-sm uppercase tracking-wider text-indigo-600">Personal Info</h4>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <span className="text-gray-500 font-medium">Roll No:</span>
+                            <span className="text-gray-900 font-bold">{docModal.student.rollNo || 'N/A'}</span>
+                            
+                            <span className="text-gray-500 font-medium">Date of Birth:</span>
+                            <span className="text-gray-900">{docModal.student.dob || 'N/A'}</span>
+                            
+                            <span className="text-gray-500 font-medium">Gender:</span>
+                            <span className="text-gray-900 capitalize">{docModal.student.gender || 'N/A'}</span>
+                            
+                            <span className="text-gray-500 font-medium">Phone:</span>
+                            <span className="text-gray-900">{docModal.student.phone || 'N/A'}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-4">
+                          <h4 className="font-bold text-gray-900 border-b pb-1 text-sm uppercase tracking-wider text-indigo-600">Account Details</h4>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <span className="text-gray-500 font-medium">Username:</span>
+                            <span className="text-gray-900 font-mono font-bold">{docModal.student.username}</span>
+                            
+                            <span className="text-gray-500 font-medium">Password:</span>
+                            <span className="text-gray-900 font-mono font-bold">{docModal.student.password}</span>
+                            
+                            <span className="text-gray-500 font-medium">Guardian:</span>
+                            <span className="text-gray-900">{docModal.student.guardianName || 'N/A'}</span>
+                            
+                            <span className="text-gray-500 font-medium">Admission:</span>
+                            <span className="text-gray-900">{docModal.student.admissionDate || 'N/A'}</span>
+                          </div>
+                        </div>
+
+                        <div className="col-span-1 md:col-span-2 space-y-2">
+                          <h4 className="font-bold text-gray-900 border-b pb-1 text-sm uppercase tracking-wider text-indigo-600">Address</h4>
+                          <p className="text-sm text-gray-800 leading-relaxed bg-gray-50 p-3 rounded border border-gray-100 italic">
+                            {docModal.student.address || 'No address provided.'}
+                          </p>
+                        </div>
+
+                        <div className="col-span-1 md:col-span-2 space-y-2">
+                          <h4 className="font-bold text-gray-900 border-b pb-1 text-sm uppercase tracking-wider text-indigo-600">Subjects</h4>
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {docModal.student.subjects && docModal.student.subjects.length > 0 ? (
+                                docModal.student.subjects.map((sub: string, i: number) => (
+                                  <span key={i} className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md text-xs font-semibold border border-indigo-100">
+                                    {sub}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-xs text-gray-400 italic">No subjects assigned.</span>
+                              )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1171,10 +1266,10 @@ export default function Students() {
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Select Grade</option>
-                    {classes.map((cls) => (
+                    {sortedClasses.map((cls) => (
                       <option key={cls.id} value={cls.name}>{cls.name}</option>
                     ))}
-                    {GRADES.filter(g => !classes.some(c => c.name === g)).map((grade) => (
+                    {GRADES.filter(g => !classes.some(c => c.name === g)).sort((a,b) => getGradeSortValue(a) - getGradeSortValue(b)).map((grade) => (
                       <option key={grade} value={grade}>{grade}</option>
                     ))}
                   </select>
