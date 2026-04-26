@@ -832,7 +832,9 @@ export default function Students() {
 
   if (view === "view") {
     const filteredStudents = students.filter(s => {
-      const matchesClass = filterClass ? s.grade === filterClass : true;
+      const matchesClass = filterClass === "unassigned" 
+        ? (!s.grade || s.grade === "")
+        : (filterClass ? s.grade === filterClass : true);
       const matchesSearch = searchQuery 
         ? s.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
           s.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -843,9 +845,13 @@ export default function Students() {
     });
 
     const studentCountByClass = students.reduce((acc, s) => {
-      acc[s.grade] = (acc[s.grade] || 0) + 1;
+      if (s.grade) {
+        acc[s.grade] = (acc[s.grade] || 0) + 1;
+      }
       return acc;
     }, {} as Record<string, number>);
+
+    const unassignedCount = students.filter(s => !s.grade || s.grade === "").length;
 
     return (
       <>
@@ -887,6 +893,7 @@ export default function Students() {
                 className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white w-full sm:w-auto"
               >
                 <option value="">All Classes ({students.length})</option>
+                <option value="unassigned" className="text-red-600 font-bold">Unassigned ({unassignedCount})</option>
                 {classes.map((cls) => (
                   <option key={cls.id} value={cls.name}>
                     {cls.name} ({studentCountByClass[cls.name] || 0})
