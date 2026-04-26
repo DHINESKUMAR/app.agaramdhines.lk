@@ -153,6 +153,15 @@ export default function Students() {
       return;
     }
     
+    // Check for duplicate roll number
+    if (formData.rollNo) {
+      const isDuplicateRoll = students.some(s => s.rollNo && s.rollNo.toString().trim() === formData.rollNo.toString().trim());
+      if (isDuplicateRoll) {
+        alert("ஏற்கனவே இந்த roll number save ஆகி உள்ளது / This roll number is already in use.");
+        return;
+      }
+    }
+    
     setUpdateProgress(0);
     // Simulate loading to 100
     for(let i = 1; i <= 100; i += 2) {
@@ -195,6 +204,19 @@ export default function Students() {
     if (!formData.name || !formData.username) {
       alert("Name and Username are required!");
       return;
+    }
+    
+    // Check for duplicate roll number
+    if (formData.rollNo) {
+      const isDuplicateRoll = students.some(s => 
+        s.id !== editingStudentId && 
+        s.rollNo && 
+        s.rollNo.toString().trim() === formData.rollNo.toString().trim()
+      );
+      if (isDuplicateRoll) {
+        alert("ஏற்கனவே இந்த roll number save ஆகி உள்ளது / This roll number is already in use.");
+        return;
+      }
     }
     
     setUpdateProgress(0);
@@ -373,6 +395,19 @@ export default function Students() {
           const username = String(row[usernameKey] || "").trim();
           const password = String(row[passwordKey] || "").trim();
           const rollNo = rollNoKey ? String(row[rollNoKey] || "").trim() : "";
+          
+          // Check for duplicate roll number within existing students OR newStudents being imported
+          if (rollNo) {
+            const isDuplicateInExisting = students.some(s => s.rollNo && s.rollNo.toString().trim() === rollNo);
+            const isDuplicateInNew = newStudents.some(s => s.rollNo === rollNo);
+            
+            if (isDuplicateInExisting || isDuplicateInNew) {
+              console.error(`Skipping row, roll number ${rollNo} already exists for ${name}`);
+              errorCount++;
+              continue;
+            }
+          }
+          
           const subjectsStr = subjectsKey ? String(row[subjectsKey] || "").trim() : "";
           
           let subjects = subjectsStr ? subjectsStr.split(/[,;]/).map(s => s.trim()).filter(Boolean) : [];
