@@ -1543,17 +1543,17 @@ export default function StudentDashboard() {
                 <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mr-3">
                   <ShieldAlert size={20} />
                 </div>
-                Rules & Regulations
+                விதிமுறைகள் மற்றும் நிபந்தனைகள் (Rules & Regulations)
               </h2>
-              <p className="text-slate-500 mb-8 ml-13">Please follow these rules for a better learning environment.</p>
+              <p className="text-slate-500 mb-8 ml-13">மாணவர்கள் தங்கள் கற்றல் சூழலை மரியாதையுடனும், ஒழுக்கத்துடனும் பேணுவதற்கு இது உதவும்.</p>
               
               <div className="grid grid-cols-1 gap-4">
                 {[
-                  { id: "01", text: "Attendance of students is strict for better learning activities of students.", color: "indigo" },
-                  { id: "02", text: "Students are prohibited from misrepresenting the phone numbers of other students for any reason.", color: "rose" },
-                  { id: "03", text: "If you do not pay the fee on the specified date, you will be removed from the class.", color: "amber" },
-                  { id: "04", text: "Homework is compulsory.", color: "emerald" },
-                  { id: "05", text: "Students who disrupt the class will be expelled immediately.", color: "slate" }
+                  { id: "01", text: "நிர்ணயிக்கப்பட்ட வருகைப்பதிவு: மாணவர்களின் சிறந்த கற்றல் செயல்பாடுகளுக்காக வருகைப்பதிவு கட்டாயமாகும்.", color: "indigo" },
+                  { id: "02", text: "தவறான தகவல் தடை: மாணவர்கள் மற்ற மாணவர்களின் தொலைபேசி எண்களை எந்த காரணத்திற்காகவும் தவறாகப் பயன்படுத்தக் கூடாது.", color: "rose" },
+                  { id: "03", text: "கட்டண ஒழுங்கு: குறிப்பிட்ட தேதியில் கட்டணத்தை செலுத்தாவிடில், வகுப்பிலிருந்து நீக்கப்படுவர்.", color: "amber" },
+                  { id: "04", text: "வீட்டுப்பாடம் (Homework): வீட்டுப்பாடங்கள் செய்வது கட்டாயமாகும்.", color: "emerald" },
+                  { id: "05", text: "நன்னடத்தை: வகுப்பிற்கு இடையூறு விளைவிக்கும் மாணவர்கள் உடனடியாக வெளியேற்றப்படுவார்கள்.", color: "slate" }
                 ].map((rule) => (
                   <motion.div 
                     initial={{ opacity: 0, x: -20 }}
@@ -1574,11 +1574,11 @@ export default function StudentDashboard() {
                   <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center">
                     <Info size={16} />
                   </div>
-                  <h3 className="font-bold">Important Note</h3>
+                  <h3 className="font-bold">முக்கிய குறிப்பு (Important Note)</h3>
                 </div>
                 <p className="text-slate-400 text-sm leading-relaxed">
-                  These rules are strictly enforced to maintain academic discipline and ensure high-quality education for all students. 
-                  By being a part of Agaram Dhines Academy, you agree to abide by these regulations.
+                  மாணவர்களின் கல்வி முன்னேற்றத்திற்காகவும், அகாடமியின் ஒழுக்கத்தைப் பேணுவதற்காகவும் இந்த விதிமுறைகள் கடுமையாகப் பின்பற்றப்படுகின்றன. 
+                  அகரம் தினேஷ் அகாடமி (Agaram Dhines Academy) உடன் இணைந்திருக்கும் ஒவ்வொரு மாணவரும் இந்த விதிமுறைகளுக்குக் கட்டுப்பட வேண்டும்.
                 </p>
               </div>
             </div>
