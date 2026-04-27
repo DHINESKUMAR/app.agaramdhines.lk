@@ -431,8 +431,6 @@ export default function StudentDashboard() {
     { id: "subjects", name: "My Subjects", icon: <Book size={24} /> },
     { id: "timetable", name: "Timetable", icon: <Calendar size={24} /> },
     { id: "homework", name: "Homework", icon: <BookOpen size={24} /> },
-    { id: "marks", name: "Exam Marks", icon: <Award size={24} /> },
-    { id: "rules", name: "Rules & Regulations", icon: <ShieldAlert size={24} /> },
     { id: "fees", name: "Fees", icon: <DollarSign size={24} /> },
     { id: "website", name: "Website", icon: <Globe size={24} /> },
   ];
