@@ -39,7 +39,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
 
-import { getCourses, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses } from "../../lib/db";
+import { getCourses, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks } from "../../lib/db";
 import CountdownTimer from "../../components/CountdownTimer";
 import PopupAnnouncement from "../../components/PopupAnnouncement";
 import LiveChat from "../../components/LiveChat";
@@ -60,6 +60,7 @@ export default function StudentDashboard() {
   const [homework, setHomework] = useState<any[]>([]);
   const [staffs, setStaffs] = useState<any[]>([]);
   const [timetable, setTimetable] = useState<any[]>([]);
+  const [examMarks, setExamMarks] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
@@ -202,6 +203,7 @@ export default function StudentDashboard() {
       const allAttendance = await getAttendance();
       const allStaffs = await getStaffs();
       const allTimetable = await getTimeTable();
+      const allExamMarks = await getExamMarks();
       const allClasses = await getClasses();
       const settings = await getAdminSettings();
       
@@ -225,6 +227,7 @@ export default function StudentDashboard() {
       setClassLinks(await getClassLinks());
       setStaffs(allStaffs);
       setTimetable(allTimetable.filter((t: any) => t.grade === data.grade));
+      setExamMarks(allExamMarks.filter((m: any) => m.studentId === data.id || m.studentName === data.name));
       setClasses(allClasses);
       setAdminSettings(settings);
       
@@ -427,6 +430,7 @@ export default function StudentDashboard() {
     { id: "subjects", name: "My Subjects", icon: <Book size={24} /> },
     { id: "timetable", name: "Timetable", icon: <Calendar size={24} /> },
     { id: "homework", name: "Homework", icon: <BookOpen size={24} /> },
+    { id: "marks", name: "Exam Marks", icon: <Award size={24} /> },
     { id: "fees", name: "Fees", icon: <DollarSign size={24} /> },
     { id: "website", name: "Website", icon: <Globe size={24} /> },
   ];
@@ -792,6 +796,16 @@ export default function StudentDashboard() {
                   <Youtube size={28} />
                 </div>
                 <span className="font-bold text-slate-700 text-sm sm:text-base">YouTube</span>
+              </div>
+
+              <div
+                onClick={() => setActiveTab("marks")}
+                className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"
+              >
+                <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-emerald-100 transition-colors">
+                  <Award size={28} />
+                </div>
+                <span className="font-bold text-slate-700 text-sm sm:text-base">Marks</span>
               </div>
 
               <div
@@ -1420,6 +1434,82 @@ export default function StudentDashboard() {
                             {record.status === "Absent" && <XCircle size={12} />}
                             {record.status}
                           </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "marks" && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+              <h2 className="text-2xl font-bold mb-2 text-slate-800 flex items-center">
+                <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mr-3">
+                  <Award size={20} />
+                </div>
+                Exam Marks / Results
+              </h2>
+              <p className="text-slate-500 mb-8 ml-13">View your academic performance and exam results.</p>
+              
+              <div className="space-y-6">
+                {examMarks.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
+                    <Award className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+                    <p>No exam marks found yet.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {examMarks.map((mark: any) => (
+                      <div key={mark.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                        <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
+                          <h3 className="font-bold text-slate-800">{mark.examTitle || "Term Exam"}</h3>
+                          <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100">
+                            {mark.term || "N/A"}
+                          </span>
+                        </div>
+                        <div className="p-5">
+                          <div className="flex justify-between items-center mb-4">
+                            <div>
+                              <p className="text-sm font-bold text-slate-900">{mark.subject}</p>
+                              <p className="text-xs text-slate-500">{mark.date || new Date().toLocaleDateString()}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-2xl font-black text-indigo-600">{mark.marks}<span className="text-sm text-slate-400 font-normal">/100</span></p>
+                              <p className={`text-xs font-bold ${
+                                mark.marks >= 75 ? 'text-emerald-600' : 
+                                mark.marks >= 65 ? 'text-blue-600' :
+                                mark.marks >= 50 ? 'text-amber-600' :
+                                'text-rose-600'
+                              }`}>
+                                Grade: {
+                                  mark.marks >= 75 ? 'A' : 
+                                  mark.marks >= 65 ? 'B' :
+                                  mark.marks >= 50 ? 'C' :
+                                  mark.marks >= 35 ? 'S' : 'W'
+                                }
+                              </p>
+                            </div>
+                          </div>
+                          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${mark.marks}%` }}
+                              className={`h-full rounded-full ${
+                                mark.marks >= 75 ? 'bg-emerald-500' : 
+                                mark.marks >= 50 ? 'bg-indigo-500' :
+                                'bg-rose-500'
+                              }`}
+                            />
+                          </div>
+                          {mark.remarks && (
+                            <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100 italic text-xs text-slate-600">
+                              " {mark.remarks} "
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
