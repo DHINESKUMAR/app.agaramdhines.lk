@@ -1463,56 +1463,62 @@ export default function StudentDashboard() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {examMarks.map((mark: any) => (
-                      <div key={mark.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
-                        <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
-                          <h3 className="font-bold text-slate-800">{mark.examTitle || "Term Exam"}</h3>
-                          <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100">
-                            {mark.term || "N/A"}
-                          </span>
-                        </div>
-                        <div className="p-5">
-                          <div className="flex justify-between items-center mb-4">
-                            <div>
-                              <p className="text-sm font-bold text-slate-900">{mark.subject}</p>
-                              <p className="text-xs text-slate-500">{mark.date || new Date().toLocaleDateString()}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-2xl font-black text-indigo-600">{mark.marks}<span className="text-sm text-slate-400 font-normal">/100</span></p>
-                              <p className={`text-xs font-bold ${
-                                mark.marks >= 75 ? 'text-emerald-600' : 
-                                mark.marks >= 65 ? 'text-blue-600' :
-                                mark.marks >= 50 ? 'text-amber-600' :
-                                'text-rose-600'
-                              }`}>
-                                Grade: {
-                                  mark.marks >= 75 ? 'A' : 
-                                  mark.marks >= 65 ? 'B' :
-                                  mark.marks >= 50 ? 'C' :
-                                  mark.marks >= 35 ? 'S' : 'W'
-                                }
-                              </p>
-                            </div>
+                    {examMarks.map((mark: any) => {
+                      const obtained = Number(mark.obtained) || 0;
+                      const total = Number(mark.total) || 100;
+                      const percentage = (obtained / total) * 100;
+                      
+                      const getGrade = (p: number) => {
+                        if (p >= 75) return { text: 'A', color: 'text-emerald-600' };
+                        if (p >= 65) return { text: 'B', color: 'text-blue-600' };
+                        if (p >= 50) return { text: 'C', color: 'text-indigo-600' };
+                        if (p >= 35) return { text: 'S', color: 'text-amber-600' };
+                        return { text: 'W', color: 'text-rose-600' };
+                      };
+                      
+                      const grade = getGrade(percentage);
+
+                      return (
+                        <div key={mark.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                          <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
+                            <h3 className="font-bold text-slate-800">{mark.exam || "Term Exam"}</h3>
+                            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100">
+                              {mark.subject}
+                            </span>
                           </div>
-                          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <motion.div 
-                              initial={{ width: 0 }}
-                              animate={{ width: `${mark.marks}%` }}
-                              className={`h-full rounded-full ${
-                                mark.marks >= 75 ? 'bg-emerald-500' : 
-                                mark.marks >= 50 ? 'bg-indigo-500' :
-                                'bg-rose-500'
-                              }`}
-                            />
-                          </div>
-                          {mark.remarks && (
-                            <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100 italic text-xs text-slate-600">
-                              " {mark.remarks} "
+                          <div className="p-5">
+                            <div className="flex justify-between items-center mb-4">
+                              <div>
+                                <p className="text-sm font-bold text-slate-900">{mark.subject}</p>
+                                <p className="text-xs text-slate-500">{mark.date || new Date().toLocaleDateString()}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-2xl font-black text-indigo-600">{obtained}<span className="text-sm text-slate-400 font-normal">/{total}</span></p>
+                                <p className={`text-xs font-bold ${grade.color}`}>
+                                  Grade: {grade.text} ({percentage.toFixed(1)}%)
+                                </p>
+                              </div>
                             </div>
-                          )}
+                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <motion.div 
+                                initial={{ width: 0 }}
+                                animate={{ width: `${percentage}%` }}
+                                className={`h-full rounded-full ${
+                                  percentage >= 75 ? 'bg-emerald-500' : 
+                                  percentage >= 50 ? 'bg-indigo-500' :
+                                  'bg-rose-500'
+                                }`}
+                              />
+                            </div>
+                            {mark.remarks && (
+                              <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100 italic text-xs text-slate-600">
+                                " {mark.remarks} "
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

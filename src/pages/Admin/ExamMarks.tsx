@@ -57,10 +57,10 @@ export default function ExamMarks() {
     return (!selectedGrade || s.grade === selectedGrade) &&
     (!selectedSubject || studentSubjects.includes(selectedSubject)) &&
     (!searchTerm || 
-      s.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      s.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.rollNo?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+        s.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        s.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (s.rollNo && s.rollNo.toString().toLowerCase().includes(searchTerm.toLowerCase()))
+      )
   });
 
   const handleMarkChange = (studentId: string, field: 'obtained' | 'total' | 'remarks', value: string) => {
@@ -311,7 +311,7 @@ export default function ExamMarks() {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Name or ID..."
+                placeholder="Name, ID or Roll No..."
                 className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-400 bg-gray-50 font-medium text-gray-800"
               />
             </div>
