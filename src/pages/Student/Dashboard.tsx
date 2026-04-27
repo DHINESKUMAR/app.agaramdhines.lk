@@ -30,7 +30,8 @@ import {
   Award,
   QrCode,
   RotateCw,
-  MessageCircle
+  MessageCircle,
+  ShieldAlert
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
@@ -431,6 +432,7 @@ export default function StudentDashboard() {
     { id: "timetable", name: "Timetable", icon: <Calendar size={24} /> },
     { id: "homework", name: "Homework", icon: <BookOpen size={24} /> },
     { id: "marks", name: "Exam Marks", icon: <Award size={24} /> },
+    { id: "rules", name: "Rules & Regulations", icon: <ShieldAlert size={24} /> },
     { id: "fees", name: "Fees", icon: <DollarSign size={24} /> },
     { id: "website", name: "Website", icon: <Globe size={24} /> },
   ];
@@ -806,6 +808,16 @@ export default function StudentDashboard() {
                   <Award size={28} />
                 </div>
                 <span className="font-bold text-slate-700 text-sm sm:text-base">Marks</span>
+              </div>
+
+              <div
+                onClick={() => setActiveTab("rules")}
+                className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"
+              >
+                <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-rose-100 transition-colors">
+                  <ShieldAlert size={28} />
+                </div>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">Rules</span>
               </div>
 
               <div
@@ -1521,6 +1533,55 @@ export default function StudentDashboard() {
                     })}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "rules" && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+              <h2 className="text-2xl font-bold mb-2 text-slate-800 flex items-center">
+                <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mr-3">
+                  <ShieldAlert size={20} />
+                </div>
+                Rules & Regulations
+              </h2>
+              <p className="text-slate-500 mb-8 ml-13">Please follow these rules for a better learning environment.</p>
+              
+              <div className="grid grid-cols-1 gap-4">
+                {[
+                  { id: "01", text: "Attendance of students is strict for better learning activities of students.", color: "indigo" },
+                  { id: "02", text: "Students are prohibited from misrepresenting the phone numbers of other students for any reason.", color: "rose" },
+                  { id: "03", text: "If you do not pay the fee on the specified date, you will be removed from the class.", color: "amber" },
+                  { id: "04", text: "Homework is compulsory.", color: "emerald" },
+                  { id: "05", text: "Students who disrupt the class will be expelled immediately.", color: "slate" }
+                ].map((rule) => (
+                  <motion.div 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    key={rule.id} 
+                    className="flex items-start gap-4 p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-white hover:shadow-sm transition-all"
+                  >
+                    <div className={`w-8 h-8 rounded-lg bg-${rule.color}-100 text-${rule.color}-600 flex items-center justify-center font-bold text-sm shrink-0 border border-${rule.color}-200`}>
+                      {rule.id}
+                    </div>
+                    <p className="text-slate-700 font-medium leading-relaxed">{rule.text}</p>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="mt-8 p-6 bg-slate-900 rounded-2xl text-white">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center">
+                    <Info size={16} />
+                  </div>
+                  <h3 className="font-bold">Important Note</h3>
+                </div>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  These rules are strictly enforced to maintain academic discipline and ensure high-quality education for all students. 
+                  By being a part of Agaram Dhines Academy, you agree to abide by these regulations.
+                </p>
               </div>
             </div>
           </div>
