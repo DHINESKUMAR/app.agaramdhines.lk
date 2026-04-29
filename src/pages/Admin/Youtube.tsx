@@ -1,67 +1,100 @@
 import React, { useState, useEffect } from 'react';
-import { Youtube as YoutubeIcon, PlayCircle, Trash2, ArrowLeft, Plus, ExternalLink, BookOpen } from 'lucide-react';
-import { getYoutubeLinks, saveYoutubeLinks } from '../../lib/db';
+import { Youtube as YoutubeIcon, PlayCircle, Trash2, ArrowLeft, Plus, ExternalLink, BookOpen, Folder, Globe, FileText, LayoutGrid, List } from 'lucide-react';
+import { getYoutubeLinks, saveYoutubeLinks, getWebPosts, saveWebPosts } from '../../lib/db';
 
 export default function Youtube() {
+  const [activeTab, setActiveTab] = useState<'youtube' | 'webposts'>('youtube');
   const [links, setLinks] = useState<any[]>([]);
+  const [webPosts, setWebPosts] = useState<any[]>([]);
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
+  const [viewType, setViewType] = useState<'grid' | 'list'>('grid');
   
   const [formData, setFormData] = useState({
     subject: '',
     title: '',
-    link: ''
+    link: '',
+    folder: '',
+    isPublic: false,
+    content: '' // for web posts
   });
 
   useEffect(() => {
-    getYoutubeLinks().then(data => {
-      if (Array.isArray(data)) {
-        setLinks(data);
-      } else {
-        setLinks([]);
-      }
+    Promise.all([getYoutubeLinks(), getWebPosts()]).then(([linksData, postsData]) => {
+      setLinks(Array.isArray(linksData) ? linksData : []);
+      setWebPosts(Array.isArray(postsData) ? postsData : []);
     });
   }, []);
 
   const GRADES = [
+    "Public (All Students)",
     "தரம் 01", "தரம் 02", "தரம் 03", "தரம் 04", "தரம் 05", 
     "தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", 
     "தரம் 11", "தரம் 12", "தரம் 13"
   ];
 
-  const handleAddLink = async (e: React.FormEvent) => {
+  const handleAddEntry = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.subject || !formData.title || !formData.link) {
-      alert("Subject, Title, and Link are required!");
-      return;
-    }
     
-    // Basic YouTube URL validation
-    if (!formData.link.includes('youtube.com') && !formData.link.includes('youtu.be')) {
-      alert("Please enter a valid YouTube URL.");
-      return;
-    }
+    if (activeTab === 'youtube') {
+      if (!formData.subject || !formData.title || !formData.link || !formData.folder) {
+        alert("Subject, Folder, Title, and Link are required!");
+        return;
+      }
+      
+      if (!formData.link.includes('youtube.com') && !formData.link.includes('youtu.be')) {
+        alert("Please enter a valid YouTube URL.");
+        return;
+      }
 
-    const newLink = { 
-      id: Date.now().toString(), 
-      grade: selectedGrade,
-      subject: formData.subject,
-      title: formData.title,
-      link: formData.link,
-      date: new Date().toISOString()
-    };
+      const newLink = { 
+        id: Date.now().toString(), 
+        grade: selectedGrade === "Public (All Students)" ? "Public" : selectedGrade,
+        isPublic: selectedGrade === "Public (All Students)",
+        subject: formData.subject,
+        folder: formData.folder,
+        title: formData.title,
+        link: formData.link,
+        date: new Date().toISOString()
+      };
+      
+      const updatedLinks = [...links, newLink];
+      setLinks(updatedLinks);
+      await saveYoutubeLinks(updatedLinks);
+    } else {
+      if (!formData.subject || !formData.title || !formData.content) {
+        alert("Subject, Title, and Content are required!");
+        return;
+      }
+
+      const newPost = {
+        id: Date.now().toString(),
+        grade: selectedGrade === "Public (All Students)" ? "Public" : selectedGrade,
+        isPublic: selectedGrade === "Public (All Students)",
+        subject: formData.subject,
+        title: formData.title,
+        content: formData.content,
+        date: new Date().toISOString()
+      };
+
+      const updatedPosts = [...webPosts, newPost];
+      setWebPosts(updatedPosts);
+      await saveWebPosts(updatedPosts);
+    }
     
-    const updatedLinks = [...links, newLink];
-    setLinks(updatedLinks);
-    await saveYoutubeLinks(updatedLinks);
-    
-    setFormData({ subject: '', title: '', link: '' });
+    setFormData({ subject: '', title: '', link: '', folder: '', isPublic: false, content: '' });
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this video link?")) {
-      const updatedLinks = links.filter(l => l.id !== id);
-      setLinks(updatedLinks);
-      await saveYoutubeLinks(updatedLinks);
+    if (window.confirm(`Are you sure you want to delete this ${activeTab === 'youtube' ? 'video' : 'post'}?`)) {
+      if (activeTab === 'youtube') {
+        const updatedLinks = links.filter(l => l.id !== id);
+        setLinks(updatedLinks);
+        await saveYoutubeLinks(updatedLinks);
+      } else {
+        const updatedPosts = webPosts.filter(p => p.id !== id);
+        setWebPosts(updatedPosts);
+        await saveWebPosts(updatedPosts);
+      }
     }
   };
 
@@ -73,12 +106,22 @@ export default function Youtube() {
   };
 
   if (selectedGrade) {
-    const gradeLinks = links.filter(l => l && l.grade === selectedGrade);
+    const isGradePublic = selectedGrade === "Public (All Students)";
+    const gradeLinks = links.filter(l => l && (isGradePublic ? l.isPublic : l.grade === selectedGrade));
+    const gradePosts = webPosts.filter(p => p && (isGradePublic ? p.isPublic : p.grade === selectedGrade));
     
+    // Group links by folder
+    const folders: { [key: string]: any[] } = {};
+    gradeLinks.forEach(link => {
+      const f = link.folder || 'General';
+      if (!folders[f]) folders[f] = [];
+      folders[f].push(link);
+    });
+
     return (
-      <div className="max-w-6xl mx-auto p-4 space-y-6">
+      <div className="max-w-7xl mx-auto p-4 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+        <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-6 rounded-2xl shadow-sm border border-gray-100 gap-4">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setSelectedGrade(null)}
@@ -87,128 +130,173 @@ export default function Youtube() {
               <ArrowLeft size={20} className="text-gray-600" />
             </button>
             <div>
-              <h2 className="text-xl font-bold text-gray-800">{selectedGrade} - YouTube Links</h2>
-              <p className="text-sm text-gray-500">Manage video lessons for this grade</p>
+              <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                {isGradePublic ? <Globe className="text-green-500" size={24} /> : null}
+                {selectedGrade} - E-Learning
+              </h2>
+              <p className="text-sm text-gray-500">Manage videos and posts for this section</p>
             </div>
           </div>
-          <div className="bg-red-50 text-red-600 px-4 py-2 rounded-lg font-medium flex items-center gap-2">
-            <YoutubeIcon size={20} />
-            {gradeLinks.length} Videos
+          
+          <div className="flex items-center bg-gray-100 p-1 rounded-xl">
+            <button 
+              onClick={() => setActiveTab('youtube')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'youtube' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <YoutubeIcon size={18} /> YouTube
+            </button>
+            <button 
+              onClick={() => setActiveTab('webposts')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'webposts' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <FileText size={18} /> Web Posts
+            </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Add Form */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sticky top-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sticky top-6">
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <Plus size={20} className="text-blue-600" />
-                Add New Video
+                Add {activeTab === 'youtube' ? 'Video' : 'Post'}
               </h3>
-              <form onSubmit={handleAddLink} className="space-y-4">
+              <form onSubmit={handleAddEntry} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Subject</label>
                   <input 
                     type="text" 
                     placeholder="e.g., Mathematics" 
                     value={formData.subject}
                     onChange={(e) => setFormData({...formData, subject: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow" 
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm" 
                   />
                 </div>
+                {activeTab === 'youtube' && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Folder / Unit</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g., Algebra" 
+                      value={formData.folder}
+                      onChange={(e) => setFormData({...formData, folder: e.target.value})}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm" 
+                    />
+                  </div>
+                )}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Video Title</label>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Title</label>
                   <input 
                     type="text" 
-                    placeholder="e.g., Algebra Chapter 1" 
+                    placeholder="Enter descriptive title" 
                     value={formData.title}
                     onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow" 
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm" 
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">YouTube URL</label>
-                  <input 
-                    type="url" 
-                    placeholder="https://youtube.com/watch?v=..." 
-                    value={formData.link}
-                    onChange={(e) => setFormData({...formData, link: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow" 
-                  />
-                </div>
+                {activeTab === 'youtube' ? (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">YouTube URL</label>
+                    <input 
+                      type="url" 
+                      placeholder="https://..." 
+                      value={formData.link}
+                      onChange={(e) => setFormData({...formData, link: e.target.value})}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm" 
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Content (HTML/Text)</label>
+                    <textarea 
+                      rows={6}
+                      placeholder="Write your post content here..." 
+                      value={formData.content}
+                      onChange={(e) => setFormData({...formData, content: e.target.value})}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm" 
+                    />
+                  </div>
+                )}
                 <button 
                   type="submit" 
-                  className="w-full bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 font-medium transition-colors flex items-center justify-center gap-2"
+                  className={`w-full py-3 rounded-xl text-white font-bold transition-all flex items-center justify-center gap-2 shadow-sm ${activeTab === 'youtube' ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                 >
-                  <YoutubeIcon size={18} />
-                  Save Video Link
+                  <Plus size={18} />
+                  Save {activeTab === 'youtube' ? 'Video' : 'Post'}
                 </button>
               </form>
             </div>
           </div>
 
-          {/* Videos List */}
-          <div className="lg:col-span-2 space-y-4">
-            {gradeLinks.length === 0 ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 flex flex-col items-center justify-center text-center">
-                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                  <PlayCircle size={32} className="text-gray-400" />
+          {/* Content List */}
+          <div className="lg:col-span-3 space-y-8">
+            {activeTab === 'youtube' ? (
+              Object.keys(folders).length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 flex flex-col items-center text-center">
+                   <YoutubeIcon size={48} className="text-gray-200 mb-4" />
+                   <h3 className="text-lg font-bold text-gray-800">No folders yet</h3>
+                   <p className="text-gray-500">Your categorized videos will appear here.</p>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-1">No videos added yet</h3>
-                <p className="text-gray-500">Add your first YouTube video link for {selectedGrade} using the form.</p>
-              </div>
+              ) : (
+                Object.keys(folders).sort().map(folderName => (
+                  <div key={folderName} className="space-y-4">
+                    <div className="flex items-center gap-2 text-indigo-900 border-b pb-2">
+                       <Folder size={20} className="text-indigo-600" />
+                       <h3 className="text-lg font-black uppercase tracking-wider">{folderName}</h3>
+                       <span className="bg-indigo-100 text-indigo-600 text-xs font-bold px-2 py-0.5 rounded-full">
+                         {folders[folderName].length}
+                       </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {folders[folderName].map(link => {
+                        const videoId = extractVideoId(link.link);
+                        const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&q=80';
+                        return (
+                          <div key={link.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-md transition-all">
+                             <div className="relative aspect-video">
+                                <img src={thumbnailUrl} alt={link.title} className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                   <a href={link.link} target="_blank" rel="noopener" className="p-3 bg-red-600 text-white rounded-full"><PlayCircle size={32} /></a>
+                                </div>
+                             </div>
+                             <div className="p-4">
+                                <span className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded tracking-widest">{link.subject}</span>
+                                <h4 className="font-bold text-gray-900 mt-2 line-clamp-2">{link.title}</h4>
+                                <div className="mt-4 flex justify-between items-center">
+                                   <span className="text-xs text-gray-400">{new Date(link.date).toLocaleDateString()}</span>
+                                   <button onClick={() => handleDelete(link.id)} className="text-gray-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
+                                </div>
+                             </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              )
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {gradeLinks.map((link) => {
-                  const videoId = extractVideoId(link.link);
-                  const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&q=80';
-                  
-                  return (
-                    <div key={link.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group">
-                      <div className="relative h-40 bg-gray-100">
-                        <img 
-                          src={thumbnailUrl} 
-                          alt={link.title}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <a 
-                            href={link.link} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-white hover:scale-110 transition-transform shadow-lg"
-                          >
-                            <PlayCircle size={24} />
-                          </a>
-                        </div>
-                        <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded backdrop-blur-sm flex items-center gap-1">
-                          <BookOpen size={12} />
-                          {link.subject}
-                        </div>
+                {gradePosts.length === 0 ? (
+                  <div className="md:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-500">
+                    No web posts created for this grade yet.
+                  </div>
+                ) : (
+                  gradePosts.map(post => (
+                    <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all">
+                      <div className="flex justify-between items-start mb-4">
+                        <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded tracking-widest">{post.subject}</span>
+                        <button onClick={() => handleDelete(post.id)} className="text-gray-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
                       </div>
-                      <div className="p-4">
-                        <h4 className="font-bold text-gray-900 mb-1 line-clamp-2" title={link.title}>{link.title}</h4>
-                        <div className="flex items-center justify-between mt-4">
-                          <a 
-                            href={link.link} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                          >
-                            Watch <ExternalLink size={14} />
-                          </a>
-                          <button 
-                            onClick={() => handleDelete(link.id)}
-                            className="text-gray-400 hover:text-red-600 transition-colors p-1.5 hover:bg-red-50 rounded-md"
-                            title="Delete Video"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+                      <h4 className="text-xl font-bold text-gray-900 mb-3">{post.title}</h4>
+                      <p className="text-gray-600 text-sm line-clamp-3 mb-4">{post.content}</p>
+                      <div className="flex justify-between items-center pt-4 border-t border-gray-50">
+                        <span className="text-xs text-gray-400">{new Date(post.date).toLocaleDateString()}</span>
+                        <button className="text-indigo-600 font-bold text-xs hover:underline">Edit Full Post</button>
                       </div>
                     </div>
-                  );
-                })}
+                  ))
+                )}
               </div>
             )}
           </div>
@@ -218,72 +306,119 @@ export default function Youtube() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 space-y-8">
-      {/* YouTube Channel Banner */}
-      <div className="relative rounded-2xl overflow-hidden shadow-lg bg-gradient-to-r from-red-600 to-red-800 text-white">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?q=80&w=2000')] bg-cover bg-center opacity-20 mix-blend-overlay"></div>
-        <div className="relative p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-6">
-            <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-white/20 shrink-0">
-              <YoutubeIcon size={48} className="text-red-600" />
+    <div className="max-w-7xl mx-auto p-4 space-y-10">
+      {/* Banner */}
+      <div className="relative rounded-[2.5rem] overflow-hidden shadow-2xl bg-slate-900 text-white min-h-[300px] flex flex-col justify-end">
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=2000')] bg-cover bg-center opacity-40 mix-blend-luminosity"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent"></div>
+        <div className="relative p-8 md:p-12 space-y-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-red-600 rounded-2xl flex items-center justify-center shadow-lg transform -rotate-3">
+                  <YoutubeIcon size={24} className="text-white" />
+                </div>
+                <span className="font-black uppercase tracking-[0.2em] text-red-500 text-sm">Media Hub</span>
+              </div>
+              <h1 className="text-4xl md:text-5xl font-black tracking-tight">E-Learning & YouTube</h1>
+              <p className="text-slate-400 text-lg max-w-2xl font-medium">Manage units, video lessons, and interactive web posts categories by grade.</p>
             </div>
-            <div>
-              <h1 className="text-3xl md:text-4xl font-bold mb-2">Agaram Dhines</h1>
-              <p className="text-red-100 text-lg mb-4">Official YouTube Channel for Education</p>
-              <div className="flex items-center gap-4 text-sm font-medium">
-                <span className="bg-black/20 px-3 py-1.5 rounded-full backdrop-blur-sm">Educational Videos</span>
-                <span className="bg-black/20 px-3 py-1.5 rounded-full backdrop-blur-sm">தரம் 01 - 13</span>
+            <div className="flex gap-4">
+              <div className="bg-slate-800/50 backdrop-blur-md p-4 rounded-2xl border border-white/10 text-center min-w-[100px]">
+                <div className="text-2xl font-black text-red-500">{links.length}</div>
+                <div className="text-[10px] uppercase font-bold tracking-widest text-slate-500">Videos</div>
+              </div>
+              <div className="bg-slate-800/50 backdrop-blur-md p-4 rounded-2xl border border-white/10 text-center min-w-[100px]">
+                <div className="text-2xl font-black text-indigo-500">{webPosts.length}</div>
+                <div className="text-[10px] uppercase font-bold tracking-widest text-slate-500">Posts</div>
               </div>
             </div>
           </div>
-          <a 
-            href="https://www.youtube.com/@agaramdhines" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="bg-white text-red-600 hover:bg-gray-50 px-8 py-3.5 rounded-full font-bold shadow-lg transition-transform hover:scale-105 flex items-center gap-2 whitespace-nowrap"
-          >
-            <YoutubeIcon size={20} />
-            Visit Channel
-          </a>
         </div>
       </div>
 
-      {/* Grades Grid */}
-      <div>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">Manage Class Videos</h2>
-          <p className="text-gray-500">Select a grade to add or manage YouTube links</p>
+      {/* Selector */}
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+           <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+             <LayoutGrid className="text-red-600" />
+             Select Target Grade
+           </h2>
+           <div className="hidden md:flex gap-2">
+              <button 
+                onClick={() => setViewType('grid')}
+                className={`p-2 rounded-lg transition-all ${viewType === 'grid' ? 'bg-red-100 text-red-600' : 'text-gray-400 hover:bg-gray-100'}`}
+              >
+                <LayoutGrid size={20} />
+              </button>
+              <button 
+                onClick={() => setViewType('list')}
+                className={`p-2 rounded-lg transition-all ${viewType === 'list' ? 'bg-red-100 text-red-600' : 'text-gray-400 hover:bg-gray-100'}`}
+              >
+                <List size={20} />
+              </button>
+           </div>
         </div>
-        
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+
+        <div className={viewType === 'grid' ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4" : "space-y-2"}>
           {GRADES.map((grade) => {
-            const videoCount = links.filter(l => l && l.grade === grade).length;
+            const isPublicBtn = grade === "Public (All Students)";
+            const vCount = links.filter(l => l && (isPublicBtn ? l.isPublic : l.grade === grade)).length;
+            const pCount = webPosts.filter(p => p && (isPublicBtn ? p.isPublic : p.grade === grade)).length;
             
+            if (viewType === 'grid') {
+              return (
+                <button
+                  key={grade}
+                  onClick={() => setSelectedGrade(grade)}
+                  className={`bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:border-red-500 hover:shadow-xl transition-all group text-left relative overflow-hidden flex flex-col justify-between h-[180px] ${isPublicBtn ? ' ring-2 ring-green-100' : ''}`}
+                >
+                  <div className={`absolute top-0 right-0 w-24 h-24 rounded-bl-full -mr-12 -mt-12 transition-all group-hover:scale-125 ${isPublicBtn ? 'bg-green-50' : 'bg-red-50'}`}></div>
+                  
+                  <div className="relative flex justify-between items-start">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${isPublicBtn ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                      {isPublicBtn ? <Globe size={24} /> : <YoutubeIcon size={24} />}
+                    </div>
+                    {(vCount + pCount) > 0 && (
+                      <span className="bg-slate-900 text-white text-[10px] font-black px-2 py-1 rounded-lg">
+                        {vCount + pCount}
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="relative">
+                    <h3 className="text-lg font-black text-slate-900 leading-tight mb-1">{grade}</h3>
+                    <div className="flex gap-2">
+                       <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                          <YoutubeIcon size={10} /> {vCount}
+                       </span>
+                       <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                          <FileText size={10} /> {pCount}
+                       </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            }
+
             return (
               <button
                 key={grade}
                 onClick={() => setSelectedGrade(grade)}
-                className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:border-red-200 hover:shadow-md transition-all group text-left relative overflow-hidden"
+                className="w-full bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between hover:bg-red-50 group transition-all"
               >
-                <div className="absolute top-0 right-0 w-16 h-16 bg-red-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
-                
-                <div className="flex justify-between items-start mb-4 relative">
-                  <div className="w-12 h-12 bg-red-50 text-red-600 rounded-lg flex items-center justify-center group-hover:bg-red-600 group-hover:text-white transition-colors">
-                    <PlayCircle size={24} />
-                  </div>
-                  {videoCount > 0 && (
-                    <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded-full">
-                      {videoCount}
-                    </span>
-                  )}
+                <div className="flex items-center gap-4">
+                   <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center group-hover:bg-red-600 group-hover:text-white transition-all">
+                     {isPublicBtn ? <Globe size={18} /> : <Folder size={18} />}
+                   </div>
+                   <span className="font-bold text-slate-800">{grade}</span>
                 </div>
-                
-                <h3 className="text-lg font-bold text-gray-800 mb-1 relative">{grade}</h3>
-                <p className="text-sm text-gray-500 relative">
-                  {videoCount === 0 ? 'No videos' : `${videoCount} video${videoCount > 1 ? 's' : ''}`}
-                </p>
+                <div className="flex gap-3 text-xs font-bold text-slate-400">
+                  <span className="flex items-center gap-1 group-hover:text-red-600"><YoutubeIcon size={14} /> {vCount}</span>
+                  <span className="flex items-center gap-1 group-hover:text-indigo-600"><FileText size={14} /> {pCount}</span>
+                </div>
               </button>
-            );
+            )
           })}
         </div>
       </div>

@@ -40,7 +40,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
 
-import { getCourses, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks } from "../../lib/db";
+import { getCourses, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts } from "../../lib/db";
 import CountdownTimer from "../../components/CountdownTimer";
 import PopupAnnouncement from "../../components/PopupAnnouncement";
 import LiveChat from "../../components/LiveChat";
@@ -55,6 +55,7 @@ export default function StudentDashboard() {
   const [courses, setCourses] = useState<any[]>([]);
   const [zoomLinks, setZoomLinks] = useState<any[]>([]);
   const [youtubeLinks, setYoutubeLinks] = useState<any[]>([]);
+  const [webPosts, setWebPosts] = useState<any[]>([]);
   const [fees, setFees] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [classLinks, setClassLinks] = useState<Record<string, string>>({});
@@ -63,6 +64,7 @@ export default function StudentDashboard() {
   const [timetable, setTimetable] = useState<any[]>([]);
   const [examMarks, setExamMarks] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
+  const [eLearningType, setELearningType] = useState<"videos" | "posts">("videos");
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
   const [adminSettings, setAdminSettings] = useState<any>(null);
@@ -207,11 +209,20 @@ export default function StudentDashboard() {
       const allExamMarks = await getExamMarks();
       const allClasses = await getClasses();
       const settings = await getAdminSettings();
+      const allYoutubeLinks = await getYoutubeLinks();
+      const allWebPosts = await getWebPosts();
       
       setCourses(allCourses.filter((c: any) => c.grade === data.grade));
       setZoomLinks(allZoomLinks.filter((z: any) => z.grade === data.grade));
-      setYoutubeLinks(await getYoutubeLinks());
       
+      // Filter YouTube links and Web Posts by grade or isPublic
+      setYoutubeLinks(allYoutubeLinks.filter((l: any) => 
+        l.isPublic || l.grade === data.grade || l.grade === "Public"
+      ));
+      setWebPosts(allWebPosts.filter((p: any) => 
+        p.isPublic || p.grade === data.grade || p.grade === "Public"
+      ));
+
       const studentFees = allFees.filter((f: any) => f.studentId === data.id || f.studentName === data.name);
       setFees(studentFees);
       
@@ -795,7 +806,7 @@ export default function StudentDashboard() {
                 <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-rose-100 transition-colors">
                   <Youtube size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base">YouTube</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base">E-Learning</span>
               </div>
 
               <div
@@ -1303,60 +1314,143 @@ export default function StudentDashboard() {
         {activeTab === "youtube" && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
-              <h2 className="text-2xl font-bold mb-2 text-slate-800 flex items-center">
-                <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mr-3">
-                  <Youtube size={20} />
+              <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold mb-1 text-slate-800 flex items-center">
+                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mr-3">
+                      <Youtube size={20} />
+                    </div>
+                    E-Learning Center
+                  </h2>
+                  <p className="text-slate-500 ml-13">Everything you need to learn at home.</p>
                 </div>
-                YouTube Videos
-              </h2>
-              <p className="text-slate-500 mb-8 ml-13">Watch recorded classes and tutorials.</p>
+                <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
+                  <button 
+                    onClick={() => setELearningType("videos")}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${eLearningType === 'videos' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Videos
+                  </button>
+                  <button 
+                    onClick={() => setELearningType("posts")}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${eLearningType === 'posts' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Web Posts
+                  </button>
+                </div>
+              </div>
               
-              <div className="space-y-4">
-                {youtubeLinks.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
-                    <Youtube className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-                    <p>No videos found.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {youtubeLinks.map(link => (
-                      <a 
-                        key={link.id} 
-                        href={link.link} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="block bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-md hover:border-red-200 transition-all group"
-                      >
-                        <div className="aspect-video bg-slate-100 relative">
-                          {/* Extract video ID to show thumbnail if possible, otherwise show placeholder */}
-                          {link.link.includes('youtube.com/watch?v=') || link.link.includes('youtu.be/') ? (
-                            <img 
-                              src={`https://img.youtube.com/vi/${link.link.includes('youtu.be/') ? link.link.split('youtu.be/')[1].split('?')[0] : link.link.split('v=')[1].split('&')[0]}/mqdefault.jpg`} 
-                              alt={link.title}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-slate-300">
-                              <Youtube size={48} />
-                            </div>
-                          )}
-                          <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors flex items-center justify-center">
-                            <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-white opacity-90 group-hover:scale-110 transition-transform shadow-lg">
-                              <Play size={24} className="ml-1" />
-                            </div>
+              {eLearningType === 'videos' ? (
+                <div className="space-y-8">
+                  {youtubeLinks.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
+                      <Youtube className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+                      <p>No videos found.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-10">
+                      {Object.entries(youtubeLinks.reduce((acc: any, link: any) => {
+                        const folder = link.folder || "Uncategorized";
+                        if (!acc[folder]) acc[folder] = [];
+                        acc[folder].push(link);
+                        return acc;
+                      }, {})).map(([folder, links]: [string, any]) => (
+                        <div key={folder} className="space-y-4">
+                          <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 border-b-2 border-indigo-50 pb-2">
+                             <div className="w-2 h-6 bg-indigo-600 rounded-full"></div>
+                             {folder}
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {links.map((link: any) => (
+                              <a 
+                                key={link.id} 
+                                href={link.link} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="block bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-md hover:border-red-200 transition-all group"
+                              >
+                                <div className="aspect-video bg-slate-100 relative">
+                                  {link.link.includes('youtube.com/watch?v=') || link.link.includes('youtu.be/') ? (
+                                    <img 
+                                      src={`https://img.youtube.com/vi/${link.link.includes('youtu.be/') ? link.link.split('youtu.be/')[1].split('?')[0] : link.link.split('v=')[1].split('&')[0]}/mqdefault.jpg`} 
+                                      alt={link.title}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                      <Youtube size={48} />
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors flex items-center justify-center">
+                                    <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-white opacity-90 group-hover:scale-110 transition-transform shadow-lg">
+                                      <Play size={24} className="ml-1" />
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="p-4">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                                      {link.subject}
+                                    </span>
+                                  </div>
+                                  <h3 className="font-bold text-slate-800 line-clamp-2 group-hover:text-red-600 transition-colors leading-tight">{link.title}</h3>
+                                  <p className="text-xs text-slate-500 mt-3 flex items-center gap-1 font-medium">
+                                    <Youtube size={14} className="text-red-500" /> Watch Tutorial
+                                  </p>
+                                </div>
+                              </a>
+                            ))}
                           </div>
                         </div>
-                        <div className="p-4">
-                          <h3 className="font-bold text-slate-800 line-clamp-2 group-hover:text-red-600 transition-colors">{link.title}</h3>
-                          <p className="text-xs text-slate-500 mt-2 flex items-center gap-1 font-medium">
-                            <Youtube size={14} className="text-red-500" /> Watch on YouTube
-                          </p>
-                        </div>
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {webPosts.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
+                      <FileText className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+                      <p>No web posts found.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-6">
+                      {webPosts.map((post: any) => (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          key={post.id} 
+                          className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
+                            <div>
+                               <div className="flex items-center gap-2 mb-3">
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                                    {post.subject}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-slate-400">
+                                    {post.date}
+                                  </span>
+                               </div>
+                               <h3 className="text-xl font-black text-slate-800 leading-tight group-hover:text-indigo-600 transition-colors">{post.title}</h3>
+                            </div>
+                            <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                               <Globe size={18} className="text-slate-400" />
+                            </div>
+                          </div>
+                          <div className="prose prose-slate prose-sm max-w-none text-slate-600 bg-slate-50/50 p-5 rounded-2xl border border-slate-100/50">
+                             {post.content.split('\n').map((line: string, i: number) => (
+                               <p key={i} className="mb-2 last:mb-0 leading-relaxed font-medium">
+                                 {line}
+                               </p>
+                             ))}
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

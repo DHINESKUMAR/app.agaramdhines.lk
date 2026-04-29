@@ -306,6 +306,9 @@ export const saveTimeTable = (timetable: any) => saveData('timetable', timetable
 export const getExamMarks = () => getData('examMarks', []);
 export const saveExamMarks = (marks: any) => saveData('examMarks', marks);
 
+export const getWebPosts = () => getData('webPosts', []);
+export const saveWebPosts = (posts: any) => saveData('webPosts', posts);
+
 export const getExamSettings = () => getData('examSettings', []);
 export const saveExamSettings = (settings: any) => saveData('examSettings', settings);
 
