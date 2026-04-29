@@ -1468,6 +1468,11 @@ export default function StudentDashboard() {
                                      </div>
                                   </div>
                                 </div>
+                                {post.imageUrl && (
+                                  <div className="mb-6 aspect-video rounded-2xl overflow-hidden border border-slate-100 shadow-sm">
+                                     <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                  </div>
+                                )}
                                 <div className="prose prose-slate prose-sm max-w-none text-slate-600 bg-slate-50/50 p-5 rounded-2xl border border-slate-100/50 mb-4">
                                    {post.content.split('\n').map((line: string, i: number) => (
                                      <p key={i} className="mb-2 last:mb-0 leading-relaxed font-medium">

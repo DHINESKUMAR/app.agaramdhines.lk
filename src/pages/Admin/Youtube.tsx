@@ -55,7 +55,8 @@ export default function Youtube() {
     link: '',
     folder: '',
     isPublic: false,
-    content: '' // for web posts
+    content: '', // for web posts
+    imageUrl: '' // featured image
   });
 
   useEffect(() => {
@@ -127,6 +128,7 @@ export default function Youtube() {
         title: formData.title,
         content: formData.content,
         link: formData.link,
+        imageUrl: formData.imageUrl,
         date: new Date().toISOString()
       };
 
@@ -135,7 +137,7 @@ export default function Youtube() {
       await saveWebPosts(updatedPosts);
     }
     
-    setFormData({ subject: '', title: '', link: '', folder: '', isPublic: false, content: '' });
+    setFormData({ subject: '', title: '', link: '', folder: '', isPublic: false, content: '', imageUrl: '' });
     setIsNewFolder(false);
     setIsNewSubject(false);
   };
@@ -286,15 +288,27 @@ export default function Youtube() {
                   )}
                 </div>
                 {activeTab === 'webposts' && (
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">External Link (Optional)</label>
-                    <input 
-                      type="url" 
-                      placeholder="https://..." 
-                      value={formData.link}
-                      onChange={(e) => setFormData({...formData, link: e.target.value})}
-                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm font-medium" 
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">External Link (Optional)</label>
+                      <input 
+                        type="url" 
+                        placeholder="https://..." 
+                        value={formData.link}
+                        onChange={(e) => setFormData({...formData, link: e.target.value})}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm font-medium" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Featured Image URL (Optional)</label>
+                      <input 
+                        type="url" 
+                        placeholder="Image URL..." 
+                        value={formData.imageUrl}
+                        onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm font-medium" 
+                      />
+                    </div>
                   </div>
                 )}
                 <div>
@@ -517,6 +531,16 @@ export default function Youtube() {
                                      </div>
                                   </div>
                                   <div className="space-y-2">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase">Featured Image URL</label>
+                                    <input 
+                                      type="url" 
+                                      value={editFormData.imageUrl || ''}
+                                      onChange={(e) => setEditFormData({...editFormData, imageUrl: e.target.value})}
+                                      className="w-full text-sm border rounded-xl px-3 py-2"
+                                      placeholder="https://image-url.com/poster.jpg"
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
                                     <label className="block text-[10px] font-bold text-slate-400 uppercase">Title</label>
                                     <input 
                                       type="text" 
@@ -570,7 +594,12 @@ export default function Youtube() {
                                     </button>
                                     <button onClick={() => handleDelete(post.id)} className="text-gray-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
                                   </div>
-                                </div>
+                                 </div>
+                                 {post.imageUrl && (
+                                   <div className="mb-4 aspect-video rounded-xl overflow-hidden border border-slate-100">
+                                      <img src={post.imageUrl} alt="Featured" className="w-full h-full object-cover" />
+                                   </div>
+                                 )}
                                 <h4 className="text-xl font-bold text-gray-900 mb-3">{post.title}</h4>
                                 <p className="text-gray-600 text-sm line-clamp-3 mb-4">{post.content}</p>
                                 {post.link && (
