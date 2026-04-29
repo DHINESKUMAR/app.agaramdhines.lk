@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Youtube as YoutubeIcon, PlayCircle, Trash2, ArrowLeft, Plus, ExternalLink, BookOpen, Folder, Globe, FileText, LayoutGrid, List } from 'lucide-react';
+import { Youtube as YoutubeIcon, PlayCircle, Trash2, ArrowLeft, Plus, ExternalLink, BookOpen, Folder, Globe, FileText, LayoutGrid, List, Share2 } from 'lucide-react';
 import { getYoutubeLinks, saveYoutubeLinks, getWebPosts, saveWebPosts } from '../../lib/db';
 
 export default function Youtube() {
@@ -7,8 +7,48 @@ export default function Youtube() {
   const [links, setLinks] = useState<any[]>([]);
   const [webPosts, setWebPosts] = useState<any[]>([]);
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState<any>(null);
   const [viewType, setViewType] = useState<'grid' | 'list'>('grid');
-  
+  const [isNewFolder, setIsNewFolder] = useState(false);
+  const [isNewSubject, setIsNewSubject] = useState(false);
+
+  const startEdit = (item: any) => {
+    setEditingId(item.id);
+    setEditFormData({ ...item });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editFormData) return;
+
+    if (activeTab === 'youtube') {
+      const updatedLinks = links.map(l => l.id === editingId ? editFormData : l);
+      setLinks(updatedLinks);
+      await saveYoutubeLinks(updatedLinks);
+    } else {
+      const updatedPosts = webPosts.map(p => p.id === editingId ? editFormData : p);
+      setWebPosts(updatedPosts);
+      await saveWebPosts(updatedPosts);
+    }
+    
+    setEditingId(null);
+    setEditFormData(null);
+  };
+
+  const togglePublicStatus = async (item: any) => {
+    const updatedItem = { ...item, isPublic: !item.isPublic, grade: !item.isPublic ? "Public" : (selectedGrade === "Public (All Students)" ? "தரம் 01" : selectedGrade) };
+    
+    if (activeTab === 'youtube') {
+      const updatedLinks = links.map(l => l.id === item.id ? updatedItem : l);
+      setLinks(updatedLinks);
+      await saveYoutubeLinks(updatedLinks);
+    } else {
+      const updatedPosts = webPosts.map(p => p.id === item.id ? updatedItem : p);
+      setWebPosts(updatedPosts);
+      await saveWebPosts(updatedPosts);
+    }
+  };
+
   const [formData, setFormData] = useState({
     subject: '',
     title: '',
@@ -31,6 +71,18 @@ export default function Youtube() {
     "தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", 
     "தரம் 11", "தரம் 12", "தரம் 13"
   ];
+
+  // Get unique subjects relative to active tab
+  const tabSubjects = Array.from(new Set(
+    (activeTab === 'youtube' ? links : webPosts).map(item => item.subject)
+  )).filter((s): s is string => !!s).sort();
+
+  // Get unique folders relative to active tab and selected grade
+  const tabFolders = Array.from(new Set(
+    (activeTab === 'youtube' ? links : webPosts)
+      .filter(item => item.grade === selectedGrade || (selectedGrade === "Public (All Students)" && item.isPublic))
+      .map(item => item.folder)
+  )).filter((f): f is string => !!f).sort();
 
   const handleAddEntry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,8 +123,10 @@ export default function Youtube() {
         grade: selectedGrade === "Public (All Students)" ? "Public" : selectedGrade,
         isPublic: selectedGrade === "Public (All Students)",
         subject: formData.subject,
+        folder: formData.folder,
         title: formData.title,
         content: formData.content,
+        link: formData.link,
         date: new Date().toISOString()
       };
 
@@ -82,6 +136,8 @@ export default function Youtube() {
     }
     
     setFormData({ subject: '', title: '', link: '', folder: '', isPublic: false, content: '' });
+    setIsNewFolder(false);
+    setIsNewSubject(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -164,24 +220,80 @@ export default function Youtube() {
               </h3>
               <form onSubmit={handleAddEntry} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Subject</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g., Mathematics" 
-                    value={formData.subject}
-                    onChange={(e) => setFormData({...formData, subject: e.target.value})}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm" 
-                  />
-                </div>
-                {activeTab === 'youtube' && (
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Folder / Unit</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-gray-400 uppercase">Subject</label>
+                    <button 
+                      type="button"
+                      onClick={() => setIsNewSubject(!isNewSubject)}
+                      className="text-[10px] font-black text-blue-600 uppercase hover:underline"
+                    >
+                      {isNewSubject ? "Select Existing" : "+ Add New Subject"}
+                    </button>
+                  </div>
+                  {isNewSubject ? (
                     <input 
                       type="text" 
-                      placeholder="e.g., Algebra" 
+                      placeholder="Type new subject name..." 
+                      value={formData.subject}
+                      onChange={(e) => setFormData({...formData, subject: e.target.value})}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm" 
+                      autoFocus
+                    />
+                  ) : (
+                    <select 
+                      value={formData.subject}
+                      onChange={(e) => setFormData({...formData, subject: e.target.value})}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white font-medium"
+                    >
+                      <option value="">Select a subject...</option>
+                      {tabSubjects.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-gray-400 uppercase">Folder / Unit</label>
+                    <button 
+                      type="button"
+                      onClick={() => setIsNewFolder(!isNewFolder)}
+                      className="text-[10px] font-black text-blue-600 uppercase hover:underline"
+                    >
+                      {isNewFolder ? "Select Existing" : "+ Add New Folder"}
+                    </button>
+                  </div>
+                  {isNewFolder ? (
+                    <input 
+                      type="text" 
+                      placeholder="Type new folder name..." 
                       value={formData.folder}
                       onChange={(e) => setFormData({...formData, folder: e.target.value})}
                       className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm" 
+                      autoFocus
+                    />
+                  ) : (
+                    <select 
+                      value={formData.folder}
+                      onChange={(e) => setFormData({...formData, folder: e.target.value})}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white"
+                    >
+                      <option value="">Select a folder...</option>
+                      {tabFolders.map(f => (
+                        <option key={f} value={f}>{f}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                {activeTab === 'webposts' && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">External Link (Optional)</label>
+                    <input 
+                      type="url" 
+                      placeholder="https://..." 
+                      value={formData.link}
+                      onChange={(e) => setFormData({...formData, link: e.target.value})}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm font-medium" 
                     />
                   </div>
                 )}
@@ -261,12 +373,72 @@ export default function Youtube() {
                                 </div>
                              </div>
                              <div className="p-4">
-                                <span className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded tracking-widest">{link.subject}</span>
-                                <h4 className="font-bold text-gray-900 mt-2 line-clamp-2">{link.title}</h4>
-                                <div className="mt-4 flex justify-between items-center">
-                                   <span className="text-xs text-gray-400">{new Date(link.date).toLocaleDateString()}</span>
-                                   <button onClick={() => handleDelete(link.id)} className="text-gray-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
-                                </div>
+                                {editingId === link.id ? (
+                                  <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Subject</label>
+                                      <select 
+                                        value={editFormData.subject}
+                                        onChange={(e) => setEditFormData({...editFormData, subject: e.target.value})}
+                                        className="w-full text-xs border rounded-lg px-2 py-1.5 bg-white font-medium"
+                                      >
+                                        <option value="">Select Subject...</option>
+                                        {tabSubjects.map(s => (
+                                          <option key={s} value={s}>{s}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Folder</label>
+                                      <select 
+                                        value={editFormData.folder}
+                                        onChange={(e) => setEditFormData({...editFormData, folder: e.target.value})}
+                                        className="w-full text-xs border rounded-lg px-2 py-1.5 bg-white"
+                                      >
+                                        <option value="">Select Folder...</option>
+                                        {tabFolders.map(f => (
+                                          <option key={f} value={f}>{f}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Visibility</label>
+                                      <select 
+                                        value={editFormData.grade}
+                                        onChange={(e) => setEditFormData({...editFormData, grade: e.target.value, isPublic: e.target.value === "Public"})}
+                                        className="w-full text-[10px] border rounded-lg px-2 py-1.5 bg-white font-bold"
+                                      >
+                                        {GRADES.map(g => (
+                                          <option key={g} value={g === "Public (All Students)" ? "Public" : g}>{g}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div className="flex gap-2 pt-2">
+                                      <button onClick={handleSaveEdit} className="flex-1 bg-indigo-600 text-white text-[10px] font-black uppercase py-2 rounded-lg shadow-sm">Save</button>
+                                      <button onClick={() => setEditingId(null)} className="flex-1 bg-white text-slate-400 text-[10px] font-black uppercase py-2 rounded-lg border border-slate-200">Cancel</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="flex justify-between items-start">
+                                      <span className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded tracking-widest">{link.subject}</span>
+                                      <button 
+                                        onClick={() => togglePublicStatus(link)}
+                                        className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-colors ${link.isPublic ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}
+                                      >
+                                        {link.isPublic ? 'Public' : 'Private'}
+                                      </button>
+                                    </div>
+                                    <h4 className="font-bold text-gray-900 mt-2 line-clamp-2">{link.title}</h4>
+                                    <div className="mt-4 flex justify-between items-center">
+                                       <div className="flex gap-1">
+                                          <button onClick={() => startEdit(link)} className="text-gray-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-lg text-xs font-bold">Edit</button>
+                                          <button onClick={() => handleDelete(link.id)} className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
+                                       </div>
+                                       <span className="text-[10px] text-gray-400">{new Date(link.date).toLocaleDateString()}</span>
+                                    </div>
+                                  </>
+                                )}
                              </div>
                           </div>
                         );
@@ -276,27 +448,152 @@ export default function Youtube() {
                 ))
               )
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {gradePosts.length === 0 ? (
-                  <div className="md:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-500">
-                    No web posts created for this grade yet.
-                  </div>
-                ) : (
-                  gradePosts.map(post => (
-                    <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all">
-                      <div className="flex justify-between items-start mb-4">
-                        <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded tracking-widest">{post.subject}</span>
-                        <button onClick={() => handleDelete(post.id)} className="text-gray-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
+              <div className="space-y-8">
+                {(() => {
+                  const postFolders: { [key: string]: any[] } = {};
+                  gradePosts.forEach(post => {
+                    const f = post.folder || 'General';
+                    if (!postFolders[f]) postFolders[f] = [];
+                    postFolders[f].push(post);
+                  });
+
+                  if (Object.keys(postFolders).length === 0) {
+                    return (
+                      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-500">
+                        No web posts created for this grade yet.
                       </div>
-                      <h4 className="text-xl font-bold text-gray-900 mb-3">{post.title}</h4>
-                      <p className="text-gray-600 text-sm line-clamp-3 mb-4">{post.content}</p>
-                      <div className="flex justify-between items-center pt-4 border-t border-gray-50">
-                        <span className="text-xs text-gray-400">{new Date(post.date).toLocaleDateString()}</span>
-                        <button className="text-indigo-600 font-bold text-xs hover:underline">Edit Full Post</button>
+                    );
+                  }
+
+                  return Object.keys(postFolders).sort().map(folderName => (
+                    <div key={folderName} className="space-y-4">
+                      <div className="flex items-center gap-2 text-indigo-900 border-b pb-2">
+                        <Folder size={20} className="text-indigo-600" />
+                        <h3 className="text-lg font-black uppercase tracking-wider">{folderName}</h3>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {postFolders[folderName].map(post => (
+                          <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all group">
+                            {editingId === post.id ? (
+                               <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                     <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Subject</label>
+                                        <select 
+                                          value={editFormData.subject}
+                                          onChange={(e) => setEditFormData({...editFormData, subject: e.target.value})}
+                                          className="w-full text-xs border rounded-xl px-3 py-2 bg-white"
+                                        >
+                                          <option value="">Select Subject...</option>
+                                          {tabSubjects.map(s => (
+                                            <option key={s} value={s}>{s}</option>
+                                          ))}
+                                        </select>
+                                     </div>
+                                     <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Folder</label>
+                                        <select 
+                                          value={editFormData.folder}
+                                          onChange={(e) => setEditFormData({...editFormData, folder: e.target.value})}
+                                          className="w-full text-xs border rounded-xl px-3 py-2 bg-white"
+                                        >
+                                          <option value="">Select Folder...</option>
+                                          {tabFolders.map(f => (
+                                            <option key={f} value={f}>{f}</option>
+                                          ))}
+                                        </select>
+                                     </div>
+                                     <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Grade / Public</label>
+                                        <select 
+                                          value={editFormData.grade}
+                                          onChange={(e) => setEditFormData({...editFormData, grade: e.target.value, isPublic: e.target.value === "Public"})}
+                                          className="w-full text-xs border rounded-xl px-3 py-2 bg-white font-bold"
+                                        >
+                                          {GRADES.map(g => (
+                                            <option key={g} value={g === "Public (All Students)" ? "Public" : g}>{g}</option>
+                                          ))}
+                                        </select>
+                                     </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase">Title</label>
+                                    <input 
+                                      type="text" 
+                                      value={editFormData.title}
+                                      onChange={(e) => setEditFormData({...editFormData, title: e.target.value})}
+                                      className="w-full text-sm border rounded-xl px-3 py-2 font-bold"
+                                      placeholder="Title"
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase">Content</label>
+                                    <textarea 
+                                      value={editFormData.content}
+                                      onChange={(e) => setEditFormData({...editFormData, content: e.target.value})}
+                                      className="w-full text-sm border rounded-xl px-3 py-2"
+                                      rows={4}
+                                      placeholder="Content"
+                                    />
+                                  </div>
+                                  <div className="flex gap-2 pt-2">
+                                    <button onClick={handleSaveEdit} className="bg-indigo-600 text-white text-xs font-bold px-6 py-2.5 rounded-xl shadow-md">Save Changes</button>
+                                    <button onClick={() => setEditingId(null)} className="bg-white text-slate-500 text-xs font-bold px-6 py-2.5 rounded-xl border border-slate-200">Cancel</button>
+                                  </div>
+                               </div>
+                            ) : (
+                               <>
+                                <div className="flex justify-between items-start mb-4">
+                                  <div className="flex items-center gap-2">
+                                     <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded tracking-widest">{post.subject}</span>
+                                     <button 
+                                       onClick={() => togglePublicStatus(post)}
+                                       className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-colors ${post.isPublic ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}
+                                     >
+                                       {post.isPublic ? 'Public' : 'Private'}
+                                     </button>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button 
+                                      onClick={() => {
+                                        const shareUrl = post.link || window.location.href;
+                                        if (navigator.share) {
+                                          navigator.share({ title: post.title, text: post.content, url: shareUrl });
+                                        } else {
+                                          navigator.clipboard.writeText(shareUrl);
+                                          alert("Link copied to clipboard!");
+                                        }
+                                      }}
+                                      className="text-gray-400 hover:text-blue-600 p-2 hover:bg-blue-50 rounded-lg transition-colors"
+                                    >
+                                      <Share2 size={16} />
+                                    </button>
+                                    <button onClick={() => handleDelete(post.id)} className="text-gray-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
+                                  </div>
+                                </div>
+                                <h4 className="text-xl font-bold text-gray-900 mb-3">{post.title}</h4>
+                                <p className="text-gray-600 text-sm line-clamp-3 mb-4">{post.content}</p>
+                                {post.link && (
+                                  <div className="mb-4">
+                                    <a href={post.link} target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full hover:bg-blue-100 transition-colors">
+                                      <ExternalLink size={12} /> Visit Link
+                                    </a>
+                                  </div>
+                                )}
+                                <div className="flex justify-between items-center pt-4 border-t border-gray-50">
+                                  <span className="text-xs text-gray-400">{new Date(post.date).toLocaleDateString()}</span>
+                                  <div className="flex gap-3">
+                                     <button onClick={() => startEdit(post)} className="text-indigo-600 font-bold text-xs hover:underline">Edit Post</button>
+                                  </div>
+                                </div>
+                               </>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))
-                )}
+                  ));
+                })()}
               </div>
             )}
           </div>

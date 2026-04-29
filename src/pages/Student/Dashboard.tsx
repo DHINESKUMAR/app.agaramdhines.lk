@@ -31,7 +31,8 @@ import {
   QrCode,
   RotateCw,
   MessageCircle,
-  ShieldAlert
+  ShieldAlert,
+  Share2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
@@ -1407,45 +1408,87 @@ export default function StudentDashboard() {
                   )}
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-10">
                   {webPosts.length === 0 ? (
                     <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
                       <FileText className="mx-auto h-12 w-12 text-slate-300 mb-3" />
                       <p>No web posts found.</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 gap-6">
-                      {webPosts.map((post: any) => (
-                        <motion.div 
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          key={post.id} 
-                          className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group"
-                        >
-                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
-                            <div>
-                               <div className="flex items-center gap-2 mb-3">
-                                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                                    {post.subject}
-                                  </span>
-                                  <span className="text-[10px] font-bold text-slate-400">
-                                    {post.date}
-                                  </span>
-                               </div>
-                               <h3 className="text-xl font-black text-slate-800 leading-tight group-hover:text-indigo-600 transition-colors">{post.title}</h3>
-                            </div>
-                            <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
-                               <Globe size={18} className="text-slate-400" />
-                            </div>
+                    <div className="space-y-10">
+                      {Object.entries(webPosts.reduce((acc: any, post: any) => {
+                        const folder = post.folder || "General Materials";
+                        if (!acc[folder]) acc[folder] = [];
+                        acc[folder].push(post);
+                        return acc;
+                      }, {})).map(([folder, posts]: [string, any]) => (
+                        <div key={folder} className="space-y-6">
+                          <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 border-b-2 border-indigo-50 pb-2">
+                             <div className="w-2 h-6 bg-emerald-500 rounded-full"></div>
+                             {folder}
+                          </h3>
+                          <div className="grid grid-cols-1 gap-6">
+                            {posts.map((post: any) => (
+                              <motion.div 
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                key={post.id} 
+                                className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group"
+                              >
+                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
+                                  <div>
+                                     <div className="flex items-center gap-2 mb-3">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                                          {post.subject}
+                                        </span>
+                                        <span className="text-[10px] font-bold text-slate-400">
+                                          {post.date ? new Date(post.date).toLocaleDateString() : ''}
+                                        </span>
+                                     </div>
+                                     <h3 className="text-xl font-black text-slate-800 leading-tight group-hover:text-indigo-600 transition-colors">{post.title}</h3>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                     <button 
+                                       onClick={() => {
+                                         const shareUrl = post.link || window.location.href;
+                                         if (navigator.share) {
+                                           navigator.share({ title: post.title, text: post.content, url: shareUrl });
+                                         } else {
+                                           navigator.clipboard.writeText(shareUrl);
+                                           alert("Link copied to clipboard!");
+                                         }
+                                       }}
+                                       className="p-2.5 bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-100 rounded-xl transition-all"
+                                       title="Share Post"
+                                     >
+                                       <Share2 size={18} />
+                                     </button>
+                                     <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                        <Globe size={18} className="text-slate-400" />
+                                     </div>
+                                  </div>
+                                </div>
+                                <div className="prose prose-slate prose-sm max-w-none text-slate-600 bg-slate-50/50 p-5 rounded-2xl border border-slate-100/50 mb-4">
+                                   {post.content.split('\n').map((line: string, i: number) => (
+                                     <p key={i} className="mb-2 last:mb-0 leading-relaxed font-medium">
+                                       {line}
+                                     </p>
+                                   ))}
+                                </div>
+                                {post.link && (
+                                  <a 
+                                    href={post.link} 
+                                    target="_blank" 
+                                    rel="noopener" 
+                                    className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 transition-colors"
+                                  >
+                                    Follow External Link <ExternalLink size={14} />
+                                  </a>
+                                )}
+                              </motion.div>
+                            ))}
                           </div>
-                          <div className="prose prose-slate prose-sm max-w-none text-slate-600 bg-slate-50/50 p-5 rounded-2xl border border-slate-100/50">
-                             {post.content.split('\n').map((line: string, i: number) => (
-                               <p key={i} className="mb-2 last:mb-0 leading-relaxed font-medium">
-                                 {line}
-                               </p>
-                             ))}
-                          </div>
-                        </motion.div>
+                        </div>
                       ))}
                     </div>
                   )}
