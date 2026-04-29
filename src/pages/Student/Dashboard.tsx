@@ -1342,65 +1342,85 @@ export default function StudentDashboard() {
               </div>
               
               {eLearningType === 'videos' ? (
-                <div className="space-y-8">
+                <div className="space-y-12">
                   {youtubeLinks.length === 0 ? (
                     <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
                       <Youtube className="mx-auto h-12 w-12 text-slate-300 mb-3" />
                       <p>No videos found.</p>
                     </div>
                   ) : (
-                    <div className="space-y-10">
+                    <div className="space-y-12">
                       {Object.entries(youtubeLinks.reduce((acc: any, link: any) => {
                         const folder = link.folder || "Uncategorized";
                         if (!acc[folder]) acc[folder] = [];
                         acc[folder].push(link);
                         return acc;
-                      }, {})).map(([folder, links]: [string, any]) => (
+                      }, {})).map(([folder, folderLinks]: [string, any]) => (
                         <div key={folder} className="space-y-4">
-                          <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 border-b-2 border-indigo-50 pb-2">
-                             <div className="w-2 h-6 bg-indigo-600 rounded-full"></div>
-                             {folder}
-                          </h3>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {links.map((link: any) => (
-                              <a 
-                                key={link.id} 
-                                href={link.link} 
-                                target="_blank" 
-                                rel="noreferrer"
-                                className="block bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-md hover:border-red-200 transition-all group"
-                              >
-                                <div className="aspect-video bg-slate-100 relative">
-                                  {link.link.includes('youtube.com/watch?v=') || link.link.includes('youtu.be/') ? (
-                                    <img 
-                                      src={`https://img.youtube.com/vi/${link.link.includes('youtu.be/') ? link.link.split('youtu.be/')[1].split('?')[0] : link.link.split('v=')[1].split('&')[0]}/mqdefault.jpg`} 
-                                      alt={link.title}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-slate-300">
-                                      <Youtube size={48} />
-                                    </div>
-                                  )}
-                                  <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors flex items-center justify-center">
-                                    <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-white opacity-90 group-hover:scale-110 transition-transform shadow-lg">
-                                      <Play size={24} className="ml-1" />
+                          <div className="flex items-center justify-between px-1">
+                            <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                               <div className="w-2 h-6 bg-red-600 rounded-full"></div>
+                               {folder}
+                            </h3>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                              {folderLinks.length} Videos
+                            </span>
+                          </div>
+                          
+                          <div className="relative group">
+                            <div className="flex overflow-x-auto gap-6 pb-6 pt-2 px-1 snap-x scrollbar-hide no-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                              {folderLinks.map((link: any) => (
+                                <motion.a 
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  key={link.id} 
+                                  href={link.link} 
+                                  target="_blank" 
+                                  rel="noreferrer"
+                                  className="flex-shrink-0 w-[280px] sm:w-[320px] bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-xl hover:border-red-200 transition-all group/item snap-start"
+                                >
+                                  <div className="aspect-video bg-slate-100 relative overflow-hidden">
+                                    {link.link.includes('youtube.com/watch?v=') || link.link.includes('youtu.be/') ? (
+                                      <img 
+                                        src={`https://img.youtube.com/vi/${link.link.includes('youtu.be/') ? link.link.split('youtu.be/')[1].split('?')[0] : link.link.split('v=')[1].split('&')[0]}/mqdefault.jpg`} 
+                                        alt={link.title}
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover/item:scale-110"
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                        <Youtube size={48} />
+                                      </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/20 group-hover/item:bg-transparent transition-colors flex items-center justify-center">
+                                      <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-white opacity-90 group-hover/item:scale-110 transition-transform shadow-lg">
+                                        <Play size={24} className="ml-1" />
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                                <div className="p-4">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                                      {link.subject}
-                                    </span>
+                                  <div className="p-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                                        {link.subject}
+                                      </span>
+                                    </div>
+                                    <h3 className="font-bold text-slate-800 line-clamp-2 group-hover/item:text-red-600 transition-colors leading-tight min-h-[2.5rem]">{link.title}</h3>
+                                    <div className="mt-4 flex items-center justify-between">
+                                      <p className="text-[10px] text-slate-500 flex items-center gap-1 font-black uppercase tracking-wider">
+                                        <Youtube size={12} className="text-red-500" /> Watch Now
+                                      </p>
+                                      {link.date && (
+                                        <span className="text-[10px] font-bold text-slate-400">
+                                          {new Date(link.date).toLocaleDateString()}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
-                                  <h3 className="font-bold text-slate-800 line-clamp-2 group-hover:text-red-600 transition-colors leading-tight">{link.title}</h3>
-                                  <p className="text-xs text-slate-500 mt-3 flex items-center gap-1 font-medium">
-                                    <Youtube size={14} className="text-red-500" /> Watch Tutorial
-                                  </p>
-                                </div>
-                              </a>
-                            ))}
+                                </motion.a>
+                              ))}
+                            </div>
+                            
+                            {/* Horizontal Scroll Hint Overlay */}
+                            <div className="absolute right-0 top-0 bottom-6 w-12 bg-gradient-to-l from-white to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"></div>
                           </div>
                         </div>
                       ))}
@@ -1408,90 +1428,102 @@ export default function StudentDashboard() {
                   )}
                 </div>
               ) : (
-                <div className="space-y-10">
+                <div className="space-y-12">
                   {webPosts.length === 0 ? (
                     <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
                       <FileText className="mx-auto h-12 w-12 text-slate-300 mb-3" />
                       <p>No web posts found.</p>
                     </div>
                   ) : (
-                    <div className="space-y-10">
+                    <div className="space-y-12">
                       {Object.entries(webPosts.reduce((acc: any, post: any) => {
                         const folder = post.folder || "General Materials";
                         if (!acc[folder]) acc[folder] = [];
                         acc[folder].push(post);
                         return acc;
-                      }, {})).map(([folder, posts]: [string, any]) => (
-                        <div key={folder} className="space-y-6">
-                          <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 border-b-2 border-indigo-50 pb-2">
-                             <div className="w-2 h-6 bg-emerald-500 rounded-full"></div>
-                             {folder}
-                          </h3>
-                          <div className="grid grid-cols-1 gap-6">
-                            {posts.map((post: any) => (
-                              <motion.div 
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                key={post.id} 
-                                className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group"
-                              >
-                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
-                                  <div>
-                                     <div className="flex items-center gap-2 mb-3">
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                      }, {})).map(([folder, folderPosts]: [string, any]) => (
+                        <div key={folder} className="space-y-4">
+                          <div className="flex items-center justify-between px-1">
+                            <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                               <div className="w-2 h-6 bg-emerald-500 rounded-full"></div>
+                               {folder}
+                            </h3>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                              {folderPosts.length} Posts
+                            </span>
+                          </div>
+
+                          <div className="relative group">
+                            <div className="flex overflow-x-auto gap-6 pb-6 pt-2 px-1 snap-x no-scrollbar scroll-smooth" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                              {folderPosts.map((post: any) => (
+                                <motion.div 
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  key={post.id} 
+                                  className="flex-shrink-0 w-[290px] sm:w-[350px] bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all group/post snap-start flex flex-col h-full"
+                                >
+                                  <div className="flex justify-between items-start gap-3 mb-4">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
                                           {post.subject}
                                         </span>
-                                        <span className="text-[10px] font-bold text-slate-400">
-                                          {post.date ? new Date(post.date).toLocaleDateString() : ''}
-                                        </span>
-                                     </div>
-                                     <h3 className="text-xl font-black text-slate-800 leading-tight group-hover:text-indigo-600 transition-colors">{post.title}</h3>
+                                      </div>
+                                      <h3 className="text-base font-black text-slate-800 leading-tight group-hover/post:text-indigo-600 transition-colors line-clamp-2 min-h-[2.5rem]">{post.title}</h3>
+                                    </div>
+                                    <button 
+                                      onClick={() => {
+                                        const shareUrl = post.link || window.location.href;
+                                        if (navigator.share) {
+                                          navigator.share({ title: post.title, text: post.content, url: shareUrl });
+                                        } else {
+                                          navigator.clipboard.writeText(shareUrl);
+                                          alert("Link copied to clipboard!");
+                                        }
+                                      }}
+                                      className="p-2 bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-white hover:shadow-sm border border-slate-100 rounded-xl transition-all shrink-0"
+                                    >
+                                      <Share2 size={16} />
+                                    </button>
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                     <button 
-                                       onClick={() => {
-                                         const shareUrl = post.link || window.location.href;
-                                         if (navigator.share) {
-                                           navigator.share({ title: post.title, text: post.content, url: shareUrl });
-                                         } else {
-                                           navigator.clipboard.writeText(shareUrl);
-                                           alert("Link copied to clipboard!");
-                                         }
-                                       }}
-                                       className="p-2.5 bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-100 rounded-xl transition-all"
-                                       title="Share Post"
-                                     >
-                                       <Share2 size={18} />
-                                     </button>
-                                     <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                                        <Globe size={18} className="text-slate-400" />
-                                     </div>
+
+                                  {post.imageUrl && (
+                                    <div className="mb-4 aspect-[16/10] rounded-xl overflow-hidden border border-slate-100 shadow-inner">
+                                       <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover group-hover/post:scale-110 transition-transform duration-700" />
+                                    </div>
+                                  )}
+
+                                  <div className="prose prose-slate prose-xs max-w-none text-slate-600 bg-slate-50/50 p-4 rounded-xl border border-slate-100/50 mb-4 flex-1 line-clamp-4">
+                                     {post.content.split('\n').slice(0, 3).map((line: string, i: number) => (
+                                       <p key={i} className="mb-2 last:mb-0 text-xs leading-relaxed font-medium">
+                                         {line}
+                                       </p>
+                                     ))}
                                   </div>
-                                </div>
-                                {post.imageUrl && (
-                                  <div className="mb-6 aspect-video rounded-2xl overflow-hidden border border-slate-100 shadow-sm">
-                                     <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+
+                                  <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-auto">
+                                    <div className="flex flex-col">
+                                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">PUBLISHED ON</span>
+                                      <span className="text-[10px] font-bold text-slate-500">
+                                        {post.date ? new Date(post.date).toLocaleDateString() : 'N/A'}
+                                      </span>
+                                    </div>
+                                    {post.link && (
+                                      <a 
+                                        href={post.link} 
+                                        target="_blank" 
+                                        rel="noopener" 
+                                        className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:gap-2 transition-all p-2 bg-indigo-50 rounded-lg"
+                                      >
+                                        READ <ExternalLink size={12} />
+                                      </a>
+                                    )}
                                   </div>
-                                )}
-                                <div className="prose prose-slate prose-sm max-w-none text-slate-600 bg-slate-50/50 p-5 rounded-2xl border border-slate-100/50 mb-4">
-                                   {post.content.split('\n').map((line: string, i: number) => (
-                                     <p key={i} className="mb-2 last:mb-0 leading-relaxed font-medium">
-                                       {line}
-                                     </p>
-                                   ))}
-                                </div>
-                                {post.link && (
-                                  <a 
-                                    href={post.link} 
-                                    target="_blank" 
-                                    rel="noopener" 
-                                    className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 transition-colors"
-                                  >
-                                    Follow External Link <ExternalLink size={14} />
-                                  </a>
-                                )}
-                              </motion.div>
-                            ))}
+                                </motion.div>
+                              ))}
+                            </div>
+                            {/* Horizontal Scroll Hint Overlay */}
+                            <div className="absolute right-0 top-0 bottom-6 w-12 bg-gradient-to-l from-white to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"></div>
                           </div>
                         </div>
                       ))}
@@ -1499,6 +1531,7 @@ export default function StudentDashboard() {
                   )}
                 </div>
               )}
+
             </div>
           </div>
         )}
