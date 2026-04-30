@@ -213,15 +213,23 @@ export default function StudentDashboard() {
       const allYoutubeLinks = await getYoutubeLinks();
       const allWebPosts = await getWebPosts();
       
-      setCourses(allCourses.filter((c: any) => c.grade === data.grade));
-      setZoomLinks(allZoomLinks.filter((z: any) => z.grade === data.grade));
+      setCourses(allCourses.filter((c: any) => 
+        c.grade?.toString().trim().toLowerCase() === data.grade?.toString().trim().toLowerCase()
+      ));
+      setZoomLinks(allZoomLinks.filter((z: any) => 
+        z.grade?.toString().trim().toLowerCase() === data.grade?.toString().trim().toLowerCase()
+      ));
       
       // Filter YouTube links and Web Posts by grade or isPublic
       setYoutubeLinks(allYoutubeLinks.filter((l: any) => 
-        l.isPublic || l.grade === data.grade || l.grade === "Public"
+        l.isPublic || 
+        l.grade?.toString().trim().toLowerCase() === data.grade?.toString().trim().toLowerCase() || 
+        l.grade?.toString().trim().toLowerCase() === "public"
       ));
       setWebPosts(allWebPosts.filter((p: any) => 
-        p.isPublic || p.grade === data.grade || p.grade === "Public"
+        p.isPublic || 
+        p.grade?.toString().trim().toLowerCase() === data.grade?.toString().trim().toLowerCase() || 
+        p.grade?.toString().trim().toLowerCase() === "public"
       ));
 
       const studentFees = allFees.filter((f: any) => f.studentId === data.id || f.studentName === data.name);
@@ -239,7 +247,9 @@ export default function StudentDashboard() {
       setAttendance(allAttendance.filter((a: any) => a.studentId === data.id));
       setClassLinks(await getClassLinks());
       setStaffs(allStaffs);
-      setTimetable(allTimetable.filter((t: any) => t.grade === data.grade));
+      setTimetable(allTimetable.filter((t: any) => 
+        t.grade?.toString().trim().toLowerCase() === data.grade?.toString().trim().toLowerCase()
+      ));
       setExamMarks(allExamMarks.filter((m: any) => m.studentId === data.id || m.studentName === data.name));
       setClasses(allClasses);
       setAdminSettings(settings);
@@ -252,7 +262,7 @@ export default function StudentDashboard() {
       sevenDaysAgo.setHours(0, 0, 0, 0);
       
       setHomework(allHomework.filter((h: any) => {
-        if (h.grade !== data.grade) return false;
+        if (h.grade?.toString().trim().toLowerCase() !== data.grade?.toString().trim().toLowerCase()) return false;
         const hwDate = new Date(h.date);
         return hwDate >= sevenDaysAgo;
       }));
@@ -1101,7 +1111,7 @@ export default function StudentDashboard() {
                     onChange={(e) => setFilterSubject(e.target.value)}
                   >
                     <option value="All">All Subjects</option>
-                    {Array.from(new Set(timetable.filter(t => enrolledClasses.includes(t.subject)).map(t => t.subject))).map(subject => (
+                    {Array.from(new Set(timetable.map(t => t.subject))).map(subject => (
                       <option key={subject} value={subject}>{subject}</option>
                     ))}
                   </select>
@@ -1111,7 +1121,7 @@ export default function StudentDashboard() {
                     onChange={(e) => setFilterTeacher(e.target.value)}
                   >
                     <option value="All">All Teachers</option>
-                    {Array.from(new Set(timetable.filter(t => enrolledClasses.includes(t.subject)).map(t => t.staffName))).map(teacher => (
+                    {Array.from(new Set(timetable.map(t => t.staffName))).map(teacher => (
                       <option key={teacher} value={teacher}>{teacher}</option>
                     ))}
                   </select>
@@ -1119,7 +1129,10 @@ export default function StudentDashboard() {
               </div>
               
               {(() => {
-                let filteredTimetable = timetable.filter(t => enrolledClasses.includes(t.subject));
+                let filteredTimetable = enrolledClasses.length > 0 
+                  ? timetable.filter(t => enrolledClasses.includes(t.subject))
+                  : timetable;
+                  
                 if (filterSubject !== "All") {
                   filteredTimetable = filteredTimetable.filter(t => t.subject === filterSubject);
                 }

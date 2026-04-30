@@ -333,14 +333,14 @@ export const initDB = async () => {
   const zoomLinks = await getZoomLinks();
   if (!zoomLinks || zoomLinks.length === 0) {
     await saveZoomLinks([
-      { id: "1", grade: "Grade 10", title: "Tamil Live Class", link: "https://zoom.us/j/123456789", datetime: "2026-03-05T10:00" }
+      { id: "1", grade: "தரம் 10", title: "Tamil Live Class", link: "https://zoom.us/j/123456789", datetime: "2026-03-05T10:00" }
     ]);
   }
   
   const courses = await getCourses();
   if (!courses || courses.length === 0) {
     await saveCourses([
-      { id: "1", grade: "Grade 10", title: "Science", link: "https://www.agaramdhines.lk/courses/g10-science" }
+      { id: "1", grade: "தரம் 10", title: "Science", link: "https://www.agaramdhines.lk/courses/g10-science" }
     ]);
   }
   
@@ -362,7 +362,7 @@ export const initDB = async () => {
   const schedule = await getSchedule();
   if (!schedule || schedule.length === 0) {
     await saveSchedule([
-      { id: "1", grade: "Grade 10", day: "Monday", time: "08:00 AM", subject: "Tamil", link: "https://zoom.us/j/123" }
+      { id: "1", grade: "தரம் 10", day: "Monday", time: "08:00 AM", subject: "Tamil", link: "https://zoom.us/j/123" }
     ]);
   }
   
@@ -376,7 +376,7 @@ export const initDB = async () => {
     await saveHomework([
       {
         id: "1",
-        grade: "Grade 10",
+        grade: "தரம் 10",
         title: "Tamil Chapter 1 Exercise",
         description: "Complete all exercises at the end of Chapter 1.",
         date: new Date().toISOString().split('T')[0]
