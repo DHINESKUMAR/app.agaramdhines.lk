@@ -347,8 +347,16 @@ export const initDB = async () => {
   const youtubeLinks = await getYoutubeLinks();
   if (!youtubeLinks || youtubeLinks.length === 0) {
     await saveYoutubeLinks([
-      { id: "1", title: "Tamil Chapter 1", link: "https://www.youtube.com/watch?v=12345" }
+      { id: "1", title: "Tamil Chapter 1", link: "https://www.youtube.com/watch?v=12345", folder: "General", grade: "தரம் 10", date: new Date().toISOString() },
+      { id: "new-folder-y-sample", title: "Welcome to New Folder Y", link: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", folder: "New Folder Y", grade: "தரம் 10", date: new Date().toISOString() }
     ]);
+  } else if (!youtubeLinks.find((l: any) => l.folder === "New Folder Y")) {
+    // If it exists but doesn't have the new folder, add it
+    const updatedLinks = [
+      ...youtubeLinks,
+      { id: `new-folder-y-${Date.now()}`, title: "Folder Initialization", link: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", folder: "New Folder Y", grade: "தரம் 10", date: new Date().toISOString() }
+    ];
+    await saveYoutubeLinks(updatedLinks);
   }
   
   const schedule = await getSchedule();
