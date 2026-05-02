@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { db, isFirebaseConfigured } from '../lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 
-export function useRealtimeNotifications(grade: string | undefined) {
+export function useRealtimeNotifications(grade: string | undefined, onNewNotification?: (notif: any) => void) {
   useEffect(() => {
     if (!isFirebaseConfigured || !grade) return;
 
@@ -39,6 +39,11 @@ export function useRealtimeNotifications(grade: string | undefined) {
               (navigator as any).setAppBadge(1).catch((error: any) => {
                 console.error('Failed to set app badge:', error);
               });
+            }
+
+            // Callback for UI update (e.g., showing a Toast or updating local state)
+            if (onNewNotification) {
+              onNewNotification(notification);
             }
           }
         }

@@ -116,8 +116,22 @@ export default function StudentDashboard() {
   const [showQrScanner, setShowQrScanner] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
+  const [newNotification, setNewNotification] = useState<any>(null);
+  const [badgeCount, setBadgeCount] = useState(0);
+  
   // Real-time notifications for Zoom classes, etc.
-  useRealtimeNotifications(studentData?.grade);
+  useRealtimeNotifications(studentData?.grade, (notif) => {
+    setNewNotification(notif);
+    setBadgeCount(prev => prev + 1);
+    // Auto hide after 10 seconds
+    setTimeout(() => setNewNotification(null), 10000);
+  });
+
+  useEffect(() => {
+    if (activeTab === 'home') {
+      setBadgeCount(0);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     // Clear app badge when dashboard is active
@@ -627,6 +641,53 @@ export default function StudentDashboard() {
       <CursorTrail />
       <PopupAnnouncement userRole="Students" />
       
+      {/* Real-time Toast Notification */}
+      <AnimatePresence>
+        {newNotification && (
+          <motion.div
+            initial={{ opacity: 0, x: 50, y: 50 }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="fixed bottom-24 right-6 z-[100] bg-white rounded-2xl shadow-2xl border-2 border-indigo-500 p-4 max-w-sm overflow-hidden"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center shrink-0 animate-bounce">
+                <Bell className="text-indigo-600" size={24} />
+              </div>
+              <div className="flex-1">
+                <div className="flex justify-between items-start">
+                  <h3 className="font-bold text-gray-900 pr-4">{newNotification.title}</h3>
+                  <button onClick={() => setNewNotification(null)} className="text-gray-400 hover:text-gray-600">
+                    <XCircle size={18} />
+                  </button>
+                </div>
+                <p className="text-sm text-gray-600 mt-1">{newNotification.message}</p>
+                <div className="flex gap-2 mt-3">
+                  <button 
+                    onClick={() => {
+                      if (newNotification.type === 'zoom_class') setActiveTab('home');
+                      if (newNotification.type === 'homework') setActiveTab('homework');
+                      if (newNotification.type === 'youtube' || newNotification.type === 'webpost') setActiveTab('e-learning');
+                      setNewNotification(null);
+                    }}
+                    className="bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    View Now
+                  </button>
+                </div>
+              </div>
+            </div>
+            {/* Progress bar */}
+            <motion.div 
+              initial={{ width: "100%" }}
+              animate={{ width: "0%" }}
+              transition={{ duration: 10, ease: "linear" }}
+              className="absolute bottom-0 left-0 h-1 bg-indigo-500"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Pending Fees Reminder Banner */}
       {hasPendingFees && (
         <div className="bg-rose-500 text-white px-4 py-3 shadow-md flex items-center justify-between z-50 animate-pulse">
@@ -675,11 +736,16 @@ export default function StudentDashboard() {
           <div className="relative" ref={notificationsRef}>
             <button 
               className="relative p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors"
-              onClick={() => setShowNotifications(!showNotifications)}
+              onClick={() => {
+                setShowNotifications(!showNotifications);
+                setBadgeCount(0);
+              }}
             >
               <Bell size={20} />
-              {notifications.length > 0 && (
-                <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white"></span>
+              {(notifications.length > 0 || badgeCount > 0) && (
+                <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-white px-1 shadow-sm">
+                  {badgeCount > 0 ? badgeCount : (notifications.length > 0 ? '!' : '')}
+                </span>
               )}
             </button>
             <AnimatePresence>
@@ -2107,10 +2173,15 @@ export default function StudentDashboard() {
 
                 {/* Inactive Icon */}
                 <div 
-                  className={`transition-all duration-300 text-gray-400 hover:text-gray-200
+                  className={`transition-all duration-300 text-gray-400 hover:text-gray-200 relative
                     ${isActive ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}
                 >
                   {React.cloneElement(item.icon as React.ReactElement, { size: 22 })}
+                  {item.id === 'home' && badgeCount > 0 && !isActive && (
+                    <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-bold min-w-[15px] h-[15px] flex items-center justify-center rounded-full shadow-lg border border-white">
+                      {badgeCount}
+                    </span>
+                  )}
                 </div>
               </button>
             );
