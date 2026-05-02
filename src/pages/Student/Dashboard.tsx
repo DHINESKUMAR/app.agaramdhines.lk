@@ -818,12 +818,6 @@ export default function StudentDashboard() {
                           <li>Click **Notifications** &rarr; Toggle **ON** (சுவிட்ச்சை ஆன் செய்யவும்)</li>
                        </ol>
                     </div>
-                    <div className="py-4 flex flex-col items-center gap-2">
-                       <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">
-                         Waiting for you to enable in settings...
-                       </p>
-                    </div>
                   </div>
                 )}
               </div>
