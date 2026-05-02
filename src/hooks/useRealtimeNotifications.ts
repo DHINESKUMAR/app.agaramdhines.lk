@@ -54,7 +54,7 @@ export function useRealtimeNotifications(grade: string | undefined, onNewNotific
               try {
                 const n = new Notification(notification.title, {
                   body: notification.message,
-                  icon: '/pwa-192x192.png',
+                  icon: '/logo.png',
                   tag: notification.id, // prevent duplicates
                   renotify: true
                 } as any);
