@@ -53,12 +53,13 @@ export default function StudentFeeStatement() {
     loadData();
   }, []);
 
-  // Filter students
   const filteredStudents = students.filter(student => {
-    const matchesSearch = 
-      (student.name && student.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (student.username && student.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (student.rollNo && student.rollNo.toLowerCase().includes(searchTerm.toLowerCase()));
+    const searchLow = searchTerm.toLowerCase().trim();
+    const matchesSearch = !searchTerm ? true :
+      (student.name && student.name.toLowerCase().includes(searchLow)) ||
+      (student.username && student.username.toString().toLowerCase().includes(searchLow)) ||
+      (student.id && student.id.toString().toLowerCase().includes(searchLow)) ||
+      (student.rollNo && student.rollNo.toString().toLowerCase().includes(searchLow));
       
     const matchesGrade = selectedGrade === 'All' || student.grade === selectedGrade;
     

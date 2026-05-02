@@ -877,11 +877,13 @@ export default function Students() {
       const matchesClass = filterClass === "unassigned" 
         ? (!s.grade || s.grade === "")
         : (filterClass ? s.grade === filterClass : true);
+      const searchLow = searchQuery.toLowerCase().trim();
       const matchesSearch = searchQuery 
-        ? s.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-          s.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          s.rollNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          s.username?.toLowerCase().includes(searchQuery.toLowerCase())
+        ? s.name?.toLowerCase().includes(searchLow) || 
+          s.id?.toString().toLowerCase().includes(searchLow) ||
+          s.rollNo?.toString().toLowerCase().includes(searchLow) ||
+          s.username?.toString().toLowerCase().includes(searchLow) ||
+          s.phone?.toString().includes(searchLow)
         : true;
       return matchesClass && matchesSearch;
     });

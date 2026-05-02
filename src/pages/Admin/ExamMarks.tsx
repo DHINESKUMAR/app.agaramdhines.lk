@@ -54,12 +54,14 @@ export default function ExamMarks() {
     // but the intention is they must have the subject attached to appear.
     const studentSubjects = s.subjects && s.subjects.length > 0 ? s.subjects : (classes.find(c => c.name === s.grade)?.subjects || []);
     
+    const searchLow = searchTerm.toLowerCase().trim();
     return (!selectedGrade || s.grade === selectedGrade) &&
     (!selectedSubject || studentSubjects.includes(selectedSubject)) &&
     (!searchTerm || 
-        s.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        s.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (s.rollNo && s.rollNo.toString().toLowerCase().includes(searchTerm.toLowerCase()))
+        s.name?.toLowerCase().includes(searchLow) || 
+        s.id?.toString().toLowerCase().includes(searchLow) ||
+        s.rollNo?.toString().toLowerCase().includes(searchLow) ||
+        s.username?.toString().toLowerCase().includes(searchLow)
       )
   });
 
