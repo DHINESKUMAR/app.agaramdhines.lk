@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getZoomLinks, saveZoomLinks, getSubjects, getClasses } from '../../lib/db';
+import { getZoomLinks, saveZoomLinks, getSubjects, getClasses, addNotification } from '../../lib/db';
 import { Video, PlayCircle, Trash2, ArrowLeft, Plus, ExternalLink, BookOpen, Calendar, Clock, Key } from 'lucide-react';
 import CountdownTimer from '../../components/CountdownTimer';
 
@@ -66,6 +66,17 @@ export default function LiveClasses() {
     const updatedLinks = [...links, newLink];
     setLinks(updatedLinks);
     await saveZoomLinks(updatedLinks);
+    
+    // Add Notification for Students
+    if (selectedGrade) {
+      await addNotification({
+        grade: selectedGrade,
+        title: "புதிய Zoom வகுப்பு!",
+        message: `${formData.subject}: ${formData.title} வகுப்பு நேரலைக்காக சேர்க்கப்பட்டுள்ளது.`,
+        type: 'zoom_class',
+        createdAt: new Date().toISOString()
+      });
+    }
     
     setFormData({ subject: '', title: '', link: '', datetime: '', hostKey: '', meetingId: '', passcode: '' });
   };

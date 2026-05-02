@@ -321,6 +321,25 @@ export const saveBehaviourRecords = (records: any) => saveData('behaviourRecords
 export const getQuestionPapers = () => getData('questionPapers', []);
 export const saveQuestionPapers = (papers: any) => saveData('questionPapers', papers);
 
+export const getNotifications = (grade: string) => {
+  if (isFirebaseConfigured) {
+    // We return a query that can be used with onSnapshot
+    return query(collection(db, 'notifications'), where('grade', '==', grade));
+  }
+  return null;
+};
+
+export const addNotification = async (notification: { grade: string, title: string, message: string, type: string, createdAt: string }) => {
+  if (isFirebaseConfigured) {
+    const docRef = doc(collection(db, 'notifications'));
+    await setDoc(docRef, { ...notification, id: docRef.id });
+  } else {
+    const notifications = JSON.parse(localStorage.getItem('notifications') || '[]');
+    notifications.push({ ...notification, id: Date.now().toString() });
+    localStorage.setItem('notifications', JSON.stringify(notifications));
+  }
+};
+
 export const getChatMessages = () => getData('chatMessages', []);
 export const saveChatMessages = (messages: any) => saveData('chatMessages', messages);
 

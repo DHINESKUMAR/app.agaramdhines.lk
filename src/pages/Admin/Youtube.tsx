@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Youtube as YoutubeIcon, PlayCircle, Trash2, ArrowLeft, Plus, ExternalLink, BookOpen, Folder, Globe, FileText, LayoutGrid, List, Share2 } from 'lucide-react';
-import { getYoutubeLinks, saveYoutubeLinks, getWebPosts, saveWebPosts } from '../../lib/db';
+import { getYoutubeLinks, saveYoutubeLinks, getWebPosts, saveWebPosts, addNotification } from '../../lib/db';
 
 export default function Youtube() {
   const [activeTab, setActiveTab] = useState<'youtube' | 'webposts'>('youtube');
@@ -113,6 +113,17 @@ export default function Youtube() {
       const updatedLinks = [...links, newLink];
       setLinks(updatedLinks);
       await saveYoutubeLinks(updatedLinks);
+
+      // Add Notification
+      if (newLink.grade) {
+        await addNotification({
+          grade: newLink.grade,
+          title: "புதிய வீடியோ பாடம்!",
+          message: `${formData.subject}: ${formData.title} வீடியோ சேர்க்கப்பட்டுள்ளது.`,
+          type: 'youtube',
+          createdAt: new Date().toISOString()
+        });
+      }
     } else {
       if (!formData.subject || !formData.title || !formData.content) {
         alert("Subject, Title, and Content are required!");
@@ -135,6 +146,17 @@ export default function Youtube() {
       const updatedPosts = [...webPosts, newPost];
       setWebPosts(updatedPosts);
       await saveWebPosts(updatedPosts);
+
+      // Add Notification
+      if (newPost.grade) {
+        await addNotification({
+          grade: newPost.grade,
+          title: "புதிய பாடம் (Post)!",
+          message: `${formData.subject}: ${formData.title} பாடம் சேர்க்கப்பட்டுள்ளது.`,
+          type: 'webpost',
+          createdAt: new Date().toISOString()
+        });
+      }
     }
     
     setFormData({ subject: '', title: '', link: '', folder: '', isPublic: false, content: '', imageUrl: '' });

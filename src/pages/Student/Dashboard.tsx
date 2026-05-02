@@ -47,6 +47,7 @@ import PopupAnnouncement from "../../components/PopupAnnouncement";
 import LiveChat from "../../components/LiveChat";
 import { useChatNotifications } from "../../hooks/useChatNotifications";
 import { useHomeworkNotifications } from "../../hooks/useHomeworkNotifications";
+import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
@@ -114,6 +115,16 @@ export default function StudentDashboard() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showQrScanner, setShowQrScanner] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
+
+  // Real-time notifications for Zoom classes, etc.
+  useRealtimeNotifications(studentData?.grade);
+
+  useEffect(() => {
+    // Clear app badge when dashboard is active
+    if ('navigator' in window && 'clearAppBadge' in navigator) {
+      (navigator as any).clearAppBadge().catch((err: any) => console.log('Badge not supported', err));
+    }
+  }, []);
 
   const handleQrScan = async (decodedText: string) => {
     setShowQrScanner(false);

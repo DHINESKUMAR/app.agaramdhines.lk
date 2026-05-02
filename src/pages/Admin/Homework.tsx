@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getHomework, saveHomework, getClasses } from "../../lib/db";
+import { getHomework, saveHomework, getClasses, addNotification } from "../../lib/db";
 import { Book, Calculator, FlaskConical, Globe, Palette, Music, FileText, ArrowLeft, Plus, Calendar, Clock, ChevronRight, Trash2 } from "lucide-react";
 
 export default function Homework() {
@@ -53,6 +53,15 @@ export default function Homework() {
     const updatedList = [...homeworkList, newHomework];
     setHomeworkList(updatedList);
     await saveHomework(updatedList);
+    
+    // Add Notification
+    await addNotification({
+      grade: selectedGrade,
+      title: "புதிய Homework!",
+      message: `${selectedSubject}: ${title} - புதிய ஒப்படைப்பு வழங்கப்பட்டுள்ளது.`,
+      type: 'homework',
+      createdAt: new Date().toISOString()
+    });
     
     alert("Homework added successfully!");
     setSelectedGrade("");
