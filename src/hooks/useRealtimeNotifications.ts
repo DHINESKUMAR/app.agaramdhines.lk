@@ -11,11 +11,12 @@ export function useRealtimeNotifications(grade: string | undefined) {
       Notification.requestPermission();
     }
 
+    // Start listening for notifications created after this moment
+    const mountTime = new Date().toISOString();
+
     const q = query(
       collection(db, 'notifications'),
-      where('grade', 'in', [grade, 'Public', 'public']),
-      orderBy('createdAt', 'desc'),
-      limit(1)
+      where('grade', 'in', [grade, 'Public', 'public'])
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -23,12 +24,8 @@ export function useRealtimeNotifications(grade: string | undefined) {
         if (change.type === 'added') {
           const notification = change.doc.data();
           
-          // Check if it's a recent notification (not an old one from history)
-          const createdAt = new Date(notification.createdAt).getTime();
-          const now = new Date().getTime();
-          
-          // If the notification is newer than 30 seconds ago, show it
-          if (now - createdAt < 30000) {
+          // Only show if notification was created after mount
+          if (notification.createdAt >= mountTime) {
             // Browser Notification
             if ('Notification' in window && Notification.permission === 'granted') {
               new Notification(notification.title, {
@@ -46,6 +43,8 @@ export function useRealtimeNotifications(grade: string | undefined) {
           }
         }
       });
+    }, (error) => {
+      console.error("Notification listener error:", error);
     });
 
     return () => unsubscribe();

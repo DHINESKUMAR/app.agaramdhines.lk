@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getAnnouncements, saveAnnouncements } from "../../lib/db";
+import { getAnnouncements, saveAnnouncements, addNotification } from "../../lib/db";
 import { Plus, Trash2, Bell, Megaphone, Eye, XCircle, Edit2 } from "lucide-react";
 
 export default function Announcements() {
@@ -91,6 +91,17 @@ export default function Announcements() {
 
     setAnnouncements(updated);
     await saveAnnouncements(updated);
+    
+    // Add Notification
+    if (formData.isActive) {
+      await addNotification({
+        grade: formData.targetAudience === "Students" || formData.targetAudience === "All" ? "Public" : "Staff",
+        title: formData.title,
+        message: formData.message,
+        type: 'announcement',
+        createdAt: new Date().toISOString()
+      });
+    }
     
     setFormData({
       title: "",
