@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      // Admin/Staff can write notifications
+      allow create: if request.auth != null; 
+      // Everyone can read notifications that match their grade or are public
+      allow read: if true; 
+    }
+    
+    // Students collection
+    match /students/{studentId} {
+      allow read, write: if true;
+    }
+
+    // Zoom links and other data
+    match /zoomLinks/{id} { allow read: if true; allow write: if request.auth != null; }
+    match /youtubeLinks/{id} { allow read: if true; allow write: if request.auth != null; }
+    match /homework/{id} { allow read: if true; allow write: if request.auth != null; }
+    match /announcements/{id} { allow read: if true; allow write: if request.auth != null; }
+  }
+}

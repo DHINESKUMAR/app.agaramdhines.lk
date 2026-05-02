@@ -116,12 +116,64 @@ export default function StudentDashboard() {
   const [showQrScanner, setShowQrScanner] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
+  const [realtimeNotifications, setRealtimeNotifications] = useState<any[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('notification_history') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
   const [newNotification, setNewNotification] = useState<any>(null);
   const [badgeCount, setBadgeCount] = useState(0);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+    
+    // Clear badge when dashboard is active or on click
+    const clearBadge = () => {
+      const badgeKey = `app_badge_count_${studentData?.grade}`;
+      localStorage.setItem(badgeKey, "0");
+      if ('navigator' in window && 'clearAppBadge' in navigator) {
+        (navigator as any).clearAppBadge().catch(() => {});
+      }
+    };
+    
+    if (activeTab === 'home') clearBadge();
+  }, [activeTab, studentData?.grade]);
+
+  const requestNotificationPermission = async () => {
+    if ('Notification' in window) {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === 'granted') {
+        new Notification("Agaram Academy", {
+          body: "Notifications are now active! You'll see them like WhatsApp messages.",
+          icon: "/logo.png"
+        });
+      }
+    } else {
+      alert("This browser does not support notifications.");
+    }
+  };
   
   // Real-time notifications for Zoom classes, etc.
   useRealtimeNotifications(studentData?.grade, (notif) => {
     console.log("Dashboard received notification:", notif);
+    
+    // Add to local state (at the top)
+    setRealtimeNotifications(prev => {
+      // Check for duplicates
+      const isDuplicate = prev.some(p => p.message === notif.message && p.title === notif.title);
+      if (isDuplicate) return prev;
+      
+      const updated = [notif, ...prev].slice(0, 50);
+      localStorage.setItem('notification_history', JSON.stringify(updated));
+      return updated;
+    });
+
     setNewNotification(notif);
     setBadgeCount(prev => prev + 1);
     
@@ -802,12 +854,15 @@ export default function StudentDashboard() {
               onClick={() => {
                 setShowNotifications(!showNotifications);
                 setBadgeCount(0);
+                if ('navigator' in window && 'clearAppBadge' in navigator) {
+                  (navigator as any).clearAppBadge().catch(() => {});
+                }
               }}
             >
               <Bell size={20} />
-              {(notifications.length > 0 || badgeCount > 0) && (
+              {(realtimeNotifications.length > 0 || badgeCount > 0) && (
                 <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-white px-1 shadow-sm">
-                  {badgeCount > 0 ? badgeCount : (notifications.length > 0 ? '!' : '')}
+                  {badgeCount > 0 ? badgeCount : (realtimeNotifications.length > 0 ? '!' : '')}
                 </span>
               )}
             </button>
@@ -817,31 +872,64 @@ export default function StudentDashboard() {
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden"
+                  className="absolute right-0 mt-4 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-[110] overflow-hidden"
                 >
                   <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                     <h3 className="font-bold text-gray-800">Notifications</h3>
-                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
-                      {notifications.length} New
-                    </span>
+                    <div className="flex gap-2 items-center">
+                       <button 
+                         onClick={() => {
+                           setRealtimeNotifications([]);
+                           localStorage.removeItem('notification_history');
+                         }}
+                         className="text-[10px] text-gray-400 hover:text-rose-500 font-bold uppercase transition-colors"
+                       >
+                         Clear
+                       </button>
+                       <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full font-medium">
+                         {realtimeNotifications.length}
+                       </span>
+                    </div>
                   </div>
                   <div className="max-h-96 overflow-y-auto">
-                    {notifications.length === 0 ? (
+                    {realtimeNotifications.length === 0 ? (
                       <div className="p-6 text-center text-gray-500">
                         <Bell className="mx-auto mb-2 text-gray-300" size={24} />
                         <p>No new notifications</p>
                       </div>
                     ) : (
-                      notifications.map((notif) => (
-                        <div key={notif.id} className="p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => { setActiveTab('homework'); setShowNotifications(false); }}>
+                      realtimeNotifications.map((notif, idx) => (
+                        <div 
+                          key={idx} 
+                          className="p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer" 
+                          onClick={() => { 
+                            if (notif.type === 'homework') setActiveTab('homework');
+                            if (notif.type === 'zoom_class') setActiveTab('home');
+                            if (notif.type === 'youtube' || notif.type === 'webpost') setActiveTab('e-learning');
+                            setShowNotifications(false); 
+                          }}
+                        >
                           <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                              <BookOpen size={16} className="text-blue-600" />
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                              notif.type === 'zoom_class' ? 'bg-amber-100 text-amber-600' : 
+                              notif.type === 'homework' ? 'bg-indigo-100 text-indigo-600' : 
+                              notif.type === 'youtube' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'
+                            }`}>
+                              {notif.type === 'zoom_class' ? <Video size={18} /> : 
+                               notif.type === 'homework' ? <Book size={18} /> : 
+                               notif.type === 'youtube' ? <Youtube size={18} /> : <Bell size={18} />}
                             </div>
-                            <div>
-                              <h4 className="text-sm font-bold text-gray-800">{notif.title}</h4>
-                              <p className="text-xs text-gray-600 mt-1">{notif.message}</p>
-                              <span className="text-[10px] text-gray-400 mt-2 block">{notif.date}</span>
+                            <div className="flex-1">
+                              <p className="text-sm font-bold text-gray-800 leading-tight">{notif.title}</p>
+                              <p className="text-xs text-gray-500 line-clamp-2 mt-1">{notif.message}</p>
+                              <div className="flex justify-between items-center mt-2">
+                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                  {notif.type?.replace('_', ' ')}
+                                </span>
+                                <span className="text-[10px] text-gray-400 font-medium">
+                                  {notif.createdAt ? new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -896,6 +984,33 @@ export default function StudentDashboard() {
 
         {activeTab === "home" && (
           <div className="space-y-6">
+            {notificationPermission === 'default' && (
+              <motion.div 
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-indigo-600 rounded-3xl p-5 text-white flex flex-col sm:flex-row items-center justify-between gap-5 shadow-[0_10px_40px_-10px_rgba(79,70,229,0.4)] border-2 border-indigo-400 relative overflow-hidden group"
+              >
+                <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:rotate-12 transition-transform">
+                   <Bell size={80} />
+                </div>
+                <div className="flex items-center gap-4 relative z-10">
+                  <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center animate-bounce shadow-inner">
+                    <Bell className="text-white" size={28} />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-lg tracking-tight">முக்கிய அறிவிப்புகளைப் பெறவும் (Enable Alerts)</h4>
+                    <p className="text-sm text-indigo-100 font-medium max-w-md">வகுப்பு மற்றும் தேர்வு முடிவுகளை உடனுக்குடன் பெற அறிவிப்புகளை அனுமதியுங்கள். (Get instant updates for classes and results.)</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={requestNotificationPermission}
+                  className="bg-white text-indigo-600 px-8 py-3 rounded-2xl text-sm font-black shadow-xl hover:bg-indigo-50 hover:scale-105 active:scale-95 transition-all uppercase tracking-widest whitespace-nowrap relative z-10"
+                >
+                  Enable Now
+                </button>
+              </motion.div>
+            )}
+            
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl shadow-lg p-6 sm:p-8 text-white relative overflow-hidden">
               <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-white opacity-10 rounded-full blur-2xl"></div>
               <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-24 h-24 bg-pink-500 opacity-20 rounded-full blur-xl"></div>
