@@ -763,68 +763,6 @@ export default function StudentDashboard() {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans relative">
       <CursorTrail />
       <PopupAnnouncement userRole="Students" />
-
-      {/* Mandatory Notification Permission Overlay */}
-      <AnimatePresence>
-        {notificationPermission !== 'granted' && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[2000] bg-slate-900/95 backdrop-blur-2xl flex items-center justify-center p-4 sm:p-6"
-          >
-            <motion.div 
-              initial={{ scale: 0.9, y: 20, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="bg-white rounded-[2.5rem] p-8 sm:p-10 max-w-md w-full shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] border-4 border-indigo-100 flex flex-col items-center text-center relative overflow-hidden"
-            >
-              {/* Decorative Background Elements */}
-              <div className="absolute -top-10 -right-10 w-40 h-40 bg-indigo-50 rounded-full blur-3xl opacity-50"></div>
-              <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-purple-50 rounded-full blur-3xl opacity-50"></div>
-
-              <div className="w-24 h-24 bg-indigo-600 rounded-[2rem] flex items-center justify-center mb-8 shadow-[0_20px_40px_-10px_rgba(79,70,229,0.4)] animate-bounce relative z-10">
-                <Bell size={48} className="text-white" />
-              </div>
-
-              <h2 className="text-2xl font-black text-slate-800 mb-4 leading-tight relative z-10 font-sans">
-                {notificationPermission === 'default' 
-                  ? "முக்கிய அறிவிப்புகளை அனுமதிக்கவும் (Enable Alerts)" 
-                  : "அறிவிப்புகளைத் தற்காலிகமாக அனுமதிக்கவும் (Check Settings)"}
-              </h2>
-              
-              <p className="text-slate-500 font-medium mb-8 leading-relaxed relative z-10">
-                {notificationPermission === 'default'
-                  ? "வகுப்பு இணைப்புகள், தேர்வு முடிவுகள் மற்றும் முக்கிய செய்திகளை உடனுக்குடன் பெற அறிவிப்புகளை அனுமதியுங்கள். (Get instant updates for Zoom classes and results.)"
-                  : "நீங்கள் அறிவிப்புகளைத் தடை செய்துள்ளீர்கள். மொபைல் செட்டிங்ஸில் (Settings -> Agaram Academy) சென்று 'Allow Notifications' என்பதை ஆன் செய்யவும்."}
-              </p>
-
-              <div className="w-full space-y-4 relative z-10">
-                {notificationPermission === 'default' ? (
-                  <button 
-                    onClick={requestNotificationPermission}
-                    className="w-full bg-indigo-600 text-white py-5 rounded-[1.5rem] font-black text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3"
-                  >
-                    Allow Notifications <Check size={24} />
-                  </button>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-left">
-                       <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-2">How to Fix (எவ்வாறு சரிசெய்வது):</p>
-                       <ol className="text-sm text-slate-600 space-y-3 font-bold list-decimal pl-4">
-                          <li>Go to Phone **Settings** (செட்டிங்ஸ் செல்லவும்)</li>
-                          <li>Open **Apps / App Management** (ஆப்ஸ் மேனேஜ்மென்ட்)</li>
-                          <li>Find **Agaram Academy**</li>
-                          <li>Click **Notifications** &rarr; Toggle **ON** (சுவிட்ச்சை ஆன் செய்யவும்)</li>
-                       </ol>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
       
       {/* Real-time Toast Notification */}
       <AnimatePresence>
