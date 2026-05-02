@@ -130,6 +130,14 @@ export default function StudentDashboard() {
   useEffect(() => {
     if ('Notification' in window) {
       setNotificationPermission(Notification.permission);
+      
+      // Auto detect when user returns to the app tab
+      const handleFocus = () => {
+        setNotificationPermission(Notification.permission);
+      };
+      
+      window.addEventListener('focus', handleFocus);
+      return () => window.removeEventListener('focus', handleFocus);
     }
     
     // Clear badge when dashboard is active or on click
@@ -801,21 +809,21 @@ export default function StudentDashboard() {
                   </button>
                 ) : (
                   <div className="space-y-4">
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left">
-                       <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-2">How to Fix:</p>
-                       <ol className="text-xs text-slate-600 space-y-2 font-bold list-decimal pl-4">
-                          <li>Go to Phone **Settings**</li>
-                          <li>Open **App Management / Apps**</li>
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-left">
+                       <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-2">How to Fix (எவ்வாறு சரிசெய்வது):</p>
+                       <ol className="text-sm text-slate-600 space-y-3 font-bold list-decimal pl-4">
+                          <li>Go to Phone **Settings** (செட்டிங்ஸ் செல்லவும்)</li>
+                          <li>Open **Apps / App Management** (ஆப்ஸ் மேனேஜ்மென்ட்)</li>
                           <li>Find **Agaram Academy**</li>
-                          <li>Click **Notifications** &rarr; Toggle **ON**</li>
+                          <li>Click **Notifications** &rarr; Toggle **ON** (சுவிட்ச்சை ஆன் செய்யவும்)</li>
                        </ol>
                     </div>
-                    <button 
-                      onClick={() => window.location.reload()}
-                      className="w-full bg-indigo-600 text-white py-5 rounded-[1.5rem] font-black text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all"
-                    >
-                      I Have Enabled It <RotateCw size={20} className="inline ml-2" />
-                    </button>
+                    <div className="py-4 flex flex-col items-center gap-2">
+                       <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">
+                         Waiting for you to enable in settings...
+                       </p>
+                    </div>
                   </div>
                 )}
               </div>
