@@ -878,10 +878,14 @@ export default function Students() {
         ? (!s.grade || s.grade === "")
         : (filterClass ? s.grade === filterClass : true);
       const searchLow = searchQuery.toLowerCase().trim();
+      const isNumericSearch = /^\d+$/.test(searchLow);
+
       const matchesSearch = searchQuery 
         ? s.name?.toLowerCase().includes(searchLow) || 
           s.id?.toString().toLowerCase().includes(searchLow) ||
           s.rollNo?.toString().toLowerCase().includes(searchLow) ||
+          (isNumericSearch && s.rollNo?.toString().endsWith(searchLow)) ||
+          (isNumericSearch && s.id?.toString().endsWith(searchLow)) ||
           s.username?.toString().toLowerCase().includes(searchLow) ||
           s.phone?.toString().includes(searchLow)
         : true;
@@ -1341,9 +1345,12 @@ export default function Students() {
                           const gradeStudents = students.filter(s => {
                             if (s.grade !== bulkSubjectData.grade) return false;
                             if (!query) return true;
+                            const isNumericSearch = /^\d+$/.test(query);
                             return (
                               s.name?.toLowerCase().includes(query) ||
-                              s.rollNo?.toLowerCase().includes(query) ||
+                              s.rollNo?.toString().toLowerCase().includes(query) ||
+                              (isNumericSearch && s.rollNo?.toString().endsWith(query)) ||
+                              (isNumericSearch && s.id?.toString().endsWith(query)) ||
                               s.username?.toLowerCase().includes(query)
                             );
                           });

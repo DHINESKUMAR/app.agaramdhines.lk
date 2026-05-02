@@ -50,17 +50,21 @@ export default function ExamMarks() {
   }, []);
 
   const filteredStudents = students.filter(s => {
-    // Determine the student's subjects. If empty, fall back to class subjects safely so older data doesn't break, 
-    // but the intention is they must have the subject attached to appear.
+    // Determine the student's subjects.
     const studentSubjects = s.subjects && s.subjects.length > 0 ? s.subjects : (classes.find(c => c.name === s.grade)?.subjects || []);
     
     const searchLow = searchTerm.toLowerCase().trim();
+    // Support matching the end of the roll number/id specifically if the user types just digits
+    const isNumericSearch = /^\d+$/.test(searchLow);
+
     return (!selectedGrade || s.grade === selectedGrade) &&
     (!selectedSubject || studentSubjects.includes(selectedSubject)) &&
     (!searchTerm || 
         s.name?.toLowerCase().includes(searchLow) || 
         s.id?.toString().toLowerCase().includes(searchLow) ||
         s.rollNo?.toString().toLowerCase().includes(searchLow) ||
+        (isNumericSearch && s.rollNo?.toString().endsWith(searchLow)) ||
+        (isNumericSearch && s.id?.toString().endsWith(searchLow)) ||
         s.username?.toString().toLowerCase().includes(searchLow)
       )
   });
@@ -69,7 +73,7 @@ export default function ExamMarks() {
     setMarksInput(prev => ({
       ...prev,
       [studentId]: {
-        ...prev[studentId],
+        ...prev[studentId] || { obtained: '', total: '100', remarks: '' },
         [field]: value
       }
     }));
@@ -81,7 +85,7 @@ export default function ExamMarks() {
       return;
     }
 
-    const newMarks = Object.entries(marksInput).map(([studentId, data]: [string, any]) => ({
+    const newMarksEntries = Object.entries(marksInput).map(([studentId, data]: [string, any]) => ({
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       studentId,
       grade: selectedGrade,
@@ -93,8 +97,21 @@ export default function ExamMarks() {
       date: new Date().toISOString().split('T')[0]
     }));
 
-    // In a real app, we'd update existing marks rather than just appending
-    const updatedMarks = [...marks, ...newMarks];
+    // Update existing marks: remove old entries for exactly this student/exam/subject combination
+    // and replace with new ones to avoid duplicates.
+    let updatedMarks = [...marks];
+    
+    newMarksEntries.forEach(newEntry => {
+      // Find and remove if duplicate
+      updatedMarks = updatedMarks.filter(m => 
+        !(m.studentId === newEntry.studentId && 
+          m.exam === newEntry.exam && 
+          m.subject === newEntry.subject)
+      );
+      // Add the new one
+      updatedMarks.push(newEntry);
+    });
+
     setMarks(updatedMarks);
     await saveExamMarks(updatedMarks);
     

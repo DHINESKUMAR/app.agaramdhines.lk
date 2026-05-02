@@ -121,9 +121,18 @@ export default function StudentDashboard() {
   
   // Real-time notifications for Zoom classes, etc.
   useRealtimeNotifications(studentData?.grade, (notif) => {
+    console.log("Dashboard received notification:", notif);
     setNewNotification(notif);
     setBadgeCount(prev => prev + 1);
-    // Auto hide after 10 seconds
+    
+    // Play a gentle notification sound
+    try {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.volume = 0.5;
+      audio.play().catch(() => {});
+    } catch (e) {}
+
+    // Auto hide toast after 10 seconds
     setTimeout(() => setNewNotification(null), 10000);
   });
 
@@ -321,6 +330,17 @@ export default function StudentDashboard() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(displayName);
   const [profileImage, setProfileImage] = useState(studentData?.image || null);
+  const [generatingReportData, setGeneratingReportData] = useState<{ examName: string, marks: any[] } | null>(null);
+
+  const getGradeLetter = (obt: number, tot: number) => {
+    const percent = (obt / tot) * 100;
+    if (percent >= 90) return { grade: 'A+', color: 'text-emerald-600 bg-emerald-50' };
+    if (percent >= 80) return { grade: 'A', color: 'text-green-600 bg-green-50' };
+    if (percent >= 70) return { grade: 'B', color: 'text-indigo-600 bg-indigo-50' };
+    if (percent >= 60) return { grade: 'C', color: 'text-blue-600 bg-blue-50' };
+    if (percent >= 50) return { grade: 'D', color: 'text-amber-600 bg-amber-50' };
+    return { grade: 'F', color: 'text-rose-600 bg-rose-50' };
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -401,6 +421,49 @@ export default function StudentDashboard() {
       console.error("Error generating Certificate:", error);
       alert("Failed to generate Certificate. Please try again.");
     }
+  };
+
+  const handleDownloadReportCard = async (examName: string, format: 'png' | 'pdf') => {
+    const marksForExam = examMarks.filter(m => m.exam === examName);
+    if (marksForExam.length === 0) {
+      alert("No marks found for this exam.");
+      return;
+    }
+
+    setGeneratingReportData({ examName, marks: marksForExam });
+    
+    // Allow React to render the template
+    setTimeout(async () => {
+      const element = document.getElementById('report-card-template');
+      if (!element) {
+        alert("Template not found. Please try again.");
+        setGeneratingReportData(null);
+        return;
+      }
+
+      try {
+        const dataUrl = await toPng(element, { quality: 1, pixelRatio: 2, backgroundColor: 'white' });
+        
+        if (format === 'png') {
+          const link = document.createElement('a');
+          link.download = `${studentData.name}_${examName}.png`;
+          link.href = dataUrl;
+          link.click();
+        } else {
+          const pdf = new jsPDF('p', 'mm', 'a4');
+          const imgProps = pdf.getImageProperties(dataUrl);
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+          pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
+          pdf.save(`${studentData.name}_${examName}.pdf`);
+        }
+      } catch (err) {
+        console.error("Download failed:", err);
+        alert("Download failed. Please try again.");
+      } finally {
+        setGeneratingReportData(null);
+      }
+    }, 500);
   };
 
   const formatMonth = (monthStr: string) => {
@@ -1801,6 +1864,130 @@ export default function StudentDashboard() {
           </div>
         )}
 
+        {activeTab === "marks" && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+              <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold mb-1 text-slate-800 flex items-center font-sans">
+                    <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mr-3">
+                      <Award size={20} />
+                    </div>
+                    தேர்வு முடிவுகள் (Exam Results)
+                  </h2>
+                  <p className="text-slate-500 ml-13 font-medium">Your academic performance and report cards.</p>
+                </div>
+              </div>
+
+              {examMarks.length === 0 ? (
+                <div className="text-center py-16 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
+                  <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                    <Award size={32} className="text-slate-300" />
+                  </div>
+                  <p className="text-lg font-bold text-slate-400">No results published yet.</p>
+                  <p className="text-sm">Results will appear here once the administrator uploads them.</p>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {Object.entries(examMarks.reduce((acc: any, mark: any) => {
+                    if (!acc[mark.exam]) acc[mark.exam] = [];
+                    acc[mark.exam].push(mark);
+                    return acc;
+                  }, {})).map(([examName, marks]: [string, any]) => {
+                    // Sort marks by subject
+                    const sortedMarks = marks.sort((a: any, b: any) => a.subject.localeCompare(b.subject));
+                    
+                    return (
+                      <div key={examName} className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                        <div className="bg-white px-6 py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
+                          <h3 className="text-lg font-black text-slate-800">{examName}</h3>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => handleDownloadReportCard(examName, 'pdf')}
+                              className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-sm"
+                            >
+                              <Download size={14} /> PDF Result
+                            </button>
+                            <button 
+                              onClick={() => handleDownloadReportCard(examName, 'png')}
+                              className="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-200 transition-colors flex items-center gap-2"
+                            >
+                              <Camera size={14} /> Image Result
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div className="p-6 overflow-x-auto">
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2">
+                                <th className="pb-3 px-2">Subject</th>
+                                <th className="pb-3 px-2 text-center">Marks</th>
+                                <th className="pb-3 px-2 text-center">Grade</th>
+                                <th className="pb-3 px-2">Remarks</th>
+                                <th className="pb-3 px-2 text-center">Download</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {sortedMarks.map((m: any) => {
+                                const percentage = (m.obtained / m.total) * 100;
+                                let grade = 'F';
+                                let color = 'text-red-600 bg-red-50';
+                                
+                                if (percentage >= 90) { grade = 'A+'; color = 'text-emerald-600 bg-emerald-50'; }
+                                else if (percentage >= 80) { grade = 'A'; color = 'text-green-600 bg-green-50'; }
+                                else if (percentage >= 70) { grade = 'B'; color = 'text-blue-600 bg-blue-50'; }
+                                else if (percentage >= 60) { grade = 'C'; color = 'text-yellow-600 bg-yellow-50'; }
+                                else if (percentage >= 50) { grade = 'D'; color = 'text-orange-600 bg-orange-50'; }
+
+                                return (
+                                  <tr key={m.id} className="group hover:bg-white transition-colors">
+                                    <td className="py-4 px-2">
+                                      <span className="font-bold text-slate-800 text-sm">{m.subject}</span>
+                                    </td>
+                                    <td className="py-4 px-2 text-center">
+                                      <div className="flex flex-col items-center">
+                                        <span className="font-black text-indigo-600 text-base">{m.obtained}</span>
+                                        <span className="text-[10px] text-slate-400 font-bold">/ {m.total}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-4 px-2 text-center">
+                                      <span className={`px-2.5 py-1 rounded-lg font-black text-xs border ${color} border-current/20`}>
+                                        {grade}
+                                      </span>
+                                    </td>
+                                    <td className="py-4 px-2">
+                                      <p className="text-xs text-slate-600 italic font-medium max-w-[150px] truncate" title={m.remarks}>
+                                        {m.remarks || "N/A"}
+                                      </p>
+                                    </td>
+                                    <td className="py-4 px-2 text-center">
+                                      <button 
+                                        onClick={() => {
+                                          const tempMark = { ...m, studentName: studentData.name, rollNo: studentData.rollNo };
+                                          // For now full report card is same as individual but aggregated
+                                          handleDownloadReportCard(examName, 'pdf');
+                                        }}
+                                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors inline-flex group-hover:scale-110"
+                                      >
+                                        <Download size={18} />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === "rules" && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
@@ -2287,6 +2474,151 @@ export default function StudentDashboard() {
             </div>
           </div>
         </div>
+
+        {/* Full Report Card Template */}
+        {generatingReportData && (
+          <div 
+            id="report-card-template" 
+            className="w-[210mm] min-h-[297mm] bg-white p-12 text-slate-900 flex flex-col items-center border border-gray-100"
+          >
+            {/* Header with Academy Info */}
+            <div className="w-full flex justify-between items-start border-b-4 border-indigo-900 pb-6 mb-8">
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 bg-indigo-900 text-white rounded-2xl flex items-center justify-center font-black text-3xl shadow-lg">
+                  A
+                </div>
+                <div>
+                  <h1 className="text-3xl font-black text-indigo-900 tracking-tighter uppercase">Agaram Academy</h1>
+                  <p className="text-indigo-600 font-bold text-sm tracking-widest uppercase">E-Learning & Academic Centre</p>
+                  <p className="text-xs text-gray-500 font-medium mt-1 italic">Knowledge for a better future</p>
+                </div>
+              </div>
+              <div className="text-right flex flex-col items-end">
+                <div className="bg-indigo-900 text-white px-4 py-2 rounded-lg font-black text-xs tracking-widest uppercase mb-2 shadow-sm">
+                  Official Progress Report
+                </div>
+                <div className="bg-white p-2 border border-gray-200 rounded-lg shadow-sm">
+                  <QRCodeSVG value={studentData.id} size={60} level="H" />
+                </div>
+              </div>
+            </div>
+
+            {/* Student Profile Info */}
+            <div className="w-full grid grid-cols-2 gap-8 mb-10 bg-slate-50 p-8 rounded-3xl border border-slate-100 relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-200/20 rounded-full -mr-16 -mt-16"></div>
+               <div className="flex items-center gap-6 relative z-10">
+                  <div className="w-28 h-28 rounded-2xl border-4 border-white shadow-xl overflow-hidden bg-white shrink-0">
+                    {profileImage ? (
+                      <img src={profileImage} alt={studentData.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-200">
+                        <User size={48} />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-1">Student Name</p>
+                    <h2 className="text-2xl font-black text-slate-800 leading-tight">{studentData.name}</h2>
+                    <p className="text-indigo-600 font-bold text-sm mt-1">{studentData.rollNo || 'N/A'}</p>
+                  </div>
+               </div>
+               
+               <div className="flex flex-col justify-center space-y-4 relative z-10">
+                  <div className="flex justify-between border-b border-indigo-100 pb-2">
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Grade / Class</span>
+                    <span className="font-bold text-slate-800">{studentData.grade}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-indigo-100 pb-2">
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Exam Period</span>
+                    <span className="font-black text-indigo-700">{generatingReportData.examName}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-indigo-100 pb-2">
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Date Issued</span>
+                    <span className="font-bold text-slate-800">{new Date().toLocaleDateString()}</span>
+                  </div>
+               </div>
+            </div>
+
+            {/* Marks Table */}
+            <div className="w-full mb-12 flex-1">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-indigo-900 text-white">
+                    <th className="py-4 px-6 text-left rounded-tl-2xl font-black uppercase tracking-widest text-xs">Subject Name</th>
+                    <th className="py-4 px-6 text-center font-black uppercase tracking-widest text-xs">Max Marks</th>
+                    <th className="py-4 px-6 text-center font-black uppercase tracking-widest text-xs">Obtained</th>
+                    <th className="py-4 px-6 text-center font-black uppercase tracking-widest text-xs">Grade</th>
+                    <th className="py-4 px-6 text-left rounded-tr-2xl font-black uppercase tracking-widest text-xs">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {generatingReportData.marks.map((m: any, idx: number) => {
+                    const { grade, color } = getGradeLetter(m.obtained, m.total);
+                    return (
+                      <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                        <td className="py-5 px-6 font-bold text-slate-800">{m.subject}</td>
+                        <td className="py-5 px-6 text-center font-bold text-slate-400">{m.total}</td>
+                        <td className="py-5 px-6 text-center font-black text-indigo-600 text-lg">{m.obtained}</td>
+                        <td className="py-5 px-6 text-center">
+                          <span className={`px-3 py-1.5 rounded-lg font-black text-sm border ${color.replace('text-', 'border-').split(' ')[0]}/20 ${color}`}>
+                            {grade}
+                          </span>
+                        </td>
+                        <td className="py-5 px-6 text-slate-600 italic font-medium text-sm">{m.remarks || "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-indigo-50/50 border-t-2 border-indigo-100">
+                    <td className="py-6 px-6 font-black text-slate-800 uppercase tracking-widest text-sm">Overall Result</td>
+                    <td className="py-6 px-6 text-center font-black text-slate-400">
+                      {generatingReportData.marks.reduce((sum, m) => sum + Number(m.total), 0)}
+                    </td>
+                    <td className="py-6 px-6 text-center font-black text-2xl text-indigo-900">
+                      {generatingReportData.marks.reduce((sum, m) => sum + Number(m.obtained), 0)}
+                    </td>
+                    <td className="py-6 px-6 text-center" colSpan={2}>
+                      <div className="flex items-center justify-center gap-3">
+                         <span className="text-[10px] font-black uppercase text-indigo-400">Status:</span>
+                         <span className="text-emerald-600 font-black tracking-widest uppercase">PASSED</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Signature Area */}
+            <div className="w-full grid grid-cols-2 gap-20 mt-auto pt-10 border-t border-gray-100 px-10">
+               <div className="text-center">
+                  <div className="h-16 flex items-center justify-center mt-2">
+                    {/* Placeholder for Signature */}
+                    <div className="w-16 h-1 bg-indigo-900 mb-2 opacity-10"></div>
+                  </div>
+                  <div className="w-full border-t border-slate-300 pt-3">
+                    <p className="font-black text-slate-800 uppercase tracking-widest text-[10px]">Academic Director</p>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Agaram Dhines</p>
+                  </div>
+               </div>
+               <div className="text-center">
+                  <div className="h-16 flex flex-col items-center justify-center">
+                    <Award size={32} className="text-indigo-900 opacity-20" />
+                  </div>
+                  <div className="w-full border-t border-slate-300 pt-3">
+                    <p className="font-black text-slate-800 uppercase tracking-widest text-[10px]">Academy Stamp</p>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Verified Document</p>
+                  </div>
+               </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="mt-20 w-full pt-8 border-t border-slate-100 text-center">
+              <p className="text-[10px] text-slate-400 font-medium"> This is a computer-generated report. It is valid without an original signature. </p>
+              <p className="text-[9px] text-indigo-300 font-black uppercase tracking-widest mt-2">Built with Excellence by Agaram Dhines Academy</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {showQrScanner && (

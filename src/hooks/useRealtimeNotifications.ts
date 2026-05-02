@@ -11,8 +11,9 @@ export function useRealtimeNotifications(grade: string | undefined, onNewNotific
       Notification.requestPermission();
     }
 
-    // Start listening for notifications created after this moment
-    const mountTime = new Date().toISOString();
+    // Start listening for notifications created recently (within last 10 minutes)
+    // to handle clock skews between admin and student
+    const mountTime = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
     const q = query(
       collection(db, 'notifications'),
@@ -24,9 +25,18 @@ export function useRealtimeNotifications(grade: string | undefined, onNewNotific
         if (change.type === 'added') {
           const notification = change.doc.data();
           
-          // Only show if notification was created after mount
-          if (notification.createdAt >= mountTime) {
-            // Browser Notification
+          // Only show if notification was created after our (buffered) mount time
+          if (notification.createdAt && notification.createdAt >= mountTime) {
+            console.log("New notification received:", notification);
+            
+            // App Badge (System level)
+            if ('navigator' in window && 'setAppBadge' in navigator) {
+              (navigator as any).setAppBadge(1).catch((error: any) => {
+                console.error('Failed to set app badge:', error);
+              });
+            }
+
+            // Browser Notification (System level)
             if ('Notification' in window && Notification.permission === 'granted') {
               new Notification(notification.title, {
                 body: notification.message,
@@ -34,14 +44,7 @@ export function useRealtimeNotifications(grade: string | undefined, onNewNotific
               });
             }
 
-            // App Badge
-            if ('navigator' in window && 'setAppBadge' in navigator) {
-              (navigator as any).setAppBadge(1).catch((error: any) => {
-                console.error('Failed to set app badge:', error);
-              });
-            }
-
-            // Callback for UI update (e.g., showing a Toast or updating local state)
+            // Callback for UI update (Home dashboard badge)
             if (onNewNotification) {
               onNewNotification(notification);
             }
