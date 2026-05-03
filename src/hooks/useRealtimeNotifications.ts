@@ -31,15 +31,17 @@ export function useRealtimeNotifications(grade: string | undefined, onNewNotific
     const q = query(
       collection(db, 'notifications'),
       where('grade', 'in', [grade, 'Public', 'public', 'All', 'all']),
+      orderBy('createdAt', 'desc'),
       limit(20)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
-          const notification = change.doc.data();
+          const notification = { ...change.doc.data(), id: change.doc.id };
+          const isRealtime = notification.createdAt && notification.createdAt >= activeSessionTime;
           
-          if (notification.createdAt && notification.createdAt >= activeSessionTime) {
+          if (isRealtime) {
             console.log("Real-time notification received:", notification);
             
             // Increment and set badge
@@ -55,33 +57,24 @@ export function useRealtimeNotifications(grade: string | undefined, onNewNotific
                 const n = new Notification(notification.title, {
                   body: notification.message,
                   icon: '/logo.png',
-                  tag: notification.id, // prevent duplicates
+                  tag: notification.id,
                   renotify: true
                 } as any);
-                n.onclick = () => {
-                  window.focus();
-                  n.close();
-                };
-              } catch (e) {
-                console.error("Failed to show browser notification", e);
-              }
+                n.onclick = () => { window.focus(); n.close(); };
+              } catch (e) {}
             }
 
-            // Vibration if supported
-            if ('vibrate' in navigator) {
-              navigator.vibrate([200, 100, 200]);
-            }
+            if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
+          }
 
-            // Callback for UI update
-            if (onNewNotification) {
-              onNewNotification(notification);
-            }
+          // Always report to the callback so the UI can decide what to do
+          if (onNewNotification) {
+            onNewNotification({ ...notification, _isInitial: !isRealtime });
           }
         }
       });
     }, (error) => {
       console.error("Notification listener error:", error);
-      // If index is missing, error will provide the link to create it
     });
 
     return () => unsubscribe();

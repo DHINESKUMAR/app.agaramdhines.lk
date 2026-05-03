@@ -8,7 +8,7 @@ const getData = async (key: string, defaultValue: any) => {
       if (Array.isArray(defaultValue)) {
         const querySnapshot = await getDocs(collection(db, key));
         if (!querySnapshot.empty) {
-          const data = querySnapshot.docs.map(doc => doc.data());
+          const data = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
           try {
             localStorage.setItem(key, JSON.stringify(data));
           } catch (e) {

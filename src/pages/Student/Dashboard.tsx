@@ -124,33 +124,46 @@ export default function StudentDashboard() {
     }
   });
   const [newNotification, setNewNotification] = useState<any>(null);
-  const [badgeCount, setBadgeCount] = useState(0);
+  const [badgeCount, setBadgeCount] = useState(() => {
+    return parseInt(localStorage.getItem(`app_badge_count_${studentData?.grade}`) || "0");
+  });
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+
+  useEffect(() => {
+    // Initial badge sync on mount/grade change
+    const count = parseInt(localStorage.getItem(`app_badge_count_${studentData?.grade}`) || "0");
+    setBadgeCount(count);
+  }, [studentData?.grade]);
 
   useEffect(() => {
     if ('Notification' in window) {
       setNotificationPermission(Notification.permission);
       
-      // Auto detect when user returns to the app tab
       const handleFocus = () => {
         setNotificationPermission(Notification.permission);
+        const count = parseInt(localStorage.getItem(`app_badge_count_${studentData?.grade}`) || "0");
+        setBadgeCount(count);
       };
       
       window.addEventListener('focus', handleFocus);
       return () => window.removeEventListener('focus', handleFocus);
     }
-    
-    // Clear badge when dashboard is active or on click
-    const clearBadge = () => {
-      const badgeKey = `app_badge_count_${studentData?.grade}`;
-      localStorage.setItem(badgeKey, "0");
-      if ('navigator' in window && 'clearAppBadge' in navigator) {
-        (navigator as any).clearAppBadge().catch(() => {});
-      }
-    };
-    
-    if (activeTab === 'home') clearBadge();
-  }, [activeTab, studentData?.grade]);
+  }, [studentData?.grade]);
+
+  const clearBadge = () => {
+    const badgeKey = `app_badge_count_${studentData?.grade}`;
+    localStorage.setItem(badgeKey, "0");
+    setBadgeCount(0);
+    if ('navigator' in window && 'clearAppBadge' in navigator) {
+      (navigator as any).clearAppBadge().catch(() => {});
+    }
+  };
+
+  useEffect(() => {
+    if (showNotifications) {
+      clearBadge();
+    }
+  }, [showNotifications, studentData?.grade]);
 
   const requestNotificationPermission = async () => {
     if ('Notification' in window) {
@@ -174,33 +187,38 @@ export default function StudentDashboard() {
     // Add to local state (at the top)
     setRealtimeNotifications(prev => {
       // Check for duplicates
-      const isDuplicate = prev.some(p => p.message === notif.message && p.title === notif.title);
+      const isDuplicate = prev.some(p => (notif.id && p.id === notif.id) || (p.message === notif.message && p.title === notif.title));
       if (isDuplicate) return prev;
       
-      const updated = [notif, ...prev].slice(0, 50);
+      const updated = [notif, ...prev].sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      }).slice(0, 50);
       localStorage.setItem('notification_history', JSON.stringify(updated));
       return updated;
     });
 
-    setNewNotification(notif);
-    setBadgeCount(prev => prev + 1);
-    
-    // Play a gentle notification sound
-    try {
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.volume = 0.5;
-      audio.play().catch(() => {});
-    } catch (e) {}
+    if (!notif._isInitial) {
+      setNewNotification(notif);
+      const count = parseInt(localStorage.getItem(`app_badge_count_${studentData?.grade}`) || "0");
+      setBadgeCount(count);
+      
+      // Play a gentle notification sound
+      try {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(() => {});
+      } catch (e) {}
 
-    // Auto hide toast after 10 seconds
-    setTimeout(() => setNewNotification(null), 10000);
-  });
-
-  useEffect(() => {
-    if (activeTab === 'home') {
-      setBadgeCount(0);
+      // Auto hide toast after 10 seconds
+      setTimeout(() => setNewNotification(null), 10000);
+      
+      if ('vibrate' in navigator) {
+        navigator.vibrate([200, 100, 200]);
+      }
     }
-  }, [activeTab]);
+  });
 
   useEffect(() => {
     // Clear app badge when dashboard is active
