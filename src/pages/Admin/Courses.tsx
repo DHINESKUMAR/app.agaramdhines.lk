@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { getCourses, saveCourses, getClasses, getStaffs } from '../../lib/db';
-import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, List, LayoutGrid, Folder } from 'lucide-react';
+import { getCourses, saveCourses, getClasses, getStaffs, getCourseWebsiteLinks, saveCourseWebsiteLinks } from '../../lib/db';
+import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, List, LayoutGrid, Folder, Globe, Save } from 'lucide-react';
 
 export default function Courses() {
-  const [view, setView] = useState<'menu' | 'add' | 'view'>('menu');
+  const [view, setView] = useState<'menu' | 'add' | 'view' | 'links'>('menu');
   const [courses, setCourses] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [staffs, setStaffs] = useState<any[]>([]);
+  const [courseLinks, setCourseLinks] = useState<Record<string, string>>({});
   const [filterClass, setFilterClass] = useState<string>("");
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
 
@@ -14,6 +15,7 @@ export default function Courses() {
     getCourses().then(setCourses);
     getClasses().then(setClasses);
     getStaffs().then(setStaffs);
+    getCourseWebsiteLinks().then(links => setCourseLinks(links || {}));
   }, [view]);
 
   const [formData, setFormData] = useState({
@@ -23,6 +25,13 @@ export default function Courses() {
     link: '',
     folder: ''
   });
+
+  const handleSaveLinks = async () => {
+    await saveCourseWebsiteLinks(courseLinks);
+    alert('Links Saved Successfully');
+    setView('menu');
+  };
+
 
   const getFolderColor = (folderName: string) => {
     const colors = [
@@ -87,7 +96,7 @@ export default function Courses() {
            </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <button 
             onClick={() => setView('add')}
             className="group relative bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-sm hover:border-indigo-600 hover:shadow-2xl transition-all text-left overflow-hidden"
@@ -111,6 +120,68 @@ export default function Courses() {
             <h3 className="text-2xl font-black text-slate-900 mb-2">Manage All Library</h3>
             <p className="text-slate-500 font-medium font-medium">View, filter, and organize study content for all enrolled classes.</p>
           </button>
+
+          <button 
+            onClick={() => setView('links')}
+            className="group relative bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-sm hover:border-blue-600 hover:shadow-2xl transition-all text-left overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full -mr-16 -mt-16 transition-transform group-hover:scale-110"></div>
+            <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-xl shadow-blue-100 mb-6 group-hover:rotate-6 transition-all">
+               <Globe size={32} />
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 mb-2">Website Grade Links</h3>
+            <p className="text-slate-500 font-medium">Set direct website course links for each grade from 01 to 13.</p>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'links') {
+    return (
+      <div className="max-w-3xl mx-auto p-6 space-y-8">
+        <div className="flex items-center justify-between">
+           <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setView('menu')} 
+                className="flex items-center justify-center w-12 h-12 rounded-2xl bg-white border-2 border-slate-100 text-slate-400 hover:text-indigo-600 transition-all shadow-sm"
+              >
+                <ArrowLeft size={24} />
+              </button>
+              <div>
+                 <h2 className="text-3xl font-black text-slate-900">Website Grade Links</h2>
+                 <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Direct Course Routing</p>
+              </div>
+           </div>
+           <button 
+              onClick={handleSaveLinks}
+              className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100"
+           >
+              <Save size={20} />
+              Save All Links
+           </button>
+        </div>
+
+        <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 shadow-sm overflow-hidden p-8 space-y-6">
+          <p className="text-slate-500 font-medium bg-blue-50 p-6 rounded-3xl border border-blue-100 flex items-start gap-4">
+            <span className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5">i</span>
+            These links will be shown to students if they don't have any specific course material uploaded yet.
+          </p>
+          
+          <div className="grid grid-cols-1 gap-4">
+            {GRADES.map(grade => (
+              <div key={grade} className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-colors">
+                <span className="w-24 font-black text-slate-700">{grade}:</span>
+                <input 
+                  type="url" 
+                  placeholder="https://www.agaramdhines.lk/courses/..."
+                  value={courseLinks[grade] || ''}
+                  onChange={(e) => setCourseLinks({...courseLinks, [grade]: e.target.value})}
+                  className="flex-1 bg-white border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-indigo-600 transition-all"
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );

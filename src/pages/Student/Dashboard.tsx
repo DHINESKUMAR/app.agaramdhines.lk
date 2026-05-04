@@ -43,7 +43,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
 
-import { getCourses, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts } from "../../lib/db";
+import { getCourses, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts } from "../../lib/db";
 import CountdownTimer from "../../components/CountdownTimer";
 import PopupAnnouncement from "../../components/PopupAnnouncement";
 import LiveChat from "../../components/LiveChat";
@@ -63,6 +63,7 @@ export default function StudentDashboard() {
   const [fees, setFees] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [classLinks, setClassLinks] = useState<Record<string, string>>({});
+  const [courseWebsiteLinks, setCourseWebsiteLinks] = useState<Record<string, string>>({});
   const [homework, setHomework] = useState<any[]>([]);
   const [staffs, setStaffs] = useState<any[]>([]);
   const [timetable, setTimetable] = useState<any[]>([]);
@@ -435,7 +436,8 @@ export default function StudentDashboard() {
       }
 
       setAttendance(allAttendance.filter((a: any) => a.studentId === freshStudentData.id || a.studentId === freshStudentData.student_id));
-      setClassLinks(await getClassLinks());
+      getClassLinks().then(setClassLinks);
+      getCourseWebsiteLinks().then(setCourseWebsiteLinks);
       setStaffs(allStaffs);
       
       setTimetable(allTimetable.filter((t: any) => {
@@ -1702,10 +1704,39 @@ export default function StudentDashboard() {
               
               <div className="space-y-4">
                 {courses.length === 0 ? (
-                  <div className="text-center py-16 text-slate-500 bg-slate-50 rounded-3xl border-2 border-slate-100 border-dashed">
-                    <Book className="mx-auto h-16 w-16 text-slate-200 mb-4" />
-                    <h3 className="text-xl font-bold text-slate-800 mb-2">No recordings found.</h3>
-                    <p className="max-w-xs mx-auto">Please check your internet connection or contact support if this is unexpected.</p>
+                  <div className="space-y-8">
+                    <div className="text-center py-16 text-slate-500 bg-slate-50 rounded-[3rem] border-2 border-slate-100 border-dashed">
+                      <Globe className="mx-auto h-20 w-20 text-slate-200 mb-6" />
+                      <h3 className="text-2xl font-black text-slate-800 mb-2">நேரடி வகுப்புப் பதிவுகள் (Courses)</h3>
+                      <p className="max-w-md mx-auto text-slate-400 font-medium">தற்போது உங்களது வகுப்பிற்கு பதிவுகள் எதுவும் சேர்க்கப்படவில்லை. கீழேயுள்ள பட்டனை அழுத்தி எமது இணையதளத்தில் கற்கவும்.</p>
+
+                      <div className="mt-10 flex flex-wrap justify-center gap-4 px-6">
+                        {/* Always show at least the main link or grade specific links */}
+                        {["தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", "தரம் 11"].map(grade => {
+                          const link = courseWebsiteLinks[grade] || "https://www.agaramdhines.lk/courses/";
+                          return (
+                            <button
+                              key={grade}
+                              onClick={() => window.open(link, "_blank")}
+                              className="bg-white hover:bg-indigo-600 hover:text-white text-indigo-600 border-2 border-indigo-100 px-6 py-4 rounded-3xl font-black transition-all shadow-sm hover:shadow-xl hover:shadow-indigo-200 hover:-translate-y-1 flex items-center gap-3 min-w-[140px] justify-center"
+                            >
+                              <BookOpen size={18} />
+                              {grade}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-10 flex justify-center">
+                        <button 
+                          onClick={() => window.open("https://www.agaramdhines.lk/courses/", "_blank")}
+                          className="bg-indigo-600 text-white px-10 py-5 rounded-[2rem] font-black text-lg hover:bg-slate-900 transition-all shadow-2xl shadow-indigo-200 flex items-center gap-3"
+                        >
+                          <ExternalLink size={24} />
+                          அனைத்து பாடநெறிகள் (Main Website)
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-4">

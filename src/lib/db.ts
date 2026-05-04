@@ -279,6 +279,9 @@ export const saveSchedule = (schedule: any) => saveData('schedule', schedule);
 export const getClassLinks = () => getData('classLinks', {});
 export const saveClassLinks = (links: any) => saveData('classLinks', links);
 
+export const getCourseWebsiteLinks = () => getData('courseWebsiteLinks', {});
+export const saveCourseWebsiteLinks = (links: any) => saveData('courseWebsiteLinks', links);
+
 export const getClasses = () => getData('classes', []);
 export const saveClasses = (classes: any) => saveData('classes', classes);
 
