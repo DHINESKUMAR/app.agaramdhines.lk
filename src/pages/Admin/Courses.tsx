@@ -480,9 +480,9 @@ export default function Courses() {
                const isExpanded = expandedFolders[folderName];
                return (
                   <div key={folderName} className={`bg-white border-2 ${groupColor.border} rounded-[2.5rem] overflow-hidden shadow-sm hover:shadow-xl transition-all`}>
-                     <button 
+                     <div 
                         onClick={() => setExpandedFolders(prev => ({ ...prev, [folderName]: !prev[folderName] }))}
-                        className={`w-full flex items-center justify-between p-7 hover:bg-white/50 transition-colors group ${groupColor.bg}`}
+                        className={`w-full flex items-center justify-between p-7 hover:bg-white/50 transition-colors group cursor-pointer ${groupColor.bg}`}
                      >
                         <div className="flex items-center gap-6 text-left flex-1 min-w-0">
                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 ${isExpanded ? `${groupColor.icon} text-white shadow-lg ${groupColor.shadow} rotate-6` : `${groupColor.bg} ${groupColor.text} border ${groupColor.border}`}`}>
@@ -520,7 +520,7 @@ export default function Courses() {
                         <div className={`transition-transform duration-500 ${isExpanded ? 'rotate-180' : ''} ${groupColor.text}`}>
                            <ChevronDown size={24} />
                         </div>
-                     </button>
+                     </div>
 
                      {isExpanded && (
                         <div className="p-6 md:p-10 pt-0 space-y-4 bg-slate-50/20">
