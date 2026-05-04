@@ -1690,70 +1690,56 @@ export default function StudentDashboard() {
         {activeTab === "courses" && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
-              <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-                <div>
-                  <h2 className="text-2xl font-bold mb-1 text-slate-800 flex items-center">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3">
-                      <FileText size={20} />
-                    </div>
-                    Recording & Study Materials
-                  </h2>
-                  <p className="text-slate-500 ml-13">Access all your course recordings and materials.</p>
-                </div>
-                <button 
-                  onClick={() => window.open("https://www.agaramdhines.lk/courses/", "_blank")}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border border-slate-200 shadow-sm grow-0 shrink-0 w-fit"
-                >
-                  <ExternalLink size={14} />
-                  <span>Website Courses</span>
-                </button>
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold mb-1 text-slate-800 flex items-center">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3">
+                    <FileText size={20} />
+                  </div>
+                  Recording & Study Materials
+                </h2>
+                <p className="text-slate-500 ml-13">Access all your course recordings and materials.</p>
               </div>
-              
+
+              {/* Website Links Section - Always visible */}
+              <div className="bg-slate-50/50 p-6 sm:p-8 rounded-[3rem] border-2 border-slate-100 border-dashed mb-8 shadow-inner">
+                <div className="text-center mb-6">
+                  <h3 className="text-xl font-black text-slate-800">நேரடி வகுப்புத் பதிவுகள் (Courses Website)</h3>
+                  <p className="text-slate-400 text-sm font-medium mt-1">கீழேயுள்ள வகுப்பினைத் தெரிவு செய்து எமது இணையதளத்தில் கற்கவும்.</p>
+                </div>
+
+                <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+                  {Object.keys(courseWebsiteLinks).length > 0 ? (
+                    Object.entries(courseWebsiteLinks).sort((a, b) => a[0].localeCompare(b[0])).map(([grade, link]) => (
+                      <button
+                        key={grade}
+                        onClick={() => window.open((link as string) || "https://www.agaramdhines.lk/courses/", "_blank")}
+                        className="bg-white hover:bg-slate-900 hover:text-white text-slate-700 border-2 border-slate-100 px-5 py-3 rounded-2xl font-black text-sm transition-all shadow-sm hover:shadow-xl hover:-translate-y-0.5 flex items-center gap-2"
+                      >
+                        <BookOpen size={16} />
+                        {grade}
+                      </button>
+                    ))
+                  ) : (
+                    ["தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", "தரம் 11"].map(grade => (
+                      <button
+                        key={grade}
+                        onClick={() => window.open("https://www.agaramdhines.lk/courses/", "_blank")}
+                        className="bg-white hover:bg-slate-900 hover:text-white text-slate-700 border-2 border-slate-100 px-5 py-3 rounded-2xl font-black text-sm transition-all shadow-sm hover:shadow-xl hover:-translate-y-0.5 flex items-center gap-2"
+                      >
+                        <BookOpen size={16} />
+                        {grade}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+
               <div className="space-y-4">
                 {courses.length === 0 ? (
-                  <div className="space-y-8">
-                    <div className="text-center py-16 text-slate-500 bg-slate-50 rounded-[3rem] border-2 border-slate-100 border-dashed">
-                      <Globe className="mx-auto h-20 w-20 text-slate-200 mb-6" />
-                      <h3 className="text-2xl font-black text-slate-800 mb-2">நேரடி வகுப்புப் பதிவுகள் (Courses)</h3>
-                      <p className="max-w-md mx-auto text-slate-400 font-medium">தற்போது உங்களது வகுப்பிற்கு பதிவுகள் எதுவும் சேர்க்கப்படவில்லை. கீழேயுள்ள பட்டனை அழுத்தி எமது இணையதளத்தில் கற்கவும்.</p>
-
-                      <div className="mt-10 flex flex-wrap justify-center gap-4 px-6">
-                        {/* Show all links configured in admin, prioritizing student's grade if available */}
-                        {Object.keys(courseWebsiteLinks).length > 0 ? (
-                          Object.entries(courseWebsiteLinks).map(([grade, link]) => (
-                            <button
-                              key={grade}
-                              onClick={() => window.open((link as string) || "https://www.agaramdhines.lk/courses/", "_blank")}
-                              className="bg-white hover:bg-indigo-600 hover:text-white text-indigo-600 border-2 border-indigo-100 px-6 py-4 rounded-3xl font-black transition-all shadow-sm hover:shadow-xl hover:shadow-indigo-200 hover:-translate-y-1 flex items-center gap-3 min-w-[140px] justify-center"
-                            >
-                              <BookOpen size={18} />
-                              {grade}
-                            </button>
-                          ))
-                        ) : (
-                          ["தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", "தரம் 11"].map(grade => (
-                            <button
-                              key={grade}
-                              onClick={() => window.open("https://www.agaramdhines.lk/courses/", "_blank")}
-                              className="bg-white hover:bg-indigo-600 hover:text-white text-indigo-600 border-2 border-indigo-100 px-6 py-4 rounded-3xl font-black transition-all shadow-sm hover:shadow-xl hover:shadow-indigo-200 hover:-translate-y-1 flex items-center gap-3 min-w-[140px] justify-center"
-                            >
-                              <BookOpen size={18} />
-                              {grade}
-                            </button>
-                          ))
-                        )}
-                      </div>
-
-                      <div className="mt-10 flex justify-center">
-                        <button 
-                          onClick={() => window.open("https://www.agaramdhines.lk/courses/", "_blank")}
-                          className="bg-indigo-600 text-white px-10 py-5 rounded-[2rem] font-black text-lg hover:bg-slate-900 transition-all shadow-2xl shadow-indigo-200 flex items-center gap-3"
-                        >
-                          <ExternalLink size={24} />
-                          அனைத்து பாடநெறிகள் (Main Website)
-                        </button>
-                      </div>
-                    </div>
+                  <div className="text-center py-12 px-6">
+                    <Globe className="mx-auto h-16 w-16 text-slate-200 mb-4" />
+                    <h3 className="text-xl font-bold text-slate-800">எந்தப் பதிவுகளும் காணப்படவில்லை (No recordings found)</h3>
+                    <p className="text-slate-400 text-sm">மேலே உள்ள இணையதள இணைப்புகளைப் பயன்படுத்தவும்.</p>
                   </div>
                 ) : (
                   <div className="space-y-4">

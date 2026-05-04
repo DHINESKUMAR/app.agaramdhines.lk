@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getCourses, saveCourses, getClasses, getStaffs, getCourseWebsiteLinks, saveCourseWebsiteLinks, getSubjects, saveSubjects } from '../../lib/db';
-import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, List, LayoutGrid, Folder, Globe, Save, Edit3 } from 'lucide-react';
+import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, LayoutGrid, Folder, Globe, Save, Edit3 } from 'lucide-react';
 
 const GRADES = [
   "தரம் 01", "தரம் 02", "தரம் 03", "தரம் 04", "தரம் 05", 
@@ -51,7 +51,6 @@ export default function Courses() {
     }
   };
 
-
   const getFolderColor = (folderName: string) => {
     const colors = [
       { bg: 'bg-red-50', text: 'text-red-600', icon: 'bg-red-600', border: 'border-red-100', shadow: 'shadow-red-100' },
@@ -70,12 +69,10 @@ export default function Courses() {
     return colors[Math.abs(hash) % colors.length];
   };
 
-  // Get unique subjects for the selected grade from staff assignments
   const assignedSubjects = Array.from(new Set(
     staffs.flatMap(s => s.assignedClasses?.filter((c: any) => c.grade === formData.grade).map((c: any) => c.subject) || [])
   ));
 
-  // Merge with all global subjects
   const availableSubjectsList = Array.from(new Set([
     ...assignedSubjects,
     ...allSubjects.map(s => s.name)
@@ -88,7 +85,6 @@ export default function Courses() {
       return;
     }
 
-    // If manual subject was entered and it's not in the global list, we could save it
     const subjectExists = allSubjects.some(s => s.name.toLowerCase() === formData.subject.toLowerCase());
     if (!subjectExists && isManualSubject) {
         const newSub = { id: Date.now().toString(), name: formData.subject };
@@ -151,10 +147,7 @@ export default function Courses() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <button 
-            onClick={() => setView('add')}
-            className="group relative bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-sm hover:border-indigo-600 hover:shadow-2xl transition-all text-left overflow-hidden"
-          >
+          <button onClick={() => setView('add')} className="group relative bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-sm hover:border-indigo-600 hover:shadow-2xl transition-all text-left overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-full -mr-16 -mt-16 transition-transform group-hover:scale-110"></div>
             <div className="w-16 h-16 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-100 mb-6 group-hover:rotate-6 transition-all">
                <Plus size={32} />
@@ -163,10 +156,7 @@ export default function Courses() {
             <p className="text-slate-500 font-medium">Upload recordings, PDFs, or external course links categorized by grade and subject.</p>
           </button>
 
-          <button 
-            onClick={() => setView('view')}
-            className="group relative bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-sm hover:border-indigo-600 hover:shadow-2xl transition-all text-left overflow-hidden"
-          >
+          <button onClick={() => setView('view')} className="group relative bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-sm hover:border-indigo-600 hover:shadow-2xl transition-all text-left overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-bl-full -mr-16 -mt-16 transition-transform group-hover:scale-110"></div>
             <div className="w-16 h-16 bg-emerald-600 text-white rounded-2xl flex items-center justify-center shadow-xl shadow-emerald-100 mb-6 group-hover:rotate-6 transition-all">
                <LayoutGrid size={32} />
@@ -175,10 +165,7 @@ export default function Courses() {
             <p className="text-slate-500 font-medium font-medium">View, filter, and organize study content for all enrolled classes.</p>
           </button>
 
-          <button 
-            onClick={() => setView('links')}
-            className="group relative bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-sm hover:border-blue-600 hover:shadow-2xl transition-all text-left overflow-hidden"
-          >
+          <button onClick={() => setView('links')} className="group relative bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-sm hover:border-blue-600 hover:shadow-2xl transition-all text-left overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full -mr-16 -mt-16 transition-transform group-hover:scale-110"></div>
             <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-xl shadow-blue-100 mb-6 group-hover:rotate-6 transition-all">
                <Globe size={32} />
@@ -296,7 +283,7 @@ export default function Courses() {
             <ArrowLeft size={24} />
           </button>
           <div className="text-center">
-             <h2 className="text-3xl font-black text-slate-900">New Material</h2>
+             <h2 className="text-3xl font-black text-slate-900">{editingId ? 'Edit Material' : 'New Material'}</h2>
              <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] mt-1">Website Study Resources</p>
           </div>
           <div className="w-12"></div>
@@ -314,9 +301,7 @@ export default function Courses() {
                 <option value="">Select Grade</option>
                 {classes.length > 0 ? (
                   classes.map((cls) => (
-                    <option key={cls.id} value={cls.name}>
-                      {cls.name}
-                    </option>
+                    <option key={cls.id} value={cls.name}>{cls.name}</option>
                   ))
                 ) : (
                   GRADES.map(grade => (
@@ -340,7 +325,6 @@ export default function Courses() {
                   <Edit3 size={10} />
                 </button>
               </div>
-              
               {isManualSubject ? (
                 <input 
                   type="text"
@@ -358,13 +342,8 @@ export default function Courses() {
                 >
                   <option value="">Select Subject</option>
                   {availableSubjectsList.map((subject: any) => (
-                    <option key={subject} value={subject}>
-                      {subject}
-                    </option>
+                    <option key={subject} value={subject}>{subject}</option>
                   ))}
-                  {formData.grade && availableSubjectsList.length === 0 && (
-                    <option value="" disabled>No subjects found</option>
-                  )}
                 </select>
               )}
             </div>
@@ -404,8 +383,8 @@ export default function Courses() {
           </div>
 
           <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-3xl hover:bg-slate-900 transition-all font-black text-lg shadow-xl shadow-indigo-100 flex items-center justify-center gap-3 mt-4">
-             <Plus size={24} />
-             Add to Library
+             {editingId ? <Save size={24} /> : <Plus size={24} />}
+             {editingId ? 'Update Material' : 'Add to Library'}
           </button>
         </form>
       </div>
@@ -417,7 +396,6 @@ export default function Courses() {
       ? courses.filter(c => c.grade === filterClass)
       : courses;
 
-    // Grouping for accordion view
     const folderGroups: Record<string, any[]> = {};
     filteredCourses.forEach(c => {
        const key = c.folder || `${c.grade} General Content`;
@@ -449,15 +427,12 @@ export default function Courses() {
               className="border-none bg-transparent focus:ring-0 text-sm font-black text-indigo-600"
             >
               <option value="">All Materials</option>
-              {classes.length > 0 ? (
-                classes.map((cls) => (
-                  <option key={cls.id} value={cls.name}>{cls.name}</option>
-                ))
-              ) : (
-                GRADES.map(grade => (
-                  <option key={grade} value={grade}>{grade}</option>
-                ))
-              )}
+              {classes.map((cls) => (
+                <option key={cls.id} value={cls.name}>{cls.name}</option>
+              ))}
+              {classes.length === 0 && GRADES.map(grade => (
+                <option key={grade} value={grade}>{grade}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -500,8 +475,8 @@ export default function Courses() {
                               {folderGroups[folderName].map(course => (
                                  <div key={course.id} className="bg-white border-2 border-slate-100 rounded-3xl p-6 flex flex-col gap-4 shadow-sm hover:border-indigo-600 transition-all group/item">
                                     <div className="flex justify-between items-start">
-                                       <div>
-                                          <div className="flex items-center gap-2 mb-2">
+                                       <div className="flex-1 min-w-0">
+                                          <div className="flex flex-wrap items-center gap-2 mb-2">
                                              <span className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
                                                 {course.grade}
                                              </span>
@@ -509,21 +484,23 @@ export default function Courses() {
                                                 {course.subject}
                                              </span>
                                           </div>
-                                          <h4 className="text-lg font-black text-slate-800 leading-tight mb-2">{course.title}</h4>
-                                          <a href={course.link} target="_blank" rel="noopener noreferrer" className="text-blue-500 text-xs font-bold hover:underline truncate inline-flex items-center gap-1">
-                                             <ExternalLink size={12} /> {course.link}
+                                          <h4 className="text-lg font-black text-slate-800 leading-tight mb-2 truncate">{course.title}</h4>
+                                          <a href={course.link} target="_blank" rel="noopener noreferrer" className="text-blue-500 text-xs font-bold hover:underline truncate inline-flex items-center gap-1 w-full">
+                                             <ExternalLink size={12} className="shrink-0" /> <span className="truncate">{course.link}</span>
                                           </a>
                                        </div>
-                                       <div className="flex flex-col gap-2">
+                                       <div className="flex items-center gap-1 ml-4 shrink-0">
                                           <button 
                                              onClick={() => handleEdit(course)}
                                              className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                                             title="Edit Material"
                                           >
                                              <Edit3 size={18} />
                                           </button>
                                           <button 
                                              onClick={() => handleDelete(course.id)}
                                              className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                             title="Delete Material"
                                           >
                                              <Trash2 size={18} />
                                           </button>
@@ -545,4 +522,3 @@ export default function Courses() {
 
   return null;
 }
-
