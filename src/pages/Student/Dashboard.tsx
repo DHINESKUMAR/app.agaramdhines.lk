@@ -153,6 +153,25 @@ export default function StudentDashboard() {
     }
   }, [studentData?.grade]);
 
+  // Helper to get consistent vibrant colors for folders
+  const getFolderColor = (folderName: string) => {
+    const colors = [
+      { bg: 'bg-red-50', text: 'text-red-600', icon: 'bg-red-600', border: 'border-red-100', shadow: 'shadow-red-100' },
+      { bg: 'bg-blue-50', text: 'text-blue-600', icon: 'bg-blue-600', border: 'border-blue-100', shadow: 'shadow-blue-100' },
+      { bg: 'bg-green-50', text: 'text-green-600', icon: 'bg-green-600', border: 'border-green-100', shadow: 'shadow-green-100' },
+      { bg: 'bg-purple-50', text: 'text-purple-600', icon: 'bg-purple-600', border: 'border-purple-100', shadow: 'shadow-purple-100' },
+      { bg: 'bg-orange-50', text: 'text-orange-600', icon: 'bg-orange-600', border: 'border-orange-100', shadow: 'shadow-orange-100' },
+      { bg: 'bg-pink-50', text: 'text-pink-600', icon: 'bg-pink-600', border: 'border-pink-100', shadow: 'shadow-pink-100' },
+      { bg: 'bg-indigo-50', text: 'text-indigo-600', icon: 'bg-indigo-600', border: 'border-indigo-100', shadow: 'shadow-indigo-100' },
+      { bg: 'bg-teal-50', text: 'text-teal-600', icon: 'bg-teal-600', border: 'border-teal-100', shadow: 'shadow-teal-100' },
+    ];
+    let hash = 0;
+    for (let i = 0; i < folderName.length; i++) {
+      hash = folderName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
+
   const clearBadge = () => {
     const badgeKey = `app_badge_count_${studentData?.grade}`;
     localStorage.setItem(badgeKey, "0");
@@ -350,13 +369,39 @@ export default function StudentDashboard() {
       const studentFees = allFees.filter((f: any) => f.studentId === data.id || f.studentName === data.name);
       setFees(studentFees);
       
-      // Check for pending fees for current month
-      const currentMonthStr = new Date().toISOString().slice(0, 7);
-      const hasPaidCurrentMonth = studentFees.some((f: any) => f.month === currentMonthStr);
-      if (!hasPaidCurrentMonth) {
+      // Check for pending fees for current and previous months
+      const now = new Date();
+      const unpaidMonths: string[] = [];
+      const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      // Determine start month to check from (either admission date or 6 months ago)
+      let checkStartMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+      if (freshStudentData.admissionDate) {
+        const admissionDate = new Date(freshStudentData.admissionDate);
+        if (!isNaN(admissionDate.getTime())) {
+          const admStartMonth = new Date(admissionDate.getFullYear(), admissionDate.getMonth(), 1);
+          if (admStartMonth > checkStartMonth) {
+             checkStartMonth = admStartMonth;
+          }
+        }
+      }
+
+      // Iterate through all months from checkStartMonth to currentMonth
+      let currentCheck = new Date(checkStartMonth);
+      while (currentCheck <= currentMonth) {
+        const monthStr = currentCheck.toISOString().slice(0, 7);
+        const hasPaid = studentFees.some((f: any) => f.month === monthStr);
+        if (!hasPaid) {
+          unpaidMonths.push(currentCheck.toLocaleString('default', { month: 'long', year: 'numeric' }));
+        }
+        currentCheck.setMonth(currentCheck.getMonth() + 1);
+      }
+
+      if (unpaidMonths.length > 0) {
         setHasPendingFees(true);
-        const date = new Date();
-        setPendingMonthName(date.toLocaleString('default', { month: 'long', year: 'numeric' }));
+        setPendingMonthName(unpaidMonths.join(', '));
+      } else {
+        setHasPendingFees(false);
       }
 
       setAttendance(allAttendance.filter((a: any) => a.studentId === data.id));
@@ -1587,18 +1632,19 @@ export default function StudentDashboard() {
                       return acc;
                     }, {})).map(([folder, folderCourses]: [string, any]) => {
                       const isExpanded = expandedFolders[`course-${folder}`];
+                      const folderColor = getFolderColor(folder);
                       return (
-                        <div key={folder} className="bg-white border-2 border-slate-100 rounded-[2rem] overflow-hidden shadow-sm hover:shadow-md transition-all">
+                        <div key={folder} className={`bg-white border-2 ${folderColor.border} rounded-[2rem] overflow-hidden shadow-sm hover:shadow-md transition-all`}>
                           <button 
                             onClick={() => setExpandedFolders(prev => ({ ...prev, [`course-${folder}`]: !prev[`course-${folder}`] }))}
-                            className="w-full flex items-center justify-between p-7 hover:bg-slate-50 transition-colors group"
+                            className={`w-full flex items-center justify-between p-7 hover:bg-white/50 transition-colors group ${folderColor.bg}`}
                           >
                             <div className="flex items-center gap-6 text-left">
-                              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-500 ${isExpanded ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100 -rotate-3 scale-110' : 'bg-indigo-50 text-indigo-600'}`}>
+                              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-500 ${isExpanded ? `${folderColor.icon} text-white shadow-xl ${folderColor.shadow} -rotate-3 scale-110` : `${folderColor.bg} ${folderColor.text} border ${folderColor.border}`}`}>
                                 <BookOpen size={32} />
                               </div>
                               <div>
-                                <h3 className="text-xl font-black text-slate-800 leading-tight">
+                                <h3 className={`text-xl font-black ${folderColor.text} leading-tight`}>
                                   {folder}
                                 </h3>
                                 <p className="text-slate-400 text-sm font-bold uppercase tracking-wider mt-1 opacity-70">
@@ -1607,10 +1653,10 @@ export default function StudentDashboard() {
                               </div>
                             </div>
                             <div className="flex items-center gap-4">
-                              <div className="hidden sm:flex items-center justify-center w-12 h-12 rounded-full border-2 border-slate-50 text-slate-400 font-black text-sm">
+                              <div className={`hidden sm:flex items-center justify-center w-12 h-12 rounded-full border-2 ${folderColor.border} ${folderColor.text} font-black text-sm`}>
                                 {folderCourses.length}
                               </div>
-                              <div className={`w-10 h-10 rounded-full border-2 border-slate-100 flex items-center justify-center transition-all duration-500 ${isExpanded ? 'rotate-180 bg-indigo-50 border-indigo-200 text-indigo-600' : 'text-slate-300'}`}>
+                              <div className={`w-10 h-10 rounded-full border-2 ${folderColor.border} flex items-center justify-center transition-all duration-500 ${isExpanded ? `rotate-180 ${folderColor.bg} ${folderColor.border} ${folderColor.text}` : `${folderColor.text} opacity-30`}`}>
                                 <ChevronDown size={24} />
                               </div>
                             </div>
@@ -1723,19 +1769,20 @@ export default function StudentDashboard() {
                         return acc;
                       }, {})).map(([folder, folderLinks]: [string, any]) => {
                         const isExpanded = expandedFolders[folder];
+                        const folderColor = getFolderColor(folder);
                         return (
-                          <div key={folder} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm transition-all hover:shadow-md">
+                          <div key={folder} className={`bg-white border ${folderColor.border} rounded-3xl overflow-hidden shadow-sm transition-all hover:shadow-md`}>
                             {/* Accordion Header - Image 1 style */}
                             <button 
                               onClick={() => setExpandedFolders(prev => ({ ...prev, [folder]: !prev[folder] }))}
-                              className="w-full flex items-center justify-between p-6 sm:p-7 hover:bg-slate-50 transition-colors group"
+                              className={`w-full flex items-center justify-between p-6 sm:p-7 hover:bg-white/50 transition-colors group ${folderColor.bg}`}
                             >
                               <div className="flex items-center gap-5 text-left">
-                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 ${isExpanded ? 'bg-red-600 text-white shadow-lg shadow-red-200 rotate-6' : 'bg-red-50 text-red-600 group-hover:scale-110'}`}>
+                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 ${isExpanded ? `${folderColor.icon} text-white shadow-lg ${folderColor.shadow} rotate-6` : `${folderColor.bg} ${folderColor.text} group-hover:scale-110 border ${folderColor.border}`}`}>
                                   <Megaphone size={28} className={isExpanded ? "animate-pulse" : ""} />
                                 </div>
                                 <div>
-                                  <h3 className="text-xl font-black text-slate-800 leading-tight">
+                                  <h3 className={`text-xl font-black ${folderColor.text} leading-tight`}>
                                     {folder}
                                   </h3>
                                   <p className="text-slate-500 text-sm font-medium mt-1">
@@ -1744,11 +1791,11 @@ export default function StudentDashboard() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-6">
-                                <span className="hidden sm:inline-flex text-sm font-black text-slate-400 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                                <span className={`hidden sm:inline-flex text-sm font-black ${folderColor.text} ${folderColor.bg} px-3 py-1.5 rounded-xl border ${folderColor.border}`}>
                                   {folderLinks.length} Videos
                                 </span>
-                                <div className={`transition-transform duration-500 ${isExpanded ? 'rotate-180' : ''}`}>
-                                  <ChevronDown size={24} className="text-slate-400" />
+                                <div className={`transition-transform duration-500 ${isExpanded ? 'rotate-180' : ''} ${folderColor.text}`}>
+                                  <ChevronDown size={24} />
                                 </div>
                               </div>
                             </button>

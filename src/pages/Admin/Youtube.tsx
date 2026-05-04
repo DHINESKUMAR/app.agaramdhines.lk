@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Youtube as YoutubeIcon, PlayCircle, Trash2, ArrowLeft, Plus, ExternalLink, BookOpen, Folder, Globe, FileText, LayoutGrid, List, Share2 } from 'lucide-react';
+import { Youtube as YoutubeIcon, PlayCircle, Trash2, ArrowLeft, Plus, ExternalLink, BookOpen, Folder, Globe, FileText, LayoutGrid, List, Share2, ChevronDown } from 'lucide-react';
 import { getYoutubeLinks, saveYoutubeLinks, getWebPosts, saveWebPosts, addNotification } from '../../lib/db';
 
 export default function Youtube() {
@@ -183,6 +183,26 @@ export default function Youtube() {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
+  };
+
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+
+  const getFolderColor = (folderName: string) => {
+    const colors = [
+      { bg: 'bg-red-50', text: 'text-red-600', icon: 'bg-red-600', border: 'border-red-100', shadow: 'shadow-red-100' },
+      { bg: 'bg-blue-50', text: 'text-blue-600', icon: 'bg-blue-600', border: 'border-blue-100', shadow: 'shadow-blue-100' },
+      { bg: 'bg-green-50', text: 'text-green-600', icon: 'bg-green-600', border: 'border-green-100', shadow: 'shadow-green-100' },
+      { bg: 'bg-purple-50', text: 'text-purple-600', icon: 'bg-purple-600', border: 'border-purple-100', shadow: 'shadow-purple-100' },
+      { bg: 'bg-orange-50', text: 'text-orange-600', icon: 'bg-orange-600', border: 'border-orange-100', shadow: 'shadow-orange-100' },
+      { bg: 'bg-pink-50', text: 'text-pink-600', icon: 'bg-pink-600', border: 'border-pink-100', shadow: 'shadow-pink-100' },
+      { bg: 'bg-indigo-50', text: 'text-indigo-600', icon: 'bg-indigo-600', border: 'border-indigo-100', shadow: 'shadow-indigo-100' },
+      { bg: 'bg-teal-50', text: 'text-teal-600', icon: 'bg-teal-600', border: 'border-teal-100', shadow: 'shadow-teal-100' },
+    ];
+    let hash = 0;
+    for (let i = 0; i < folderName.length; i++) {
+        hash = folderName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
   };
 
   if (selectedGrade) {
@@ -378,7 +398,7 @@ export default function Youtube() {
           </div>
 
           {/* Content List */}
-          <div className="lg:col-span-3 space-y-8">
+          <div className="lg:col-span-3 space-y-6">
             {activeTab === 'youtube' ? (
               Object.keys(folders).length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 flex flex-col items-center text-center">
@@ -387,30 +407,47 @@ export default function Youtube() {
                    <p className="text-gray-500">Your categorized videos will appear here.</p>
                 </div>
               ) : (
-                Object.keys(folders).sort().map(folderName => (
-                  <div key={folderName} className="space-y-4">
-                    <div className="flex items-center gap-2 text-indigo-900 border-b pb-2">
-                       <Folder size={20} className="text-indigo-600" />
-                       <h3 className="text-lg font-black uppercase tracking-wider">{folderName}</h3>
-                       <span className="bg-indigo-100 text-indigo-600 text-xs font-bold px-2 py-0.5 rounded-full">
-                         {folders[folderName].length}
-                       </span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                      {folders[folderName].map(link => {
-                        const videoId = extractVideoId(link.link);
-                        const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&q=80';
-                        return (
-                          <div key={link.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-md transition-all">
-                             <div className="relative aspect-video">
-                                <img src={thumbnailUrl} alt={link.title} className="w-full h-full object-cover" />
-                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                   <a href={link.link} target="_blank" rel="noopener" className="p-3 bg-red-600 text-white rounded-full"><PlayCircle size={32} /></a>
-                                </div>
-                             </div>
-                             <div className="p-4">
-                                {editingId === link.id ? (
-                                  <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                Object.keys(folders).sort().map(folderName => {
+                  const isExpanded = expandedFolders[folderName];
+                  const folderColor = getFolderColor(folderName);
+                  return (
+                    <div key={folderName} className={`bg-white border ${folderColor.border} rounded-3xl overflow-hidden shadow-sm transition-all hover:shadow-md`}>
+                      <button 
+                        onClick={() => setExpandedFolders(prev => ({ ...prev, [folderName]: !prev[folderName] }))}
+                        className={`w-full flex items-center justify-between p-6 hover:bg-white/50 transition-colors group ${folderColor.bg}`}
+                      >
+                        <div className="flex items-center gap-4 text-left">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${isExpanded ? `${folderColor.icon} text-white shadow-lg ${folderColor.shadow}` : `${folderColor.bg} ${folderColor.text} border ${folderColor.border}`}`}>
+                             <Folder size={24} />
+                          </div>
+                          <div>
+                            <h3 className={`font-black uppercase tracking-wider ${folderColor.text}`}>{folderName}</h3>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-0.5">
+                               {folders[folderName].length} Videos included
+                            </p>
+                          </div>
+                        </div>
+                        <div className={`transition-transform duration-500 ${isExpanded ? 'rotate-180' : ''} ${folderColor.text}`}>
+                          <ChevronDown size={24} />
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="p-6 pt-2 grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/30">
+                          {folders[folderName].map(link => {
+                            const videoId = extractVideoId(link.link);
+                            const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&q=80';
+                            return (
+                              <div key={link.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-md transition-all flex flex-col">
+                                 <div className="relative aspect-video">
+                                    <img src={thumbnailUrl} alt={link.title} className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                       <a href={link.link} target="_blank" rel="noopener" className="p-3 bg-red-600 text-white rounded-full transition-transform hover:scale-110"><PlayCircle size={32} /></a>
+                                    </div>
+                                 </div>
+                                 <div className="p-4 flex-1 flex flex-col">
+                                    {editingId === link.id ? (
+                                      <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
                                     <div>
                                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Subject</label>
                                       <select 
@@ -480,10 +517,12 @@ export default function Youtube() {
                         );
                       })}
                     </div>
-                  </div>
-                ))
-              )
-            ) : (
+                  )}
+                </div>
+              );
+            })
+          )
+        ) : (
               <div className="space-y-8">
                 {(() => {
                   const postFolders: { [key: string]: any[] } = {};

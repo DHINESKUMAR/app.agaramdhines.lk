@@ -232,7 +232,7 @@ export default function CollectFee() {
                         className={`p-3 hover:bg-blue-50 cursor-pointer transition-colors flex flex-col ${selectedStudent?.id === student.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
                       >
                         <span className="font-medium text-gray-800">{student.name}</span>
-                        <span className="text-xs text-gray-500">ID: {student.student_id || student.id} | Class: {student.grade}</span>
+                        <span className="text-xs text-gray-500">Roll No: {student.rollNo || "N/A"} | ID: {student.student_id || student.id} | Class: {student.grade}</span>
                       </li>
                     ))}
                   </ul>
@@ -257,6 +257,7 @@ export default function CollectFee() {
                   </div>
                   <div>
                     <h3 className="font-bold text-gray-800 leading-tight">{selectedStudent.name}</h3>
+                    <p className="text-xs text-gray-500">Roll No: {selectedStudent.rollNo || "N/A"}</p>
                     <p className="text-xs text-gray-500">ID: {selectedStudent.student_id || selectedStudent.id}</p>
                   </div>
                 </div>
