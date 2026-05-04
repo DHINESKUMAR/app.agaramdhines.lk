@@ -18,6 +18,8 @@ export default function Courses() {
   const [isManualSubject, setIsManualSubject] = useState(false);
   const [filterClass, setFilterClass] = useState<string>("");
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [customGrade, setCustomGrade] = useState("");
 
   useEffect(() => {
     getCourses().then(setCourses);
@@ -39,6 +41,14 @@ export default function Courses() {
     await saveCourseWebsiteLinks(courseLinks);
     alert('Links Saved Successfully');
     setView('menu');
+  };
+
+  const handleAddCustomGrade = () => {
+    if (!customGrade.trim()) return;
+    if (!courseLinks[customGrade]) {
+      setCourseLinks({ ...courseLinks, [customGrade]: '' });
+      setCustomGrade("");
+    }
   };
 
 
@@ -87,13 +97,20 @@ export default function Courses() {
         await saveSubjects(updatedSubs);
     }
 
-    const newCourse = { id: Date.now().toString(), ...formData };
-    const updatedCourses = [...courses, newCourse];
+    let updatedCourses;
+    if (editingId) {
+      updatedCourses = courses.map(c => c.id === editingId ? { ...c, ...formData } : c);
+      setEditingId(null);
+    } else {
+      const newCourse = { id: Date.now().toString(), ...formData };
+      updatedCourses = [...courses, newCourse];
+    }
+    
     setCourses(updatedCourses);
     await saveCourses(updatedCourses);
-    alert('Course Added');
+    alert(editingId ? 'Material Updated' : 'Material Added');
     setFormData({ grade: '', subject: '', title: '', link: '', folder: '' });
-    setView('menu');
+    setView('view');
   };
 
   const handleDelete = async (id: string) => {
@@ -102,6 +119,18 @@ export default function Courses() {
       setCourses(updatedCourses);
       await saveCourses(updatedCourses);
     }
+  };
+
+  const handleEdit = (course: any) => {
+    setFormData({
+      grade: course.grade,
+      subject: course.subject,
+      title: course.title,
+      link: course.link,
+      folder: course.folder || ''
+    });
+    setEditingId(course.id);
+    setView('add');
   };
 
   if (view === 'menu') {
@@ -188,15 +217,47 @@ export default function Courses() {
         </div>
 
         <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 shadow-sm overflow-hidden p-8 space-y-6">
-          <p className="text-slate-500 font-medium bg-blue-50 p-6 rounded-3xl border border-blue-100 flex items-start gap-4">
-            <span className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5">i</span>
-            These links will be shown to students if they don't have any specific course material uploaded yet.
-          </p>
+          <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 space-y-4">
+             <p className="text-slate-500 font-medium flex items-start gap-4">
+               <span className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5">i</span>
+               These links will be shown to students if they don't have any specific course material uploaded yet.
+             </p>
+             <div className="flex gap-4">
+                <input 
+                  type="text" 
+                  placeholder="Enter custom Class/Grade name..."
+                  value={customGrade}
+                  onChange={(e) => setCustomGrade(e.target.value)}
+                  className="flex-1 bg-white border-2 border-slate-200 rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-600 transition-all"
+                />
+                <button 
+                  onClick={handleAddCustomGrade}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-900 transition-all"
+                >
+                   <Plus size={18} />
+                   Add Grade
+                </button>
+             </div>
+          </div>
           
           <div className="grid grid-cols-1 gap-4">
-            {GRADES.map(grade => (
+            {Object.keys(courseLinks).sort((a, b) => a.localeCompare(b)).map(grade => (
               <div key={grade} className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-colors">
-                <span className="w-24 font-black text-slate-700">{grade}:</span>
+                <div className="flex items-center justify-between sm:w-32 shrink-0">
+                  <span className="font-black text-slate-700">{grade}:</span>
+                  {!GRADES.includes(grade) && (
+                    <button 
+                      onClick={() => {
+                        const newLinks = { ...courseLinks };
+                        delete newLinks[grade];
+                        setCourseLinks(newLinks);
+                      }}
+                      className="text-red-400 hover:text-red-600 sm:hidden"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
                 <input 
                   type="url" 
                   placeholder="https://www.agaramdhines.lk/courses/..."
@@ -204,6 +265,18 @@ export default function Courses() {
                   onChange={(e) => setCourseLinks({...courseLinks, [grade]: e.target.value})}
                   className="flex-1 bg-white border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-indigo-600 transition-all"
                 />
+                {!GRADES.includes(grade) && (
+                  <button 
+                    onClick={() => {
+                      const newLinks = { ...courseLinks };
+                      delete newLinks[grade];
+                      setCourseLinks(newLinks);
+                    }}
+                    className="hidden sm:flex text-slate-300 hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -425,7 +498,7 @@ export default function Courses() {
                         <div className="p-6 md:p-10 pt-0 space-y-4 bg-slate-50/20">
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               {folderGroups[folderName].map(course => (
-                                 <div key={course.id} className="bg-white border-2 border-slate-100 rounded-3xl p-6 flex flex-col gap-4 shadow-sm hover:border-indigo-600 transition-all">
+                                 <div key={course.id} className="bg-white border-2 border-slate-100 rounded-3xl p-6 flex flex-col gap-4 shadow-sm hover:border-indigo-600 transition-all group/item">
                                     <div className="flex justify-between items-start">
                                        <div>
                                           <div className="flex items-center gap-2 mb-2">
@@ -441,12 +514,20 @@ export default function Courses() {
                                              <ExternalLink size={12} /> {course.link}
                                           </a>
                                        </div>
-                                       <button 
-                                          onClick={() => handleDelete(course.id)}
-                                          className="p-2.5 text-red-100 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                                       >
-                                          <Trash2 size={20} />
-                                       </button>
+                                       <div className="flex flex-col gap-2">
+                                          <button 
+                                             onClick={() => handleEdit(course)}
+                                             className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                                          >
+                                             <Edit3 size={18} />
+                                          </button>
+                                          <button 
+                                             onClick={() => handleDelete(course.id)}
+                                             className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                          >
+                                             <Trash2 size={18} />
+                                          </button>
+                                       </div>
                                     </div>
                                  </div>
                               ))}

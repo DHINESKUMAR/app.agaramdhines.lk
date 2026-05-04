@@ -358,7 +358,14 @@ export default function StudentDashboard() {
 
       setCourses(allCourses.filter((c: any) => {
         const itemGrade = c.grade?.toString().trim().toLowerCase() || "";
-        return itemGrade === studentGrade || (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade));
+        const itemGradeNum = itemGrade.replace(/[^0-9]/g, '');
+        
+        if (itemGrade === studentGrade) return true;
+        if (normalizedStudentGrade && itemGradeNum === normalizedStudentGrade) return true;
+        if (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade)) return true;
+        if (itemGrade.includes("all") || itemGrade.includes("public")) return true;
+        
+        return false;
       }));
       
       setZoomLinks(allZoomLinks.filter((z: any) => {
@@ -1711,20 +1718,30 @@ export default function StudentDashboard() {
                       <p className="max-w-md mx-auto text-slate-400 font-medium">தற்போது உங்களது வகுப்பிற்கு பதிவுகள் எதுவும் சேர்க்கப்படவில்லை. கீழேயுள்ள பட்டனை அழுத்தி எமது இணையதளத்தில் கற்கவும்.</p>
 
                       <div className="mt-10 flex flex-wrap justify-center gap-4 px-6">
-                        {/* Always show at least the main link or grade specific links */}
-                        {["தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", "தரம் 11"].map(grade => {
-                          const link = courseWebsiteLinks[grade] || "https://www.agaramdhines.lk/courses/";
-                          return (
+                        {/* Show all links configured in admin, prioritizing student's grade if available */}
+                        {Object.keys(courseWebsiteLinks).length > 0 ? (
+                          Object.entries(courseWebsiteLinks).map(([grade, link]) => (
                             <button
                               key={grade}
-                              onClick={() => window.open(link, "_blank")}
+                              onClick={() => window.open((link as string) || "https://www.agaramdhines.lk/courses/", "_blank")}
                               className="bg-white hover:bg-indigo-600 hover:text-white text-indigo-600 border-2 border-indigo-100 px-6 py-4 rounded-3xl font-black transition-all shadow-sm hover:shadow-xl hover:shadow-indigo-200 hover:-translate-y-1 flex items-center gap-3 min-w-[140px] justify-center"
                             >
                               <BookOpen size={18} />
                               {grade}
                             </button>
-                          );
-                        })}
+                          ))
+                        ) : (
+                          ["தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", "தரம் 11"].map(grade => (
+                            <button
+                              key={grade}
+                              onClick={() => window.open("https://www.agaramdhines.lk/courses/", "_blank")}
+                              className="bg-white hover:bg-indigo-600 hover:text-white text-indigo-600 border-2 border-indigo-100 px-6 py-4 rounded-3xl font-black transition-all shadow-sm hover:shadow-xl hover:shadow-indigo-200 hover:-translate-y-1 flex items-center gap-3 min-w-[140px] justify-center"
+                            >
+                              <BookOpen size={18} />
+                              {grade}
+                            </button>
+                          ))
+                        )}
                       </div>
 
                       <div className="mt-10 flex justify-center">
