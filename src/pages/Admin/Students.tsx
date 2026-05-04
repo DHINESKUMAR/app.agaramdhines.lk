@@ -344,6 +344,54 @@ export default function Students() {
     }
   };
 
+  const handleExportCSV = () => {
+    if (students.length === 0) {
+      alert("No students to export.");
+      return;
+    }
+
+    const filteredStudents = students.filter(s => {
+      const matchesClass = filterClass === "unassigned" 
+        ? (!s.grade || s.grade === "")
+        : (filterClass ? s.grade === filterClass : true);
+      const searchLow = searchQuery.toLowerCase().trim();
+      const isNumericSearch = /^\d+$/.test(searchLow);
+
+      const matchesSearch = searchQuery 
+        ? s.name?.toLowerCase().includes(searchLow) || 
+          s.id?.toString().toLowerCase().includes(searchLow) ||
+          s.rollNo?.toString().toLowerCase().includes(searchLow) ||
+          (isNumericSearch && s.rollNo?.toString().endsWith(searchLow)) ||
+          (isNumericSearch && s.id?.toString().endsWith(searchLow)) ||
+          s.username?.toString().toLowerCase().includes(searchLow) ||
+          s.phone?.toString().includes(searchLow)
+        : true;
+      return matchesClass && matchesSearch;
+    });
+
+    const dataToExport = filteredStudents.map(s => ({
+      "Student ID": s.id,
+      "Roll No": s.rollNo || "",
+      "Name": s.name,
+      "Grade": s.grade || "",
+      "Username": s.username,
+      "Password": s.password,
+      "Phone": s.phone || "",
+      "Guardian Name": s.guardianName || "",
+      "Address": s.address || "",
+      "DOB": s.dob || "",
+      "Gender": s.gender || "",
+      "Admission Date": s.admissionDate || "",
+      "Subjects": (s.subjects || []).join(", "),
+      "Zoom Blocked": s.zoomBlocked ? "Yes" : "No"
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Students");
+    XLSX.writeFile(workbook, `Students_Export_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
   const handleBulkImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -915,6 +963,12 @@ export default function Students() {
             <h2 className="text-xl font-bold text-gray-800">View Students</h2>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-4">
+            <button
+               onClick={handleExportCSV}
+               className="bg-emerald-600 text-white rounded-md px-3 py-1.5 text-sm whitespace-nowrap hover:bg-emerald-700 flex items-center gap-2"
+            >
+               <Download size={16} /> Export CSV
+            </button>
             <button
                onClick={() => {
                  setBulkSubjectData(prev => ({...prev, grade: filterClass}));
@@ -1488,14 +1542,22 @@ export default function Students() {
   if (view === "view-id-pin") {
     return (
       <div className="p-6">
-        <div className="flex items-center mb-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center">
+            <button
+              onClick={() => setView("menu")}
+              className="mr-4 text-gray-600 hover:text-gray-900"
+            >
+              ← Back
+            </button>
+            <h2 className="text-xl font-bold text-gray-800">Student IDs & PINs</h2>
+          </div>
           <button
-            onClick={() => setView("menu")}
-            className="mr-4 text-gray-600 hover:text-gray-900"
+            onClick={handleExportCSV}
+            className="bg-emerald-600 text-white rounded-md px-3 py-1.5 text-sm whitespace-nowrap hover:bg-emerald-700 flex items-center gap-2"
           >
-            ← Back
+            <Download size={16} /> Export CSV
           </button>
-          <h2 className="text-xl font-bold text-gray-800">Student IDs & PINs</h2>
         </div>
         
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
