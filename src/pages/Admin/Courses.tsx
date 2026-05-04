@@ -21,6 +21,8 @@ export default function Courses() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [customGrade, setCustomGrade] = useState("");
 
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+
   useEffect(() => {
     getCourses().then(setCourses);
     getClasses().then(setClasses);
@@ -28,6 +30,35 @@ export default function Courses() {
     getSubjects().then(setAllSubjects);
     getCourseWebsiteLinks().then(links => setCourseLinks(links || {}));
   }, [view]);
+
+  const handleRenameFolder = async (oldName: string) => {
+    const newName = prompt("Enter new folder name:", oldName);
+    if (!newName || newName === oldName) return;
+
+    if (window.confirm(`Rename folder "${oldName}" to "${newName}"? This will update all items inside.`)) {
+      const updatedCourses = courses.map(c => {
+        if (c.folder === oldName || (!c.folder && oldName.includes("General Content"))) {
+          return { ...c, folder: newName };
+        }
+        return c;
+      });
+      setCourses(updatedCourses);
+      await saveCourses(updatedCourses);
+      alert('Folder Renamed Successfully');
+    }
+  };
+
+  const handleDeleteFolder = async (folderName: string) => {
+    if (window.confirm(`Are you SURE you want to delete the folder "${folderName}" and ALL materials inside? This cannot be undone.`)) {
+      const updatedCourses = courses.filter(c => {
+        const itemFolder = c.folder || `${c.grade} General Content`;
+        return itemFolder !== folderName;
+      });
+      setCourses(updatedCourses);
+      await saveCourses(updatedCourses);
+      alert('Folder Deleted Successfully');
+    }
+  };
 
   const [formData, setFormData] = useState({
     grade: '',
@@ -453,16 +484,38 @@ export default function Courses() {
                         onClick={() => setExpandedFolders(prev => ({ ...prev, [folderName]: !prev[folderName] }))}
                         className={`w-full flex items-center justify-between p-7 hover:bg-white/50 transition-colors group ${groupColor.bg}`}
                      >
-                        <div className="flex items-center gap-6 text-left">
+                        <div className="flex items-center gap-6 text-left flex-1 min-w-0">
                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 ${isExpanded ? `${groupColor.icon} text-white shadow-lg ${groupColor.shadow} rotate-6` : `${groupColor.bg} ${groupColor.text} border ${groupColor.border}`}`}>
                               <Folder size={28} />
                            </div>
-                           <div>
-                              <h3 className={`text-xl font-black ${groupColor.text} leading-tight`}>{folderName}</h3>
+                           <div className="flex-1 min-w-0">
+                              <h3 className={`text-xl font-black ${groupColor.text} leading-tight truncate`}>{folderName}</h3>
                               <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">
                                  {folderGroups[folderName].length} Library Items
                               </p>
                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 mr-4">
+                           <button 
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               handleRenameFolder(folderName);
+                             }}
+                             className={`p-2 rounded-xl border-2 border-transparent hover:bg-white/80 ${groupColor.text} transition-all`}
+                             title="Rename Folder"
+                           >
+                              <Edit3 size={18} />
+                           </button>
+                           <button 
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               handleDeleteFolder(folderName);
+                             }}
+                             className="p-2 rounded-xl border-2 border-transparent hover:bg-red-50 hover:text-red-600 text-slate-400 transition-all"
+                             title="Delete Folder"
+                           >
+                              <Trash2 size={18} />
+                           </button>
                         </div>
                         <div className={`transition-transform duration-500 ${isExpanded ? 'rotate-180' : ''} ${groupColor.text}`}>
                            <ChevronDown size={24} />

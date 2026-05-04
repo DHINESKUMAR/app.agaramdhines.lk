@@ -1707,29 +1707,51 @@ export default function StudentDashboard() {
                   <p className="text-slate-400 text-sm font-medium mt-1">கீழேயுள்ள வகுப்பினைத் தெரிவு செய்து எமது இணையதளத்தில் கற்கவும்.</p>
                 </div>
 
-                <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+                <div className="flex flex-wrap justify-center gap-3 sm:gap-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
                   {Object.keys(courseWebsiteLinks).length > 0 ? (
-                    Object.entries(courseWebsiteLinks).sort((a, b) => a[0].localeCompare(b[0])).map(([grade, link]) => (
-                      <button
-                        key={grade}
-                        onClick={() => window.open((link as string) || "https://www.agaramdhines.lk/courses/", "_blank")}
-                        className="bg-white hover:bg-slate-900 hover:text-white text-slate-700 border-2 border-slate-100 px-5 py-3 rounded-2xl font-black text-sm transition-all shadow-sm hover:shadow-xl hover:-translate-y-0.5 flex items-center gap-2"
-                      >
-                        <BookOpen size={16} />
-                        {grade}
-                      </button>
-                    ))
+                    Object.entries(courseWebsiteLinks).sort((a, b) => a[0].localeCompare(b[0])).map(([grade, link], index) => {
+                      const colors = [
+                        'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-600',
+                        'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-600',
+                        'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-600',
+                        'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-600',
+                        'bg-violet-50 text-violet-700 border-violet-100 hover:bg-violet-600',
+                        'bg-cyan-50 text-cyan-700 border-cyan-100 hover:bg-cyan-600'
+                      ];
+                      const colorClass = colors[index % colors.length];
+                      return (
+                        <button
+                          key={grade}
+                          onClick={() => window.open((link as string) || "https://www.agaramdhines.lk/courses/", "_blank")}
+                          className={`${colorClass} hover:text-white border-2 px-4 py-4 rounded-3xl font-black text-sm transition-all shadow-sm hover:shadow-xl hover:-translate-y-1 flex flex-col items-center justify-center gap-2 aspect-square sm:aspect-auto`}
+                        >
+                          <BookOpen size={20} />
+                          <span className="text-center">{grade}</span>
+                        </button>
+                      );
+                    })
                   ) : (
-                    ["தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", "தரம் 11"].map(grade => (
-                      <button
-                        key={grade}
-                        onClick={() => window.open("https://www.agaramdhines.lk/courses/", "_blank")}
-                        className="bg-white hover:bg-slate-900 hover:text-white text-slate-700 border-2 border-slate-100 px-5 py-3 rounded-2xl font-black text-sm transition-all shadow-sm hover:shadow-xl hover:-translate-y-0.5 flex items-center gap-2"
-                      >
-                        <BookOpen size={16} />
-                        {grade}
-                      </button>
-                    ))
+                    ["தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", "தரம் 11"].map((grade, index) => {
+                      const colors = [
+                        'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-600',
+                        'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-600',
+                        'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-600',
+                        'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-600',
+                        'bg-violet-50 text-violet-700 border-violet-100 hover:bg-violet-600',
+                        'bg-cyan-50 text-cyan-700 border-cyan-100 hover:bg-cyan-600'
+                      ];
+                      const colorClass = colors[index % colors.length];
+                      return (
+                        <button
+                          key={grade}
+                          onClick={() => window.open("https://www.agaramdhines.lk/courses/", "_blank")}
+                          className={`${colorClass} hover:text-white border-2 px-4 py-4 rounded-3xl font-black text-sm transition-all shadow-sm hover:shadow-xl hover:-translate-y-1 flex flex-col items-center justify-center gap-2 aspect-square sm:aspect-auto`}
+                        >
+                          <BookOpen size={20} />
+                          <span className="text-center">{grade}</span>
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               </div>
