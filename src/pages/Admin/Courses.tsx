@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { getCourses, saveCourses, getClasses, getStaffs, getCourseWebsiteLinks, saveCourseWebsiteLinks } from '../../lib/db';
 import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, List, LayoutGrid, Folder, Globe, Save } from 'lucide-react';
 
+const GRADES = [
+  "தரம் 01", "தரம் 02", "தரம் 03", "தரம் 04", "தரம் 05", 
+  "தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", 
+  "தரம் 11", "தரம் 12", "தரம் 13"
+];
+
 export default function Courses() {
   const [view, setView] = useState<'menu' | 'add' | 'view' | 'links'>('menu');
   const [courses, setCourses] = useState<any[]>([]);
@@ -186,12 +192,6 @@ export default function Courses() {
       </div>
     );
   }
-
-  const GRADES = [
-    "தரம் 01", "தரம் 02", "தரம் 03", "தரம் 04", "தரம் 05", 
-    "தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", 
-    "தரம் 11", "தரம் 12", "தரம் 13"
-  ];
 
   if (view === 'add') {
     return (
