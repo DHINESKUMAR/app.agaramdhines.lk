@@ -3,10 +3,11 @@ import { getStudents, saveStudents, getClasses } from "../../lib/db";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { secondaryAuth } from "../../lib/firebase";
 import * as XLSX from "xlsx";
-import { Printer, X, QrCode, Download } from "lucide-react";
+import { Printer, X, QrCode, Download, FileText } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
+import autoTable from 'jspdf-autotable';
 
 export default function Students() {
   const [view, setView] = useState<"menu" | "add" | "view" | "import" | "edit" | "view-id-pin">("menu");
@@ -390,6 +391,54 @@ export default function Students() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Students");
     XLSX.writeFile(workbook, `Students_Export_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  const handleExportPDF = () => {
+    if (students.length === 0) {
+      alert("No students to export.");
+      return;
+    }
+
+    const filteredStudents = students.filter(s => {
+      const matchesClass = filterClass === "unassigned" 
+        ? (!s.grade || s.grade === "")
+        : (filterClass ? s.grade === filterClass : true);
+      const searchLow = searchQuery.toLowerCase().trim();
+      const isNumericSearch = /^\d+$/.test(searchLow);
+
+      const matchesSearch = searchQuery 
+        ? s.name?.toLowerCase().includes(searchLow) || 
+          s.id?.toString().toLowerCase().includes(searchLow) ||
+          s.rollNo?.toString().toLowerCase().includes(searchLow) ||
+          (isNumericSearch && s.rollNo?.toString().endsWith(searchLow)) ||
+          (isNumericSearch && s.id?.toString().endsWith(searchLow)) ||
+          s.username?.toString().toLowerCase().includes(searchLow) ||
+          s.phone?.toString().includes(searchLow)
+        : true;
+      return matchesClass && matchesSearch;
+    });
+
+    const doc = new jsPDF();
+    const tableColumn = ["Student ID", "Roll No", "Name", "Grade", "Username", "Password", "Phone"];
+    const tableRows = filteredStudents.map(s => [
+      s.id,
+      s.rollNo || "",
+      s.name,
+      s.grade || "",
+      s.username,
+      s.password,
+      s.phone || ""
+    ]);
+
+    doc.text(`Student List - ${filterClass || "All Classes"}`, 14, 15);
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 20,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [30, 58, 138] }
+    });
+    doc.save(`Students_Export_${filterClass || "All"}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const handleBulkImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -963,12 +1012,22 @@ export default function Students() {
             <h2 className="text-xl font-bold text-gray-800">View Students</h2>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-4">
-            <button
-               onClick={handleExportCSV}
-               className="bg-emerald-600 text-white rounded-md px-3 py-1.5 text-sm whitespace-nowrap hover:bg-emerald-700 flex items-center gap-2"
-            >
-               <Download size={16} /> Export CSV
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleExportCSV}
+                className="bg-emerald-600 text-white rounded-md px-3 py-1.5 text-sm whitespace-nowrap hover:bg-emerald-700 flex items-center gap-2"
+                title="Export CSV (Excel)"
+              >
+                <Download size={16} /> CSV
+              </button>
+              <button
+                onClick={handleExportPDF}
+                className="bg-red-600 text-white rounded-md px-3 py-1.5 text-sm whitespace-nowrap hover:bg-red-700 flex items-center gap-2"
+                title="Export PDF"
+              >
+                <FileText size={16} /> PDF
+              </button>
+            </div>
             <button
                onClick={() => {
                  setBulkSubjectData(prev => ({...prev, grade: filterClass}));
@@ -1552,12 +1611,22 @@ export default function Students() {
             </button>
             <h2 className="text-xl font-bold text-gray-800">Student IDs & PINs</h2>
           </div>
-          <button
-            onClick={handleExportCSV}
-            className="bg-emerald-600 text-white rounded-md px-3 py-1.5 text-sm whitespace-nowrap hover:bg-emerald-700 flex items-center gap-2"
-          >
-            <Download size={16} /> Export CSV
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleExportCSV}
+              className="bg-emerald-600 text-white rounded-md px-3 py-1.5 text-sm whitespace-nowrap hover:bg-emerald-700 flex items-center gap-2"
+              title="Export CSV (Excel)"
+            >
+              <Download size={16} /> CSV
+            </button>
+            <button
+              onClick={handleExportPDF}
+              className="bg-red-600 text-white rounded-md px-3 py-1.5 text-sm whitespace-nowrap hover:bg-red-700 flex items-center gap-2"
+              title="Export PDF"
+            >
+              <FileText size={16} /> PDF
+            </button>
+          </div>
         </div>
         
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
