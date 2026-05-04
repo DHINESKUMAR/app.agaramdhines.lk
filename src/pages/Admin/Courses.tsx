@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getCourses, saveCourses, getClasses, getStaffs, getCourseWebsiteLinks, saveCourseWebsiteLinks } from '../../lib/db';
-import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, List, LayoutGrid, Folder, Globe, Save } from 'lucide-react';
+import { getCourses, saveCourses, getClasses, getStaffs, getCourseWebsiteLinks, saveCourseWebsiteLinks, getSubjects, saveSubjects } from '../../lib/db';
+import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, List, LayoutGrid, Folder, Globe, Save, Edit3 } from 'lucide-react';
 
 const GRADES = [
   "தரம் 01", "தரம் 02", "தரம் 03", "தரம் 04", "தரம் 05", 
@@ -13,7 +13,9 @@ export default function Courses() {
   const [courses, setCourses] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [staffs, setStaffs] = useState<any[]>([]);
+  const [allSubjects, setAllSubjects] = useState<any[]>([]);
   const [courseLinks, setCourseLinks] = useState<Record<string, string>>({});
+  const [isManualSubject, setIsManualSubject] = useState(false);
   const [filterClass, setFilterClass] = useState<string>("");
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
 
@@ -21,6 +23,7 @@ export default function Courses() {
     getCourses().then(setCourses);
     getClasses().then(setClasses);
     getStaffs().then(setStaffs);
+    getSubjects().then(setAllSubjects);
     getCourseWebsiteLinks().then(links => setCourseLinks(links || {}));
   }, [view]);
 
@@ -57,10 +60,16 @@ export default function Courses() {
     return colors[Math.abs(hash) % colors.length];
   };
 
-  // Get unique subjects for the selected grade
-  const availableSubjects = Array.from(new Set(
+  // Get unique subjects for the selected grade from staff assignments
+  const assignedSubjects = Array.from(new Set(
     staffs.flatMap(s => s.assignedClasses?.filter((c: any) => c.grade === formData.grade).map((c: any) => c.subject) || [])
   ));
+
+  // Merge with all global subjects
+  const availableSubjectsList = Array.from(new Set([
+    ...assignedSubjects,
+    ...allSubjects.map(s => s.name)
+  ])).filter(Boolean);
 
   const handleAddCourse = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,6 +77,16 @@ export default function Courses() {
       alert("Class, Subject, Title and Link are required!");
       return;
     }
+
+    // If manual subject was entered and it's not in the global list, we could save it
+    const subjectExists = allSubjects.some(s => s.name.toLowerCase() === formData.subject.toLowerCase());
+    if (!subjectExists && isManualSubject) {
+        const newSub = { id: Date.now().toString(), name: formData.subject };
+        const updatedSubs = [...allSubjects, newSub];
+        setAllSubjects(updatedSubs);
+        await saveSubjects(updatedSubs);
+    }
+
     const newCourse = { id: Date.now().toString(), ...formData };
     const updatedCourses = [...courses, newCourse];
     setCourses(updatedCourses);
@@ -234,23 +253,47 @@ export default function Courses() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Subject</label>
-              <select 
-                value={formData.subject}
-                onChange={(e) => setFormData({...formData, subject: e.target.value})}
-                className="w-full border-2 border-slate-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all text-sm font-bold bg-slate-50 disabled:opacity-50"
-                disabled={!formData.grade}
-              >
-                <option value="">Select Subject</option>
-                {availableSubjects.map((subject: any) => (
-                  <option key={subject} value={subject}>
-                    {subject}
-                  </option>
-                ))}
-                {formData.grade && availableSubjects.length === 0 && (
-                  <option value="" disabled>No subjects assigned</option>
-                )}
-              </select>
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Subject</label>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setIsManualSubject(!isManualSubject);
+                    setFormData({...formData, subject: ''});
+                  }}
+                  className="text-[10px] font-black text-indigo-600 hover:indigo-800 uppercase tracking-tighter flex items-center gap-1"
+                >
+                  {isManualSubject ? 'Select from list' : 'Add New Subject'}
+                  <Edit3 size={10} />
+                </button>
+              </div>
+              
+              {isManualSubject ? (
+                <input 
+                  type="text"
+                  placeholder="Enter new subject name..."
+                  value={formData.subject}
+                  onChange={(e) => setFormData({...formData, subject: e.target.value})}
+                  className="w-full border-2 border-indigo-100 bg-indigo-50/30 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all text-sm font-bold"
+                />
+              ) : (
+                <select 
+                  value={formData.subject}
+                  onChange={(e) => setFormData({...formData, subject: e.target.value})}
+                  className="w-full border-2 border-slate-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all text-sm font-bold bg-slate-50 disabled:opacity-50"
+                  disabled={!formData.grade}
+                >
+                  <option value="">Select Subject</option>
+                  {availableSubjectsList.map((subject: any) => (
+                    <option key={subject} value={subject}>
+                      {subject}
+                    </option>
+                  ))}
+                  {formData.grade && availableSubjectsList.length === 0 && (
+                    <option value="" disabled>No subjects found</option>
+                  )}
+                </select>
+              )}
             </div>
           </div>
 
