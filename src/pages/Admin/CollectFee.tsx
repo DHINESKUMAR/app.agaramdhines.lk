@@ -60,7 +60,9 @@ export default function CollectFee() {
             s.id?.toString().toLowerCase().includes(searchLow) ||
             s.rollNo?.toString().toLowerCase().includes(searchLow)
           : true;
-        const matchesGrade = selectedGrade ? s.grade === selectedGrade : true;
+        const matchesGrade = selectedGrade 
+          ? s.grade?.toString().trim().toLowerCase() === selectedGrade.toString().trim().toLowerCase() 
+          : true;
         return matchesSearch && matchesGrade;
       }).sort((a, b) => {
         if (a.grade !== b.grade) {

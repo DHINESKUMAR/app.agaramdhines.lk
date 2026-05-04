@@ -333,6 +333,7 @@ export default function StudentDashboard() {
         setCurrentStudentData(freshStudentData);
         setDisplayName(freshStudentData.name);
         setProfileImage(freshStudentData.image || null);
+        setEnrolledClasses(freshStudentData.subjects || freshStudentData.enrolledClasses || []);
       }
 
       const allCourses = await getCourses();
@@ -372,32 +373,43 @@ export default function StudentDashboard() {
       // Check for pending fees for current and previous months (Starting from April 2026)
       const now = new Date();
       const unpaidMonths: string[] = [];
-      const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       
-      // Start checking from April 2026 (2026-04)
-      const feeCheckStartLimit = new Date(2026, 3, 1); // 3 is April (0-indexed)
+      // Start checking from April 2026
+      const startYear = 2026;
+      const startMonthIndex = 3; // 3 is April (0-indexed)
       
-      let checkStartMonth = new Date(feeCheckStartLimit);
+      const currentYear = now.getFullYear();
+      const currentMonthIndex = now.getMonth();
       
+      const checkStartLocal = new Date(startYear, startMonthIndex, 1);
+      
+      // Also respect admission date if it's AFTER April 2026
+      let effectiveStart = new Date(checkStartLocal);
       if (freshStudentData.admissionDate) {
         const admissionDate = new Date(freshStudentData.admissionDate);
         if (!isNaN(admissionDate.getTime())) {
-          const admStartMonth = new Date(admissionDate.getFullYear(), admissionDate.getMonth(), 1);
-          if (admStartMonth > checkStartMonth) {
-             checkStartMonth = admStartMonth;
+          const admStart = new Date(admissionDate.getFullYear(), admissionDate.getMonth(), 1);
+          if (admStart > effectiveStart) {
+            effectiveStart = admStart;
           }
         }
       }
 
-      // Iterate through all months from checkStartMonth to currentMonth
-      let currentCheck = new Date(checkStartMonth);
-      while (currentCheck <= currentMonth) {
-        const monthStr = currentCheck.toISOString().slice(0, 7);
-        const hasPaid = studentFees.some((f: any) => f.month === monthStr);
+      // Iterate through all months from effectiveStart to current limit (May 2026)
+      let iterDate = new Date(effectiveStart.getFullYear(), effectiveStart.getMonth(), 1);
+      const limitDate = new Date(currentYear, currentMonthIndex, 1);
+      
+      while (iterDate <= limitDate) {
+        const y = iterDate.getFullYear();
+        const m = String(iterDate.getMonth() + 1).padStart(2, '0');
+        const monthKey = `${y}-${m}`;
+        
+        const hasPaid = studentFees.some((f: any) => f.month === monthKey);
         if (!hasPaid) {
-          unpaidMonths.push(currentCheck.toLocaleString('default', { month: 'long', year: 'numeric' }));
+          unpaidMonths.push(iterDate.toLocaleString('default', { month: 'long', year: 'numeric' }));
         }
-        currentCheck.setMonth(currentCheck.getMonth() + 1);
+        // Move to next month safely
+        iterDate.setMonth(iterDate.getMonth() + 1);
       }
 
       if (unpaidMonths.length > 0) {
@@ -1418,7 +1430,14 @@ export default function StudentDashboard() {
                         onChange={(e) => setFilterSubject(e.target.value)}
                       >
                         <option value="All">All Subjects</option>
-                        {Array.from(new Set(timetable.map(t => t.subject))).map(subject => (
+                        {Array.from(new Set(
+                          (enrolledClasses.length > 0 
+                            ? timetable.filter(t => 
+                                enrolledClasses.some(sub => sub?.toString().trim().toLowerCase() === t.subject?.toString().trim().toLowerCase())
+                              ) 
+                            : timetable
+                          ).map(t => t.subject)
+                        )).map(subject => (
                           <option key={subject} value={subject}>{subject}</option>
                         ))}
                       </select>
@@ -1431,7 +1450,14 @@ export default function StudentDashboard() {
                         onChange={(e) => setFilterTeacher(e.target.value)}
                       >
                         <option value="All">All Teachers</option>
-                        {Array.from(new Set(timetable.map(t => t.staffName))).map(teacher => (
+                        {Array.from(new Set(
+                          (enrolledClasses.length > 0 
+                            ? timetable.filter(t => 
+                                enrolledClasses.some(sub => sub?.toString().trim().toLowerCase() === t.subject?.toString().trim().toLowerCase())
+                              ) 
+                            : timetable
+                          ).map(t => t.staffName)
+                        )).map(teacher => (
                           <option key={teacher} value={teacher}>{teacher}</option>
                         ))}
                       </select>
@@ -1441,7 +1467,9 @@ export default function StudentDashboard() {
               
               {(() => {
                 let filteredTimetable = enrolledClasses.length > 0 
-                  ? timetable.filter(t => enrolledClasses.includes(t.subject))
+                  ? timetable.filter(t => 
+                      enrolledClasses.some(sub => sub?.toString().trim().toLowerCase() === t.subject?.toString().trim().toLowerCase())
+                    )
                   : timetable;
                   
                 if (filterSubject !== "All") {
@@ -1455,9 +1483,13 @@ export default function StudentDashboard() {
 
                 if (displaySubjects.length === 0) {
                   return (
-                    <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
-                      <Calendar className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-                      <p>No timetable entries available for your filters.</p>
+                    <div className="text-center py-20 bg-slate-50/50 rounded-[3rem] border-2 border-slate-100 border-dashed">
+                      <Calendar className="mx-auto h-20 w-20 text-slate-200 mb-6" />
+                      <h3 className="text-2xl font-black text-slate-400">No classes found for these filters.</h3>
+                      <p className="text-slate-400 mt-2">Try changing your subject or teacher selection.</p>
+                      {enrolledClasses.length > 0 && (
+                        <p className="text-xs text-indigo-400 mt-4 font-bold">Showing only subjects you are registered for.</p>
+                      )}
                     </div>
                   );
                 }
@@ -1618,8 +1650,8 @@ export default function StudentDashboard() {
                       </div>
                     )}
                   </div>
-                );
-              })}
+                )
+              })()}
             </div>
           </div>
         )}
