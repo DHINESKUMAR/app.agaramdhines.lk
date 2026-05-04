@@ -38,7 +38,7 @@ export function useRealtimeNotifications(grade: string | undefined, onNewNotific
     const unsubscribe = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
-          const notification = { ...change.doc.data(), id: change.doc.id };
+          const notification: any = { ...change.doc.data(), id: change.doc.id };
           const isRealtime = notification.createdAt && notification.createdAt >= activeSessionTime;
           
           if (isRealtime) {

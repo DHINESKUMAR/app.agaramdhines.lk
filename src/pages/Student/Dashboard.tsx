@@ -32,7 +32,9 @@ import {
   RotateCw,
   MessageCircle,
   ShieldAlert,
-  Share2
+  Share2,
+  Megaphone,
+  ChevronDown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
@@ -74,6 +76,7 @@ export default function StudentDashboard() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLandscape, setIsLandscape] = useState(false);
   const [hoveredDay, setHoveredDay] = useState<{subject: string, day: number} | null>(null);
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
 
   // Helper to get a color based on subject name
   const getSubjectColorClasses = (subjectName: string) => {
@@ -1548,32 +1551,128 @@ export default function StudentDashboard() {
 
         {activeTab === "courses" && (
           <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 180px)' }}>
-              <div className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white p-5 flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                    <FileText size={20} className="text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold">Recording</h2>
-                    <p className="text-indigo-100 text-xs font-medium">Access your learning materials</p>
-                  </div>
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+              <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold mb-1 text-slate-800 flex items-center">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3">
+                      <FileText size={20} />
+                    </div>
+                    Recording & Study Materials
+                  </h2>
+                  <p className="text-slate-500 ml-13">Access all your course recordings and materials.</p>
                 </div>
                 <button 
                   onClick={() => window.open("https://www.agaramdhines.lk/courses/", "_blank")}
-                  className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 backdrop-blur-sm"
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border border-slate-200 shadow-sm grow-0 shrink-0 w-fit"
                 >
-                  <span>Open in New Tab</span>
                   <ExternalLink size={14} />
+                  <span>Website Courses</span>
                 </button>
               </div>
-              <div className="flex-1 bg-slate-50 relative">
-                {/* Loading state could go here if needed, but iframe handles its own loading usually */}
-                <iframe 
-                  src="https://www.agaramdhines.lk/courses/" 
-                  className="absolute inset-0 w-full h-full border-0" 
-                  title="Recording"
-                />
+              
+              <div className="space-y-4">
+                {courses.length === 0 ? (
+                  <div className="text-center py-16 text-slate-500 bg-slate-50 rounded-3xl border-2 border-slate-100 border-dashed">
+                    <Book className="mx-auto h-16 w-16 text-slate-200 mb-4" />
+                    <h3 className="text-xl font-bold text-slate-800 mb-2">No recordings found.</h3>
+                    <p className="max-w-xs mx-auto">Please check your internet connection or contact support if this is unexpected.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {Object.entries(courses.reduce((acc: any, course: any) => {
+                      const folder = course.folder || `${studentData.grade} பாட அலகுகள் மற்றும் RECORDING`;
+                      if (!acc[folder]) acc[folder] = [];
+                      acc[folder].push(course);
+                      return acc;
+                    }, {})).map(([folder, folderCourses]: [string, any]) => {
+                      const isExpanded = expandedFolders[`course-${folder}`];
+                      return (
+                        <div key={folder} className="bg-white border-2 border-slate-100 rounded-[2rem] overflow-hidden shadow-sm hover:shadow-md transition-all">
+                          <button 
+                            onClick={() => setExpandedFolders(prev => ({ ...prev, [`course-${folder}`]: !prev[`course-${folder}`] }))}
+                            className="w-full flex items-center justify-between p-7 hover:bg-slate-50 transition-colors group"
+                          >
+                            <div className="flex items-center gap-6 text-left">
+                              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-500 ${isExpanded ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100 -rotate-3 scale-110' : 'bg-indigo-50 text-indigo-600'}`}>
+                                <BookOpen size={32} />
+                              </div>
+                              <div>
+                                <h3 className="text-xl font-black text-slate-800 leading-tight">
+                                  {folder}
+                                </h3>
+                                <p className="text-slate-400 text-sm font-bold uppercase tracking-wider mt-1 opacity-70">
+                                  {folderCourses.length} அலகுகள் மற்றும் விளக்கம்
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="hidden sm:flex items-center justify-center w-12 h-12 rounded-full border-2 border-slate-50 text-slate-400 font-black text-sm">
+                                {folderCourses.length}
+                              </div>
+                              <div className={`w-10 h-10 rounded-full border-2 border-slate-100 flex items-center justify-center transition-all duration-500 ${isExpanded ? 'rotate-180 bg-indigo-50 border-indigo-200 text-indigo-600' : 'text-slate-300'}`}>
+                                <ChevronDown size={24} />
+                              </div>
+                            </div>
+                          </button>
+
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="bg-slate-50/50"
+                              >
+                                <div className="p-6 sm:p-8 pt-0 space-y-3">
+                                  {folderCourses.map((course: any, index: number) => (
+                                    <motion.a
+                                      initial={{ x: -20, opacity: 0 }}
+                                      animate={{ x: 0, opacity: 1 }}
+                                      transition={{ delay: index * 0.05 }}
+                                      key={course.id}
+                                      href={course.link}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="flex items-center justify-between bg-white p-5 rounded-2xl border-2 border-slate-100 hover:border-indigo-500 hover:shadow-xl hover:shadow-indigo-500/10 transition-all group"
+                                    >
+                                      <div className="flex items-center gap-5">
+                                        <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+                                          <FileText size={24} />
+                                        </div>
+                                        <div>
+                                          <p className="font-black text-slate-700 text-lg group-hover:text-indigo-600 transition-colors">
+                                            {String(index + 1).padStart(2, '0')}. {course.title}
+                                          </p>
+                                          <div className="flex items-center gap-4 mt-1">
+                                            <span className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
+                                              <Clock size={10} /> 8 Days
+                                            </span>
+                                            <span className="text-[10px] font-black uppercase text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-md">
+                                              {course.subject || "RECORDING"}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-full border-2 border-slate-50 flex items-center justify-center text-slate-200 group-hover:text-indigo-400 transition-colors">
+                                          <CheckCircle size={20} />
+                                        </div>
+                                        <div className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                                          <ExternalLink size={18} />
+                                        </div>
+                                      </div>
+                                    </motion.a>
+                                  ))}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1609,88 +1708,154 @@ export default function StudentDashboard() {
               </div>
               
               {eLearningType === 'videos' ? (
-                <div className="space-y-12">
+                <div className="space-y-4 pt-4">
                   {youtubeLinks.length === 0 ? (
                     <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
                       <Youtube className="mx-auto h-12 w-12 text-slate-300 mb-3" />
                       <p>No videos found.</p>
                     </div>
                   ) : (
-                    <div className="space-y-12">
+                    <div className="space-y-4">
                       {Object.entries(youtubeLinks.reduce((acc: any, link: any) => {
-                        const folder = link.folder || "Uncategorized";
+                        const folder = link.folder || "இன்னும் வகைப்படுத்தப்படவில்லை (Uncategorized)";
                         if (!acc[folder]) acc[folder] = [];
                         acc[folder].push(link);
                         return acc;
-                      }, {})).map(([folder, folderLinks]: [string, any]) => (
-                        <div key={folder} className="space-y-4">
-                          <div className="flex items-center justify-between px-1">
-                            <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                               <div className="w-2 h-6 bg-red-600 rounded-full"></div>
-                               {folder}
-                            </h3>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                              {folderLinks.length} Videos
-                            </span>
-                          </div>
-                          
-                          <div className="relative group">
-                            <div className="flex overflow-x-auto gap-6 pb-6 pt-2 px-1 snap-x scrollbar-hide no-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                              {folderLinks.map((link: any) => (
-                                <motion.a 
-                                  initial={{ opacity: 0, scale: 0.95 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                  key={link.id} 
-                                  href={link.link} 
-                                  target="_blank" 
-                                  rel="noreferrer"
-                                  className="flex-shrink-0 w-[280px] sm:w-[320px] bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-xl hover:border-red-200 transition-all group/item snap-start"
+                      }, {})).map(([folder, folderLinks]: [string, any]) => {
+                        const isExpanded = expandedFolders[folder];
+                        return (
+                          <div key={folder} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm transition-all hover:shadow-md">
+                            {/* Accordion Header - Image 1 style */}
+                            <button 
+                              onClick={() => setExpandedFolders(prev => ({ ...prev, [folder]: !prev[folder] }))}
+                              className="w-full flex items-center justify-between p-6 sm:p-7 hover:bg-slate-50 transition-colors group"
+                            >
+                              <div className="flex items-center gap-5 text-left">
+                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 ${isExpanded ? 'bg-red-600 text-white shadow-lg shadow-red-200 rotate-6' : 'bg-red-50 text-red-600 group-hover:scale-110'}`}>
+                                  <Megaphone size={28} className={isExpanded ? "animate-pulse" : ""} />
+                                </div>
+                                <div>
+                                  <h3 className="text-xl font-black text-slate-800 leading-tight">
+                                    {folder}
+                                  </h3>
+                                  <p className="text-slate-500 text-sm font-medium mt-1">
+                                    {folderLinks.length} அலகுகள் மற்றும் RECORDING
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-6">
+                                <span className="hidden sm:inline-flex text-sm font-black text-slate-400 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                                  {folderLinks.length} Videos
+                                </span>
+                                <div className={`transition-transform duration-500 ${isExpanded ? 'rotate-180' : ''}`}>
+                                  <ChevronDown size={24} className="text-slate-400" />
+                                </div>
+                              </div>
+                            </button>
+
+                            {/* Accordion Content - Image 2 Video Grid style */}
+                            <AnimatePresence>
+                              {isExpanded && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.4, ease: "easeInOut" }}
+                                  className="overflow-hidden"
                                 >
-                                  <div className="aspect-video bg-slate-100 relative overflow-hidden">
-                                    {link.link.includes('youtube.com/watch?v=') || link.link.includes('youtu.be/') ? (
-                                      <img 
-                                        src={`https://img.youtube.com/vi/${link.link.includes('youtu.be/') ? link.link.split('youtu.be/')[1].split('?')[0] : link.link.split('v=')[1].split('&')[0]}/mqdefault.jpg`} 
-                                        alt={link.title}
-                                        className="w-full h-full object-cover transition-transform duration-500 group-hover/item:scale-110"
-                                      />
-                                    ) : (
-                                      <div className="w-full h-full flex items-center justify-center text-slate-300">
-                                        <Youtube size={48} />
-                                      </div>
-                                    )}
-                                    <div className="absolute inset-0 bg-black/20 group-hover/item:bg-transparent transition-colors flex items-center justify-center">
-                                      <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-white opacity-90 group-hover/item:scale-110 transition-transform shadow-lg">
-                                        <Play size={24} className="ml-1" />
-                                      </div>
-                                    </div>
+                                  <div className="p-6 sm:p-8 pt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 bg-slate-50/50">
+                                    {folderLinks.map((link: any, index: number) => {
+                                      const videoId = link.link.includes('youtu.be/') 
+                                        ? link.link.split('youtu.be/')[1].split('?')[0] 
+                                        : (link.link.includes('v=') ? link.link.split('v=')[1].split('&')[0] : null);
+                                      
+                                      return (
+                                        <motion.a
+                                          initial={{ opacity: 0, y: 20 }}
+                                          animate={{ opacity: 1, y: 0 }}
+                                          transition={{ delay: index * 0.05 }}
+                                          key={link.id}
+                                          href={link.link}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="group/item flex flex-col bg-white rounded-3xl overflow-hidden shadow-lg border-2 border-transparent hover:border-red-500 transition-all duration-300"
+                                        >
+                                          {/* Thumbnail container */}
+                                          <div className="aspect-video relative overflow-hidden bg-slate-900">
+                                            {videoId ? (
+                                              <img 
+                                                src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`} 
+                                                alt={link.title}
+                                                className="w-full h-full object-cover transition-transform duration-700 group-hover/item:scale-110 opacity-90 group-hover/item:opacity-100"
+                                                referrerPolicy="no-referrer"
+                                              />
+                                            ) : (
+                                              <div className="w-full h-full flex items-center justify-center text-red-500/20">
+                                                <Youtube size={64} />
+                                              </div>
+                                            )}
+                                            
+                                            {/* Video Overlay Info */}
+                                            <div className="absolute top-4 left-4 flex gap-2">
+                                              <span className="bg-red-600 text-white text-[10px] font-black px-2.5 py-1 rounded-lg shadow-lg uppercase tracking-tighter">
+                                                TAMIL
+                                              </span>
+                                            </div>
+                                            
+                                            {/* Play Button Overlay */}
+                                            <div className="absolute inset-0 bg-black/40 group-hover/item:bg-black/10 transition-all flex items-center justify-center">
+                                              <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center text-white scale-90 group-hover/item:scale-100 transition-transform shadow-[0_0_40px_rgba(220,38,38,0.5)] border-4 border-white/20">
+                                                <Play size={32} className="ml-1" fill="currentColor" />
+                                              </div>
+                                            </div>
+                                            
+                                            {/* Index Batch */}
+                                            <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-xl shadow-lg">
+                                              <span className="text-slate-900 font-black text-sm">
+                                                {String(index + 1).padStart(2, '0')}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Content */}
+                                          <div className="p-6">
+                                            <div className="flex items-center gap-2 mb-3">
+                                              <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center">
+                                                <BookOpen size={12} className="text-indigo-600" />
+                                              </div>
+                                              <span className="text-indigo-600 text-xs font-black uppercase tracking-widest">
+                                                {link.subject || "E-Learning"}
+                                              </span>
+                                            </div>
+                                            
+                                            <h4 className="text-lg font-black text-slate-800 leading-tight line-clamp-2 h-14 group-hover/item:text-red-600 transition-colors">
+                                              {link.title}
+                                            </h4>
+                                            
+                                            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                                              <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover/item:bg-red-50 group-hover/item:text-red-500 transition-colors">
+                                                  <Youtube size={16} />
+                                                </div>
+                                                <span className="text-xs font-bold text-slate-500 group-hover/item:text-slate-800 transition-colors">YouTube Link</span>
+                                              </div>
+                                              {link.date && (
+                                                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
+                                                  {new Date(link.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </motion.a>
+                                      );
+                                    })}
                                   </div>
-                                  <div className="p-4">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                                        {link.subject}
-                                      </span>
-                                    </div>
-                                    <h3 className="font-bold text-slate-800 line-clamp-2 group-hover/item:text-red-600 transition-colors leading-tight min-h-[2.5rem]">{link.title}</h3>
-                                    <div className="mt-4 flex items-center justify-between">
-                                      <p className="text-[10px] text-slate-500 flex items-center gap-1 font-black uppercase tracking-wider">
-                                        <Youtube size={12} className="text-red-500" /> Watch Now
-                                      </p>
-                                      {link.date && (
-                                        <span className="text-[10px] font-bold text-slate-400">
-                                          {new Date(link.date).toLocaleDateString()}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </motion.a>
-                              ))}
-                            </div>
-                            
-                            {/* Horizontal Scroll Hint Overlay */}
-                            <div className="absolute right-0 top-0 bottom-6 w-12 bg-gradient-to-l from-white to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
