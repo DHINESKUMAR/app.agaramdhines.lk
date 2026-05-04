@@ -369,13 +369,16 @@ export default function StudentDashboard() {
       const studentFees = allFees.filter((f: any) => f.studentId === data.id || f.studentName === data.name);
       setFees(studentFees);
       
-      // Check for pending fees for current and previous months
+      // Check for pending fees for current and previous months (Starting from April 2026)
       const now = new Date();
       const unpaidMonths: string[] = [];
       const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       
-      // Determine start month to check from (either admission date or 6 months ago)
-      let checkStartMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+      // Start checking from April 2026 (2026-04)
+      const feeCheckStartLimit = new Date(2026, 3, 1); // 3 is April (0-indexed)
+      
+      let checkStartMonth = new Date(feeCheckStartLimit);
+      
       if (freshStudentData.admissionDate) {
         const admissionDate = new Date(freshStudentData.admissionDate);
         if (!isNaN(admissionDate.getTime())) {
@@ -1406,28 +1409,34 @@ export default function StudentDashboard() {
                   <p className="text-slate-500 ml-13">Schedule for your subjects.</p>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                  <select
-                    className="border border-slate-200 bg-slate-50 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-colors"
-                    value={filterSubject}
-                    onChange={(e) => setFilterSubject(e.target.value)}
-                  >
-                    <option value="All">All Subjects</option>
-                    {Array.from(new Set(timetable.map(t => t.subject))).map(subject => (
-                      <option key={subject} value={subject}>{subject}</option>
-                    ))}
-                  </select>
-                  <select
-                    className="border border-slate-200 bg-slate-50 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-colors"
-                    value={filterTeacher}
-                    onChange={(e) => setFilterTeacher(e.target.value)}
-                  >
-                    <option value="All">All Teachers</option>
-                    {Array.from(new Set(timetable.map(t => t.staffName))).map(teacher => (
-                      <option key={teacher} value={teacher}>{teacher}</option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto bg-slate-50 p-2 rounded-2xl border border-slate-100">
+                    <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-xl shadow-sm border border-slate-200">
+                      <BookOpen size={16} className="text-indigo-400" />
+                      <select
+                        className="border-none bg-transparent focus:ring-0 text-sm font-bold text-slate-700 cursor-pointer"
+                        value={filterSubject}
+                        onChange={(e) => setFilterSubject(e.target.value)}
+                      >
+                        <option value="All">All Subjects</option>
+                        {Array.from(new Set(timetable.map(t => t.subject))).map(subject => (
+                          <option key={subject} value={subject}>{subject}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-xl shadow-sm border border-slate-200">
+                      <User size={16} className="text-indigo-400" />
+                      <select
+                        className="border-none bg-transparent focus:ring-0 text-sm font-bold text-slate-700 cursor-pointer"
+                        value={filterTeacher}
+                        onChange={(e) => setFilterTeacher(e.target.value)}
+                      >
+                        <option value="All">All Teachers</option>
+                        {Array.from(new Set(timetable.map(t => t.staffName))).map(teacher => (
+                          <option key={teacher} value={teacher}>{teacher}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
               </div>
               
               {(() => {
@@ -1517,23 +1526,46 @@ export default function StudentDashboard() {
                                   )}
 
                                   <AnimatePresence>
-                                    {hoveredDay?.subject === subject && hoveredDay?.day === day && classDetails && (
+                                    {hoveredDay?.subject === subjectStr && hoveredDay?.day === day && classDetails && (
                                       <motion.div
                                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                         animate={{ opacity: 1, y: 0, scale: 1 }}
                                         exit={{ opacity: 0, scale: 0.95 }}
-                                        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-56 bg-slate-800 text-white p-4 rounded-xl shadow-xl text-xs pointer-events-none border border-slate-700"
+                                        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-64 bg-slate-900/95 backdrop-blur-md text-white p-5 rounded-2xl shadow-2xl text-xs border border-white/10"
                                       >
-                                        <div className="font-bold border-b border-slate-600 pb-2 mb-2 flex items-center gap-2 text-sm">
-                                          <Clock size={14} className="text-indigo-400" /> {classDetails.startTime} - {classDetails.endTime}
+                                        <div className="font-bold border-b border-white/10 pb-3 mb-3 flex items-center justify-between text-sm">
+                                          <div className="flex items-center gap-2">
+                                            <Clock size={16} className="text-indigo-400" /> 
+                                            <span>{classDetails.startTime} - {classDetails.endTime}</span>
+                                          </div>
+                                          {isScheduled && (
+                                            <div className={`w-2 h-2 ${theme.dot} rounded-full animate-pulse`}></div>
+                                          )}
                                         </div>
-                                        <div className="flex items-center gap-2 text-slate-300 mb-1">
-                                          <User size={12} /> {classDetails.staffName}
+                                        <div className="space-y-2 mb-4">
+                                          <div className="flex items-center gap-2 text-slate-300">
+                                            <User size={14} className="text-slate-500" /> 
+                                            <span className="font-medium">{classDetails.staffName}</span>
+                                          </div>
+                                          <div className="flex items-center gap-2 text-slate-300">
+                                            <BookOpen size={14} className="text-slate-500" /> 
+                                            <span className="font-medium">{classDetails.subject}</span>
+                                          </div>
                                         </div>
-                                        <div className="flex items-center gap-2 text-indigo-300 font-medium">
-                                          <Info size={12} /> Scheduled Class
-                                        </div>
-                                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-800"></div>
+                                        
+                                        {classDetails.zoomLinkUrl && (
+                                          <button 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleJoinClass(classDetails.zoomLinkUrl);
+                                            }}
+                                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-900/20 cursor-pointer"
+                                          >
+                                            <Video size={14} /> Join Now
+                                          </button>
+                                        )}
+
+                                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900/95"></div>
                                       </motion.div>
                                     )}
                                   </AnimatePresence>
@@ -1557,14 +1589,12 @@ export default function StudentDashboard() {
                                     <div className="flex items-center gap-2">
                                       <span className="text-indigo-700 font-bold bg-indigo-50 px-2 py-1 rounded-md text-xs border border-indigo-100">{cls.startTime} - {cls.endTime}</span>
                                       {cls.zoomLinkUrl && (
-                                        <a 
-                                          href={cls.zoomLinkUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
+                                        <button 
+                                          onClick={() => handleJoinClass(cls.zoomLinkUrl)}
                                           className="bg-blue-600 text-white text-[10px] px-2.5 py-1 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1 font-bold shadow-sm"
                                         >
                                           <Video size={10} /> Join
-                                        </a>
+                                        </button>
                                       )}
                                     </div>
                                     <span className="text-slate-500 text-xs font-medium flex items-center gap-1"><User size={10}/> {cls.staffName}</span>

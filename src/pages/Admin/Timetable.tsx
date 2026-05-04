@@ -147,32 +147,6 @@ export default function Timetable() {
           </div>
           
           <div className="flex flex-wrap items-center gap-4">
-            {formData.grade && (
-              <>
-                <select 
-                  value={filterSubject}
-                  onChange={e => setFilterSubject(e.target.value)}
-                  className="border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 bg-white font-medium text-gray-700 shadow-sm cursor-pointer"
-                >
-                  <option value="">All Subjects</option>
-                  {Array.from(new Set(timetable.filter(t => t.grade === formData.grade).map(t => t.subject))).map(subject => (
-                    <option key={subject} value={subject}>{subject}</option>
-                  ))}
-                </select>
-
-                <select 
-                  value={filterTeacher}
-                  onChange={e => setFilterTeacher(e.target.value)}
-                  className="border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 bg-white font-medium text-gray-700 shadow-sm cursor-pointer"
-                >
-                  <option value="">All Teachers</option>
-                  {Array.from(new Set(timetable.filter(t => t.grade === formData.grade).map(t => t.staffName))).map(teacher => (
-                    <option key={teacher} value={teacher}>{teacher}</option>
-                  ))}
-                </select>
-              </>
-            )}
-
             <select 
               value={formData.grade}
               onChange={e => {
@@ -193,7 +167,39 @@ export default function Timetable() {
                 GRADES.map(grade => <option key={grade} value={grade}>{grade}</option>)
               )}
             </select>
-            
+
+            {formData.grade && (
+              <>
+                <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-xl border-2 border-indigo-50 shadow-sm">
+                  <BookOpen size={16} className="text-indigo-400" />
+                  <select 
+                    value={filterSubject}
+                    onChange={e => setFilterSubject(e.target.value)}
+                    className="border-none bg-transparent focus:ring-0 font-medium text-gray-700 cursor-pointer text-sm"
+                  >
+                    <option value="">All Subjects</option>
+                    {Array.from(new Set(timetable.filter(t => t.grade === formData.grade).map(t => t.subject))).map(subject => (
+                      <option key={subject} value={subject}>{subject}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-xl border-2 border-indigo-50 shadow-sm">
+                  <User size={16} className="text-indigo-400" />
+                  <select 
+                    value={filterTeacher}
+                    onChange={e => setFilterTeacher(e.target.value)}
+                    className="border-none bg-transparent focus:ring-0 font-medium text-gray-700 cursor-pointer text-sm"
+                  >
+                    <option value="">All Teachers</option>
+                    {Array.from(new Set(timetable.filter(t => t.grade === formData.grade).map(t => t.staffName))).map(teacher => (
+                      <option key={teacher} value={teacher}>{teacher}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
             <button 
               onClick={() => setIsAdding(!isAdding)}
               className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold shadow-[0_0_15px_rgba(59,130,246,0.4)] hover:shadow-[0_0_25px_rgba(59,130,246,0.6)] hover:scale-105 transition-all flex items-center gap-2"
@@ -365,8 +371,22 @@ export default function Timetable() {
                           </div>
 
                           {(entry.zoomLinkUrl || hasZoomLink) && (
-                            <div className="absolute top-2 right-16 bg-blue-500/80 backdrop-blur-sm p-1 rounded-full animate-pulse" title="Zoom Link Available">
-                              <Video size={14} className="text-white" />
+                            <div className="absolute top-2 right-16 flex items-center gap-2">
+                               {entry.zoomLinkUrl && (
+                                 <a 
+                                   href={entry.zoomLinkUrl}
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   className="bg-white/20 hover:bg-white/40 text-[10px] font-bold px-2 py-1 rounded-lg backdrop-blur-sm flex items-center gap-1 border border-white/30 transition-all"
+                                 >
+                                   <Video size={10} /> Join
+                                 </a>
+                               )}
+                               {!entry.zoomLinkUrl && (
+                                 <div className="bg-blue-500/80 backdrop-blur-sm p-1 rounded-full animate-pulse" title="Link Available in Zoom Section">
+                                   <Video size={14} className="text-white" />
+                                 </div>
+                               )}
                             </div>
                           )}
 
