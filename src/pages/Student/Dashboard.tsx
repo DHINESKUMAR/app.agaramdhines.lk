@@ -328,7 +328,11 @@ export default function StudentDashboard() {
 
     const loadData = async () => {
       const allStudents = await getStudents();
-      const freshStudentData = allStudents.find((s: any) => s.id === data.id);
+      const studentId = data.id || data.student_id;
+      const freshStudentData = allStudents.find((s: any) => 
+        s.id === studentId || s.student_id === studentId
+      ) || data;
+      
       if (freshStudentData) {
         setCurrentStudentData(freshStudentData);
         setDisplayName(freshStudentData.name);
@@ -348,68 +352,79 @@ export default function StudentDashboard() {
       const allYoutubeLinks = await getYoutubeLinks();
       const allWebPosts = await getWebPosts();
       
-      setCourses(allCourses.filter((c: any) => 
-        c.grade?.toString().trim().toLowerCase() === data.grade?.toString().trim().toLowerCase()
-      ));
-      setZoomLinks(allZoomLinks.filter((z: any) => 
-        z.grade?.toString().trim().toLowerCase() === data.grade?.toString().trim().toLowerCase()
-      ));
+      const studentGrade = freshStudentData.grade?.toString().trim().toLowerCase() || "";
+      const normalizedStudentGrade = studentGrade.replace(/[^0-9]/g, '');
+
+      setCourses(allCourses.filter((c: any) => {
+        const itemGrade = c.grade?.toString().trim().toLowerCase() || "";
+        return itemGrade === studentGrade || (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade));
+      }));
+      
+      setZoomLinks(allZoomLinks.filter((z: any) => {
+        const itemGrade = z.grade?.toString().trim().toLowerCase() || "";
+        return itemGrade === studentGrade || (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade));
+      }));
       
       // Filter YouTube links and Web Posts by grade or isPublic
       setYoutubeLinks(allYoutubeLinks.filter((l: any) => 
         l.isPublic || 
-        l.grade?.toString().trim().toLowerCase() === data.grade?.toString().trim().toLowerCase() || 
+        l.grade?.toString().trim().toLowerCase() === studentGrade || 
+        (normalizedStudentGrade && l.grade?.toString().trim().toLowerCase().includes(normalizedStudentGrade)) ||
         l.grade?.toString().trim().toLowerCase() === "public"
       ));
+      
       setWebPosts(allWebPosts.filter((p: any) => 
         p.isPublic || 
-        p.grade?.toString().trim().toLowerCase() === data.grade?.toString().trim().toLowerCase() || 
+        p.grade?.toString().trim().toLowerCase() === studentGrade || 
+        (normalizedStudentGrade && p.grade?.toString().trim().toLowerCase().includes(normalizedStudentGrade)) ||
         p.grade?.toString().trim().toLowerCase() === "public"
       ));
 
-      const studentFees = allFees.filter((f: any) => f.studentId === data.id || f.studentName === data.name);
+      const studentFees = allFees.filter((f: any) => 
+        (f.studentId && (
+          f.studentId.toString().trim().toLowerCase() === freshStudentData.id?.toString().trim().toLowerCase() ||
+          f.studentId.toString().trim().toLowerCase() === freshStudentData.student_id?.toString().trim().toLowerCase()
+        )) ||
+        (f.studentName && f.studentName.toString().trim().toLowerCase() === freshStudentData.name?.toString().trim().toLowerCase())
+      );
       setFees(studentFees);
       
       // Check for pending fees for current and previous months (Starting from April 2026)
       const now = new Date();
       const unpaidMonths: string[] = [];
       
-      // Start checking from April 2026
+      // Start checking from April 2026 (2026-04)
       const startYear = 2026;
-      const startMonthIndex = 3; // 3 is April (0-indexed)
+      const startMonthIndex = 3; 
       
       const currentYear = now.getFullYear();
       const currentMonthIndex = now.getMonth();
       
-      const checkStartLocal = new Date(startYear, startMonthIndex, 1);
+      let iterStartDate = new Date(startYear, startMonthIndex, 1);
       
-      // Also respect admission date if it's AFTER April 2026
-      let effectiveStart = new Date(checkStartLocal);
       if (freshStudentData.admissionDate) {
         const admissionDate = new Date(freshStudentData.admissionDate);
         if (!isNaN(admissionDate.getTime())) {
           const admStart = new Date(admissionDate.getFullYear(), admissionDate.getMonth(), 1);
-          if (admStart > effectiveStart) {
-            effectiveStart = admStart;
+          if (admStart > iterStartDate) {
+            iterStartDate = new Date(admStart);
           }
         }
       }
 
-      // Iterate through all months from effectiveStart to current limit (May 2026)
-      let iterDate = new Date(effectiveStart.getFullYear(), effectiveStart.getMonth(), 1);
       const limitDate = new Date(currentYear, currentMonthIndex, 1);
+      let currentCheck = new Date(iterStartDate.getFullYear(), iterStartDate.getMonth(), 1);
       
-      while (iterDate <= limitDate) {
-        const y = iterDate.getFullYear();
-        const m = String(iterDate.getMonth() + 1).padStart(2, '0');
+      while (currentCheck <= limitDate) {
+        const y = currentCheck.getFullYear();
+        const m = String(currentCheck.getMonth() + 1).padStart(2, '0');
         const monthKey = `${y}-${m}`;
         
         const hasPaid = studentFees.some((f: any) => f.month === monthKey);
         if (!hasPaid) {
-          unpaidMonths.push(iterDate.toLocaleString('default', { month: 'long', year: 'numeric' }));
+          unpaidMonths.push(currentCheck.toLocaleString('default', { month: 'long', year: 'numeric' }));
         }
-        // Move to next month safely
-        iterDate.setMonth(iterDate.getMonth() + 1);
+        currentCheck.setMonth(currentCheck.getMonth() + 1);
       }
 
       if (unpaidMonths.length > 0) {
@@ -419,13 +434,20 @@ export default function StudentDashboard() {
         setHasPendingFees(false);
       }
 
-      setAttendance(allAttendance.filter((a: any) => a.studentId === data.id));
+      setAttendance(allAttendance.filter((a: any) => a.studentId === freshStudentData.id || a.studentId === freshStudentData.student_id));
       setClassLinks(await getClassLinks());
       setStaffs(allStaffs);
-      setTimetable(allTimetable.filter((t: any) => 
-        t.grade?.toString().trim().toLowerCase() === data.grade?.toString().trim().toLowerCase()
+      
+      setTimetable(allTimetable.filter((t: any) => {
+        const itemGrade = t.grade?.toString().trim().toLowerCase() || "";
+        return itemGrade === studentGrade || (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade));
+      }));
+      
+      setExamMarks(allExamMarks.filter((m: any) => 
+        m.studentId === freshStudentData.id || 
+        m.studentId === freshStudentData.student_id ||
+        m.studentName === freshStudentData.name
       ));
-      setExamMarks(allExamMarks.filter((m: any) => m.studentId === data.id || m.studentName === data.name));
       setClasses(allClasses);
       setAdminSettings(settings);
       
