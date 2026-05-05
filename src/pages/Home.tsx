@@ -380,12 +380,6 @@ export default function Home() {
           
           <div className="flex items-center gap-2 sm:gap-4">
             <button 
-              onClick={() => window.open("https://www.agaramdhines.lk/lp-profile/", "_blank")}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1.5 text-[10px] sm:px-5 sm:py-2 sm:text-sm rounded-full font-medium hover:shadow-md hover:shadow-blue-500/20 transition-all hover:-translate-y-0.5 whitespace-nowrap"
-            >
-              Sign Up Free
-            </button>
-            <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="md:hidden p-1 sm:p-2 text-gray-600 hover:text-blue-600 transition-colors"
             >
@@ -637,6 +631,12 @@ export default function Home() {
                 
                 {!showStudentLogin ? (
                   <div className="w-full flex flex-col gap-3">
+                    <button 
+                      onClick={() => window.open("https://www.agaramdhines.lk/lp-profile/", "_blank")}
+                      className="w-full py-3 bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold rounded-xl hover:from-pink-600 hover:to-rose-600 transition-all shadow-md shadow-pink-100 flex items-center justify-center gap-2"
+                    >
+                      <UserPlus size={20} /> Register
+                    </button>
                     <button 
                       onClick={() => { setShowStudentLogin(true); setShowAdminLogin(false); setShowStaffLogin(false); }}
                       className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-md shadow-blue-200"
