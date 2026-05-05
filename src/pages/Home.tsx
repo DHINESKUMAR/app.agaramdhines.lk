@@ -205,6 +205,7 @@ export default function Home() {
   const handleQrScan = async (decodedText: string) => {
     setShowQrScanner(false);
     try {
+      // 1. Check for Admin Login specific prefix
       if (decodedText.startsWith("ADMIN_LOGIN:")) {
         const [, user, pass] = decodedText.split(":");
         const settings = await getAdminSettings();
@@ -212,6 +213,7 @@ export default function Home() {
         const isMasterAdmin = user === "ddhinesnivas111@gmail.com" && pass === "0756452527dD";
         
         if (isConfiguredAdmin || isMasterAdmin) {
+          localStorage.setItem('userSession', JSON.stringify({ role: 'Admin' }));
           navigate("/admin");
         } else {
           alert("Invalid Admin QR Code");
@@ -219,15 +221,17 @@ export default function Home() {
         return;
       }
 
+      // 2. Try to parse as JSON or use as raw ID
       let data;
       try {
         data = JSON.parse(decodedText);
       } catch (e) {
-        // Not JSON, maybe it's just an ID string? Let's check if it matches any ID directly just in case.
+        // Not JSON, assume it's just an ID string
         data = { id: decodedText };
       }
 
-      if (data.type === 'student' || !data.type) {
+      // 3. Try Student Login
+      if (!data.type || data.type === 'student') {
         const students = await getStudents();
         const student = students.find((s: any) => s.id === data.id);
         if (student) {
@@ -250,7 +254,8 @@ export default function Home() {
         }
       }
 
-      if (data.type === 'staff' || !data.type) {
+      // 4. Try Staff Login
+      if (!data.type || data.type === 'staff') {
         const staffs = await getStaffs();
         const staff = staffs.find((s: any) => s.id === data.id);
         if (staff) {
@@ -265,6 +270,14 @@ export default function Home() {
           navigate("/staff-dashboard", { state: staffData });
           return;
         }
+      }
+
+      // 5. Fallback check for Admin ID (if they just scan their username or ID)
+      const settings = await getAdminSettings();
+      if (data.id === settings?.username || data.id === "ddhinesnivas111@gmail.com") {
+         localStorage.setItem('userSession', JSON.stringify({ role: 'Admin' }));
+         navigate("/admin");
+         return;
       }
 
       alert(`Invalid QR Code or User not found.`);
