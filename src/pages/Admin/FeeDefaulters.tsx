@@ -138,6 +138,7 @@ export default function FeeDefaulters() {
 
       // Filter out subjects from the selection that have been paid
       const unpaidSubjects = subjects
+        .filter(s => s.category === "Sub") // Only calculate extra fee subjects
         .filter(s => selectedSubjects.includes(s.name))
         .filter(s => {
           return !studentFees.some(fee => fee.itemName === s.name && fee.type === "Subject Fee");
@@ -321,14 +322,16 @@ export default function FeeDefaulters() {
               </div>
             </div>
 
-            {subjects.length > 0 && (
+            {subjects.filter(s => s.category === "Sub").length > 0 && (
               <div className="flex-1">
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Select Subjects (Extra Fees)</label>
                 <div className="flex flex-col gap-2 border border-pink-50 bg-pink-50/30 rounded-xl p-3 max-h-64 overflow-y-auto">
-                  {subjects.map((sub) => {
-                    const isSelected = selectedSubjects.includes(sub.name);
-                    return (
-                      <label key={sub.id} className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-pink-600 border-pink-600 shadow-md shadow-pink-500/10' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+                  {subjects
+                    .filter(s => s.category === "Sub")
+                    .map((sub) => {
+                      const isSelected = selectedSubjects.includes(sub.name);
+                      return (
+                        <label key={sub.id} className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-pink-600 border-pink-600 shadow-md shadow-pink-500/10' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
                         <input 
                           type="checkbox"
                           checked={isSelected}

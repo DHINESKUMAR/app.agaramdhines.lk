@@ -389,9 +389,11 @@ export default function CollectFee() {
                           className="w-full border border-gray-300 rounded-md px-4 py-2.5 focus:ring-blue-500 focus:border-blue-500 bg-white transition-shadow font-bold"
                         >
                           <option value="">-- Select Subject --</option>
-                          {subjects.map(s => (
-                            <option key={s.id} value={s.name}>{s.name} (LKR {s.fee || "0"})</option>
-                          ))}
+                          {subjects
+                            .filter(s => s.category === "Sub")
+                            .map(s => (
+                              <option key={s.id} value={s.name}>{s.name} (LKR {s.fee || "0"})</option>
+                            ))}
                         </select>
                       </div>
                     )}
@@ -413,7 +415,7 @@ export default function CollectFee() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paying Now <span className="text-red-500">*</span></label>
                       <div className="relative mb-2">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                          <span className="text-gray-500 font-medium">₹</span>
+                          <span className="text-gray-500 font-medium">LKR</span>
                         </div>
                         <input 
                           type="number" 
@@ -434,7 +436,7 @@ export default function CollectFee() {
                               onClick={() => setPaymentData({...paymentData, amount: item.amount})}
                               className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100 transition-colors"
                             >
-                              {item.label}: ₹{item.amount}
+                              {item.label}: LKR {item.amount}
                             </button>
                           ))}
                         </div>
@@ -523,7 +525,7 @@ export default function CollectFee() {
                           <tr key={idx} className="hover:bg-gray-50">
                             <td className="px-4 py-2 text-sm font-medium text-gray-900">{fee.month}</td>
                             <td className="px-4 py-2 text-sm text-gray-500">{fee.date}</td>
-                            <td className="px-4 py-2 text-sm font-medium text-green-600">₹{fee.amount}</td>
+                            <td className="px-4 py-2 text-sm font-medium text-green-600">LKR {fee.amount}</td>
                             <td className="px-4 py-2 text-sm text-gray-500">{fee.method}</td>
                             <td className="px-4 py-2 text-sm text-right space-x-2">
                               <button onClick={() => handleEditFee(fee)} className="text-blue-600 hover:text-blue-800 font-medium">Edit</button>
@@ -556,7 +558,7 @@ export default function CollectFee() {
             <div className="p-6">
               <div className="flex justify-between mb-6 pb-4 border-b border-gray-100">
                 <span className="text-gray-600">Amount to Pay</span>
-                <span className="text-2xl font-bold text-gray-800">₹{paymentData.amount}</span>
+                <span className="text-2xl font-bold text-gray-800">LKR {paymentData.amount}</span>
               </div>
               
               {isProcessingPayment ? (
@@ -597,7 +599,7 @@ export default function CollectFee() {
                       onClick={handleMockPayment}
                       className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-md shadow-blue-200"
                     >
-                      Pay ₹{paymentData.amount}
+                      Pay LKR {paymentData.amount}
                     </button>
                   </div>
                 </>
@@ -656,7 +658,7 @@ export default function CollectFee() {
               
               <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg border border-blue-100">
                 <span className="font-bold text-blue-900">Amount Paid</span>
-                <span className="text-2xl font-black text-blue-700">₹{receiptData.amount}</span>
+                <span className="text-2xl font-black text-blue-700">LKR {receiptData.amount}</span>
               </div>
             </div>
             
@@ -723,7 +725,7 @@ export default function CollectFee() {
                           
                           <div class="total">
                             <span>Amount Paid</span>
-                            <span>₹${receiptData.amount}</span>
+                            <span>LKR ${receiptData.amount}</span>
                           </div>
                           
                           <div style="text-align:center; margin-top:50px; color:#888; font-size:12px;">

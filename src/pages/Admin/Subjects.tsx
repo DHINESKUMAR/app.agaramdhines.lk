@@ -8,9 +8,11 @@ export default function SubjectsGrades() {
   
   const [newSubject, setNewSubject] = useState("");
   const [newFee, setNewFee] = useState("");
+  const [newCategory, setNewCategory] = useState<"Main" | "Sub">("Main");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingFee, setEditingFee] = useState("");
+  const [editingCategory, setEditingCategory] = useState<"Main" | "Sub">("Main");
   const [editingFees, setEditingFees] = useState<{[key: string]: string}>({});
 
   useEffect(() => {
@@ -25,28 +27,32 @@ export default function SubjectsGrades() {
     const updated = [...subjects, { 
       id: Date.now().toString(), 
       name: newSubject,
+      category: newCategory,
       fee: newFee || "0"
     }];
     setSubjects(updated);
     await saveSubjects(updated);
     setNewSubject("");
     setNewFee("");
+    setNewCategory("Main");
   };
 
   const startEditing = (subject: any) => {
     setEditingId(subject.id);
     setEditingName(subject.name);
     setEditingFee(subject.fee || "0");
+    setEditingCategory(subject.category || "Main");
   };
 
   const handleUpdateSubject = async () => {
     if (!editingName.trim() || !editingId) return;
     
-    const updated = subjects.map(s => s.id === editingId ? { ...s, name: editingName, fee: editingFee } : s);
+    const updated = subjects.map(s => s.id === editingId ? { ...s, name: editingName, fee: editingFee, category: editingCategory } : s);
     setSubjects(updated);
     await saveSubjects(updated);
     setEditingId(null);
     setEditingFee("");
+    setEditingCategory("Main");
   };
 
   const handleDeleteSubject = async (id: string, name: string) => {
@@ -98,29 +104,51 @@ export default function SubjectsGrades() {
           </div>
         </div>
         
-        <form onSubmit={handleAddSubject} className="flex flex-col sm:flex-row gap-3 mb-8 bg-gray-50 p-4 rounded-xl border border-gray-100">
-          <div className="flex-1 flex flex-col md:flex-row gap-3">
-            <input
-              type="text"
-              placeholder="Subject Name (e.g. Science)"
-              value={newSubject}
-              onChange={(e) => setNewSubject(e.target.value)}
-              className="flex-1 border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium bg-white"
-            />
-            <div className="relative w-full md:w-48">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold font-sans">LKR</span>
+        <form onSubmit={handleAddSubject} className="flex flex-col gap-4 mb-8 bg-gray-50 p-6 rounded-xl border border-gray-100">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="lg:col-span-1">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Subject Name</label>
               <input
-                type="number"
-                placeholder="Fee (Optional)"
-                value={newFee}
-                onChange={(e) => setNewFee(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg pl-10 pr-3 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium bg-white"
+                type="text"
+                placeholder="e.g. Science"
+                value={newSubject}
+                onChange={(e) => setNewSubject(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium bg-white"
               />
             </div>
+            
+            <div className="lg:col-span-1">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Category</label>
+              <select
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value as any)}
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-bold bg-white"
+              >
+                <option value="Main">Main Subject (Included in Tuition)</option>
+                <option value="Sub">Sub Subject (Extra Fee)</option>
+              </select>
+            </div>
+
+            <div className="lg:col-span-1">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Extra Fee (LKR)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold font-sans">LKR</span>
+                <input
+                  type="number"
+                  placeholder="0 (Optional)"
+                  value={newFee}
+                  onChange={(e) => setNewFee(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg pl-10 pr-3 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium bg-white"
+                />
+              </div>
+            </div>
+
+            <div className="lg:col-span-1 flex items-end">
+              <button type="submit" className="w-full bg-blue-600 text-white px-8 py-3.5 rounded-lg hover:bg-blue-700 font-black uppercase text-[10px] tracking-widest flex items-center justify-center shadow-lg shadow-blue-200 transition-all hover:scale-[1.02] active:scale-95 whitespace-nowrap">
+                <Plus size={18} className="mr-2" /> Add Subject
+              </button>
+            </div>
           </div>
-          <button type="submit" className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 font-black uppercase text-xs tracking-widest flex items-center justify-center shadow-lg shadow-blue-200 transition-all hover:scale-105 active:scale-95 whitespace-nowrap">
-            <Plus size={18} className="mr-2" /> Add Subject
-          </button>
         </form>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -144,7 +172,18 @@ export default function SubjectsGrades() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Monthly Fee (LKR)</label>
+                      <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Category</label>
+                      <select 
+                        value={editingCategory}
+                        onChange={(e) => setEditingCategory(e.target.value as any)}
+                        className="w-full border border-blue-500 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none bg-white"
+                      >
+                        <option value="Main">Main Subject</option>
+                        <option value="Sub">Sub Subject</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Extra Fee (LKR)</label>
                       <input 
                         type="number"
                         value={editingFee}
@@ -163,8 +202,13 @@ export default function SubjectsGrades() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-start justify-between mb-4">
-                      <span className="font-black text-gray-800 uppercase text-sm tracking-tight">{subject.name}</span>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-black text-gray-800 uppercase text-sm tracking-tight">{subject.name}</span>
+                        <span className={`text-[9px] w-fit px-2 py-0.5 rounded-full font-black uppercase tracking-widest ${subject.category === 'Sub' ? 'bg-pink-100 text-pink-600' : 'bg-blue-100 text-blue-600'}`}>
+                          {subject.category === 'Sub' ? 'Sub Subject' : 'Main Subject'}
+                        </span>
+                      </div>
                       {subject.fee && subject.fee !== "0" && (
                         <div className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[10px] font-black">
                           LKR {subject.fee}
