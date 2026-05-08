@@ -1,36 +1,91 @@
 import React, { useState, useEffect } from "react";
-import { getSubjects, saveSubjects } from "../../lib/db";
-import { Plus, Trash2, BookOpen } from "lucide-react";
+import { getSubjects, saveSubjects, getClasses, saveClasses } from "../../lib/db";
+import { Plus, Trash2, BookOpen, Edit2, Check, X, IndianRupee, GraduationCap } from "lucide-react";
 
 export default function SubjectsGrades() {
   const [subjects, setSubjects] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
   
   const [newSubject, setNewSubject] = useState("");
+  const [newFee, setNewFee] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [editingFee, setEditingFee] = useState("");
+  const [editingFees, setEditingFees] = useState<{[key: string]: string}>({});
 
   useEffect(() => {
     getSubjects().then(setSubjects);
+    getClasses().then(setClasses);
   }, []);
 
   const handleAddSubject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubject.trim()) return;
     
-    const updated = [...subjects, { id: Date.now().toString(), name: newSubject }];
+    const updated = [...subjects, { 
+      id: Date.now().toString(), 
+      name: newSubject,
+      fee: newFee || "0"
+    }];
     setSubjects(updated);
     await saveSubjects(updated);
     setNewSubject("");
+    setNewFee("");
   };
 
-  const handleDeleteSubject = async (id: string) => {
-    if (window.confirm("Delete this subject?")) {
-      const updated = subjects.filter(s => s.id !== id);
-      setSubjects(updated);
-      await saveSubjects(updated);
+  const startEditing = (subject: any) => {
+    setEditingId(subject.id);
+    setEditingName(subject.name);
+    setEditingFee(subject.fee || "0");
+  };
+
+  const handleUpdateSubject = async () => {
+    if (!editingName.trim() || !editingId) return;
+    
+    const updated = subjects.map(s => s.id === editingId ? { ...s, name: editingName, fee: editingFee } : s);
+    setSubjects(updated);
+    await saveSubjects(updated);
+    setEditingId(null);
+    setEditingFee("");
+  };
+
+  const handleDeleteSubject = async (id: string, name: string) => {
+    if (window.confirm(`Are you sure you want to delete "${name}"?`)) {
+      try {
+        const updated = subjects.filter(s => s.id !== id);
+        setSubjects(updated);
+        await saveSubjects(updated);
+      } catch (error) {
+        console.error("Delete failed:", error);
+        alert("Failed to delete subject. Please try again.");
+      }
     }
   };
 
+  const handleFeeChange = (classId: string, fee: string) => {
+    setEditingFees(prev => ({ ...prev, [classId]: fee }));
+  };
+
+  const handleSaveFees = async (classId: string) => {
+    const fee = editingFees[classId];
+    if (fee === undefined) return;
+
+    const updatedClasses = classes.map(c => 
+      c.id === classId ? { ...c, monthlyTuitionFees: fee } : c
+    );
+    setClasses(updatedClasses);
+    await saveClasses(updatedClasses);
+    
+    // Clear editing state for this class
+    const newEditingFees = { ...editingFees };
+    delete newEditingFees[classId];
+    setEditingFees(newEditingFees);
+    
+    alert("Class fee updated successfully!");
+  };
+
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-4xl mx-auto space-y-8 pb-20">
       {/* Subjects Section */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
         <div className="flex items-center gap-3 mb-8">
@@ -38,41 +93,173 @@ export default function SubjectsGrades() {
             <BookOpen size={24} />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-800">Manage Subjects</h2>
-            <p className="text-gray-500 text-sm">Add or remove subjects that can be assigned to classes.</p>
+            <h2 className="text-2xl font-bold text-gray-800 uppercase tracking-tighter">Manage Subjects</h2>
+            <p className="text-gray-500 text-sm">Add, remove or edit subjects assigned to classes.</p>
           </div>
         </div>
         
-        <form onSubmit={handleAddSubject} className="flex gap-3 mb-8">
-          <input
-            type="text"
-            placeholder="e.g., Mathematics, Science, Tamil..."
-            value={newSubject}
-            onChange={(e) => setNewSubject(e.target.value)}
-            className="flex-1 border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
-          />
-          <button type="submit" className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium flex items-center shadow-sm transition-colors">
-            <Plus size={20} className="mr-2" /> Add Subject
+        <form onSubmit={handleAddSubject} className="flex flex-col sm:flex-row gap-3 mb-8 bg-gray-50 p-4 rounded-xl border border-gray-100">
+          <div className="flex-1 flex flex-col md:flex-row gap-3">
+            <input
+              type="text"
+              placeholder="Subject Name (e.g. Science)"
+              value={newSubject}
+              onChange={(e) => setNewSubject(e.target.value)}
+              className="flex-1 border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium bg-white"
+            />
+            <div className="relative w-full md:w-48">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold font-sans">LKR</span>
+              <input
+                type="number"
+                placeholder="Fee (Optional)"
+                value={newFee}
+                onChange={(e) => setNewFee(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg pl-10 pr-3 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium bg-white"
+              />
+            </div>
+          </div>
+          <button type="submit" className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 font-black uppercase text-xs tracking-widest flex items-center justify-center shadow-lg shadow-blue-200 transition-all hover:scale-105 active:scale-95 whitespace-nowrap">
+            <Plus size={18} className="mr-2" /> Add Subject
           </button>
         </form>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 max-h-[500px] overflow-y-auto pr-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {subjects.length === 0 ? (
             <div className="col-span-full text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
               <BookOpen size={48} className="mx-auto text-gray-300 mb-3" />
               <p className="text-gray-500 font-medium">No subjects added yet.</p>
-              <p className="text-gray-400 text-sm mt-1">Add your first subject using the form above.</p>
             </div>
           ) : (
             subjects.map(subject => (
-              <div key={subject.id} className="flex justify-between items-center p-4 border border-gray-200 rounded-xl bg-white shadow-sm hover:shadow-md transition-shadow group">
-                <span className="font-medium text-gray-800">{subject.name}</span>
-                <button onClick={() => handleDeleteSubject(subject.id)} className="text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100">
-                  <Trash2 size={18} />
-                </button>
+              <div key={subject.id} className="group relative flex flex-col p-5 border border-gray-100 rounded-2xl bg-white shadow-sm hover:shadow-xl hover:border-blue-200 transition-all duration-300">
+                {editingId === subject.id ? (
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Name</label>
+                      <input 
+                        autoFocus
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        className="w-full border border-blue-500 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Monthly Fee (LKR)</label>
+                      <input 
+                        type="number"
+                        value={editingFee}
+                        onChange={(e) => setEditingFee(e.target.value)}
+                        className="w-full border border-blue-500 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <button onClick={handleUpdateSubject} className="flex-1 bg-green-500 text-white p-2 rounded-lg flex items-center justify-center shadow-sm hover:bg-green-600 transition-colors">
+                        <Check size={16} className="mr-1" /> SAVE
+                      </button>
+                      <button onClick={() => setEditingId(null)} className="flex-1 bg-gray-100 text-gray-500 p-2 rounded-lg flex items-center justify-center hover:bg-gray-200 transition-colors">
+                        <X size={16} className="mr-1" /> CANCEL
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between mb-4">
+                      <span className="font-black text-gray-800 uppercase text-sm tracking-tight">{subject.name}</span>
+                      {subject.fee && subject.fee !== "0" && (
+                        <div className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[10px] font-black">
+                          LKR {subject.fee}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => startEditing(subject)} 
+                        className="flex-1 text-blue-500 hover:bg-blue-50 p-2 rounded-lg border border-blue-100 transition-colors flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-widest"
+                      >
+                        <Edit2 size={12} /> Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteSubject(subject.id, subject.name)} 
+                        className="flex-1 text-red-500 hover:bg-red-50 p-2 rounded-lg border border-red-50 transition-colors flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-widest"
+                      >
+                        <Trash2 size={12} /> Del
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ))
           )}
+        </div>
+      </div>
+
+      {/* Class Fees Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-12 h-12 bg-pink-100 rounded-full flex items-center justify-center text-pink-600">
+            <GraduationCap size={24} />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800 uppercase tracking-tighter">Manage Class Fees</h2>
+            <p className="text-gray-500 text-sm">Set or update monthly tuition fees for each grade.</p>
+          </div>
+        </div>
+
+        <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Class Name</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest w-48 text-right">Current Monthly Fee</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest w-64 text-right">Update Fee</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50 bg-white">
+              {classes.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="px-6 py-12 text-center text-gray-500 font-medium">
+                    No classes added yet. <a href="/admin/classes" className="text-blue-600 underline">Add classes first</a>.
+                  </td>
+                </tr>
+              ) : (
+                classes.map(cls => (
+                  <tr key={cls.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <span className="font-black text-gray-900 uppercase text-sm tracking-tight">{cls.name}</span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span className="font-bold text-gray-700">LKR {cls.monthlyTuitionFees || "0"}</span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold font-sans">LKR</span>
+                          <input 
+                            type="number"
+                            placeholder="Amount"
+                            value={editingFees[cls.id] !== undefined ? editingFees[cls.id] : (cls.monthlyTuitionFees || "")}
+                            onChange={(e) => handleFeeChange(cls.id, e.target.value)}
+                            className="w-32 border border-gray-200 rounded-lg pl-10 pr-3 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                          />
+                        </div>
+                        <button 
+                          onClick={() => handleSaveFees(cls.id)}
+                          disabled={editingFees[cls.id] === undefined}
+                          className={`p-2 rounded-lg shadow-sm transition-all ${
+                            editingFees[cls.id] !== undefined 
+                              ? 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 active:scale-95' 
+                              : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                          }`}
+                        >
+                          <Check size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
