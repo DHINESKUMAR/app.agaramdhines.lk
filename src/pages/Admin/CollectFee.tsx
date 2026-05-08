@@ -20,6 +20,7 @@ export default function CollectFee() {
 
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
   const [totalAmount, setTotalAmount] = useState(0);
+  const [isManualAmount, setIsManualAmount] = useState(false);
 
   const [subjects, setSubjects] = useState<any[]>([]);
   const [feeSettings, setFeeSettings] = useState<any[]>([]);
@@ -92,7 +93,7 @@ export default function CollectFee() {
     const preset = feeSettings.find(f => f.label.includes(student.grade));
     const tuitionAmount = preset ? parseInt(preset.amount.replace(/\D/g, '')) : 1500;
     
-    const items = [{
+    const items: any[] = [{
       id: 'tuition',
       type: 'Monthly Tuition',
       label: 'Monthly Tuition',
@@ -119,11 +120,14 @@ export default function CollectFee() {
   };
 
   useEffect(() => {
-    const total = selectedItems.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0);
-    setTotalAmount(total);
-  }, [selectedItems]);
+    if (!isManualAmount) {
+      const total = selectedItems.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0);
+      setTotalAmount(total);
+    }
+  }, [selectedItems, isManualAmount]);
 
   const toggleItem = (itemType: string, itemName: string, amount: number, isSubject: boolean) => {
+    setIsManualAmount(false); // Reset manual override when changing selection
     if (isSubject) {
       setSelectedItems(prev => {
         const exists = prev.find(i => i.itemName === itemName && i.type === 'Subject Fee');
@@ -179,21 +183,38 @@ export default function CollectFee() {
       const batchId = `BATCH-${Date.now()}`;
       const txnIdBase = transactionId || `TXN-${Math.floor(Math.random() * 1000000)}`;
       
-      const newFeeRecords = selectedItems.map((item, idx) => ({
-        id: `${Date.now()}-${idx}`,
-        studentId: selectedStudent.student_id || selectedStudent.id,
-        studentName: selectedStudent.name,
-        grade: selectedStudent.grade,
-        month: item.type === 'Monthly Tuition' ? paymentData.month : "",
-        amount: item.amount.toString(),
-        method: paymentData.method,
-        date: paymentData.date,
-        type: item.type,
-        itemName: item.itemName || "",
-        transactionId: selectedItems.length > 1 ? `${txnIdBase}-${idx + 1}` : txnIdBase,
-        batchId: batchId,
-        timestamp: new Date().toISOString()
-      }));
+      // Calculate proportions if amount was manually changed
+      const calculatedTotal = selectedItems.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0);
+      const adjustmentRatio = calculatedTotal > 0 ? totalAmount / calculatedTotal : 1;
+
+      const newFeeRecords = selectedItems.map((item, idx) => {
+        let finalAmount = parseInt(item.amount) || 0;
+        if (isManualAmount) {
+          if (idx === selectedItems.length - 1) {
+            // Last item gets the remainder to ensure exact total match
+            const otherItemsTotal = selectedItems.slice(0, -1).reduce((sum, it) => sum + Math.round((parseInt(it.amount) || 0) * adjustmentRatio), 0);
+            finalAmount = totalAmount - otherItemsTotal;
+          } else {
+            finalAmount = Math.round(finalAmount * adjustmentRatio);
+          }
+        }
+
+        return {
+          id: `${Date.now()}-${idx}`,
+          studentId: selectedStudent.student_id || selectedStudent.id,
+          studentName: selectedStudent.name,
+          grade: selectedStudent.grade,
+          month: item.type === 'Monthly Tuition' ? paymentData.month : "",
+          amount: finalAmount.toString(),
+          method: paymentData.method,
+          date: paymentData.date,
+          type: item.type,
+          itemName: item.itemName || "",
+          transactionId: selectedItems.length > 1 ? `${txnIdBase}-${idx + 1}` : txnIdBase,
+          batchId: batchId,
+          timestamp: new Date().toISOString()
+        };
+      });
 
       const updatedFees = [...existingFees, ...newFeeRecords];
       await saveFees(updatedFees);
@@ -452,15 +473,19 @@ export default function CollectFee() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount Selected</label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                          <span className="text-gray-500 font-medium">LKR</span>
+                          <span className="text-gray-500 font-medium font-bold">LKR</span>
                         </div>
                         <input 
-                          type="text" 
-                          readOnly
+                          type="number" 
                           value={totalAmount}
-                          className="w-full pl-12 pr-4 py-2.5 border border-gray-200 bg-gray-50 rounded-md font-black text-blue-700 text-xl"
+                          onChange={(e) => {
+                            setTotalAmount(parseInt(e.target.value) || 0);
+                            setIsManualAmount(true);
+                          }}
+                          className="w-full pl-12 pr-4 py-2.5 border border-blue-300 bg-white rounded-md font-black text-blue-700 text-xl focus:ring-blue-500 focus:border-blue-500 transition-shadow outline-none"
                         />
                       </div>
+                      <p className="text-[10px] text-gray-400 mt-1 font-medium italic">* You can manually adjust the total if needed</p>
                     </div>
 
                     <div>
