@@ -266,27 +266,85 @@ export default function CollectFee() {
     }, 2000);
   };
 
-  const handleEditFee = (fee: any) => {
-    setEditingFeeId(fee.id);
-    setPaymentData({
-      method: fee.method,
-      date: fee.date,
-      month: fee.month || new Date().toISOString().slice(0, 7),
+  const groupFeesByBatch = (fees: any[]) => {
+    const groups: { [key: string]: any } = {};
+    
+    fees.forEach(fee => {
+      // Prioritize batchId, then transactionId base (for manual/older records), then standard txn id
+      let id = fee.batchId;
+      if (!id && fee.transactionId) {
+        // Extract base ID if it includes sequence suffix like -1, -2
+        id = fee.transactionId.split('-')[0] + '-' + fee.transactionId.split('-')[1];
+        if (fee.transactionId.split('-').length < 2) id = fee.transactionId;
+      }
+      if (!id) id = fee.id;
+
+      if (!groups[id]) {
+        groups[id] = {
+          ...fee,
+          totalAmount: parseInt(fee.amount) || 0,
+          items: [{ label: (fee.itemName || fee.type), amount: parseInt(fee.amount) || 0, type: fee.type, itemName: fee.itemName, category: fee.category }],
+          displayType: fee.type,
+          displayMonth: fee.month
+        };
+      } else {
+        groups[id].totalAmount += (parseInt(fee.amount) || 0);
+        groups[id].items.push({ label: (fee.itemName || fee.type), amount: parseInt(fee.amount) || 0, type: fee.type, itemName: fee.itemName, category: fee.category });
+        if (fee.type === 'Monthly Tuition') {
+          groups[id].displayMonth = fee.month;
+        }
+      }
     });
     
-    setSelectedItems([{
-      id: fee.id,
-      type: fee.type || 'Monthly Tuition',
-      label: fee.type === 'Subject Fee' ? fee.itemName : fee.type,
-      itemName: fee.itemName,
-      amount: parseInt(fee.amount) || 0
+    return Object.values(groups).sort((a: any, b: any) => new Date(b.timestamp || b.date).getTime() - new Date(a.timestamp || a.date).getTime());
+  };
+
+  const handleEditFee = (fee: any) => {
+    // If it's a grouped fee, we typically only edit one record for now
+    // but the UI currently expects a single record format
+    const sourceFee = fee.items ? fee : fee;
+    setEditingFeeId(sourceFee.id);
+    setPaymentData({
+      method: sourceFee.method,
+      date: sourceFee.date,
+      month: sourceFee.month || new Date().toISOString().slice(0, 7),
+    });
+    
+    setSelectedItems(sourceFee.items ? sourceFee.items.map((it: any) => ({
+      id: Date.now() + Math.random().toString(),
+      type: it.type,
+      label: it.label,
+      itemName: it.itemName,
+      amount: it.amount,
+      category: it.category
+    })) : [{
+      id: sourceFee.id,
+      type: sourceFee.type || 'Monthly Tuition',
+      label: sourceFee.type === 'Subject Fee' ? sourceFee.itemName : sourceFee.type,
+      itemName: sourceFee.itemName,
+      amount: parseInt(sourceFee.amount) || 0
     }]);
   };
 
   const handleLoadReceipt = (fee: any) => {
-    setReceiptData(fee);
+    if (fee.items) {
+      setReceiptData({
+        ...fee,
+        amount: fee.totalAmount,
+        totalAmount: fee.totalAmount,
+        transactionId: fee.transactionId?.split('-')[0] + '-' + fee.transactionId?.split('-')[1] || fee.transactionId
+      });
+    } else {
+      setReceiptData({
+        ...fee,
+        items: [{ label: fee.itemName || fee.type, amount: parseInt(fee.amount) || 0, type: fee.type, itemName: fee.itemName }],
+        totalAmount: parseInt(fee.amount) || 0
+      });
+    }
     setShowReceipt(true);
   };
+
+  const groupedHistory = groupFeesByBatch(studentFeeHistory);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -597,15 +655,24 @@ export default function CollectFee() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {studentFeeHistory.map((fee, idx) => (
-                          <tr key={idx} className="hover:bg-gray-50">
-                            <td className="px-4 py-2 text-sm font-medium text-gray-900">{fee.month}</td>
-                            <td className="px-4 py-2 text-sm text-gray-500">{fee.date}</td>
-                            <td className="px-4 py-2 text-sm font-medium text-green-600">LKR {fee.amount}</td>
-                            <td className="px-4 py-2 text-sm text-gray-500">{fee.method}</td>
-                            <td className="px-4 py-2 text-sm text-right space-x-2">
-                              <button onClick={() => handleEditFee(fee)} className="text-blue-600 hover:text-blue-800 font-medium">Edit</button>
-                              <button onClick={() => handleLoadReceipt(fee)} className="text-indigo-600 hover:text-indigo-800 font-medium ml-2">Receipt</button>
+                        {groupedHistory.map((fee: any, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-4 text-sm font-bold text-gray-900">{fee.displayMonth || "-"}</td>
+                            <td className="px-4 py-4 text-sm text-gray-500 whitespace-nowrap">{fee.date}</td>
+                            <td className="px-4 py-4">
+                              <div className="flex flex-col">
+                                <span className="text-sm font-black text-green-600">LKR {fee.totalAmount}</span>
+                                <span className="text-[10px] text-gray-400 font-medium max-w-[200px] line-clamp-1">
+                                  {fee.items.map((i: any) => i.label).join(", ")}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 text-sm text-gray-500">
+                              <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px] font-bold uppercase tracking-tight">{fee.method}</span>
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right space-x-3 whitespace-nowrap">
+                              <button onClick={() => handleEditFee(fee)} className="text-blue-600 hover:text-blue-800 font-bold uppercase text-[10px] tracking-widest">Edit</button>
+                              <button onClick={() => handleLoadReceipt(fee)} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-md hover:bg-blue-100 font-black uppercase text-[10px] tracking-widest transition-colors">Receipt</button>
                             </td>
                           </tr>
                         ))}
