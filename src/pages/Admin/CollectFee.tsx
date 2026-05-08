@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getStudents, saveStudents, getFees, saveFees, getClasses, getAdminSettings } from "../../lib/db";
+import { getStudents, saveStudents, getFees, saveFees, getClasses, getAdminSettings, getSubjects } from "../../lib/db";
 import { Search, Calendar, CreditCard, User, BookOpen, DollarSign, CheckCircle, Printer } from "lucide-react";
 
 export default function CollectFee() {
@@ -16,22 +16,29 @@ export default function CollectFee() {
     amount: "",
     method: "Cash",
     date: new Date().toISOString().split('T')[0],
-    month: new Date().toISOString().slice(0, 7) // YYYY-MM format
+    month: new Date().toISOString().slice(0, 7), // YYYY-MM format
+    type: "Monthly Tuition", // Default type
+    itemName: "" // Optional name of the subject/course
   });
 
-  const [showPaymentGateway, setShowPaymentGateway] = useState(false);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [showReceipt, setShowReceipt] = useState(false);
-  const [receiptData, setReceiptData] = useState<any>(null);
-  const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [feeSettings, setFeeSettings] = useState<any[]>([]);
 
   useEffect(() => {
     getStudents().then(data => setStudents(data || []));
     getClasses().then(data => setClasses(data || []));
     getFees().then(data => setAllFees(data || []));
     getAdminSettings().then(data => setSettings(data));
+    getSubjects().then(data => setSubjects(data || []));
     
-    // Check if student ID is passed in URL (from Fee Defaulters page)
+    // Get fee presets from settings
+    getAdminSettings().then(data => {
+      if (data?.fees?.items) {
+        setFeeSettings(data.fees.items);
+      }
+    });
+
+    // Check if student ID is passed in URL
     const urlParams = new URLSearchParams(window.location.search);
     const studentId = urlParams.get('student');
     if (studentId) {
@@ -41,6 +48,12 @@ export default function CollectFee() {
       });
     }
   }, []);
+
+  const [showPaymentGateway, setShowPaymentGateway] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [receiptData, setReceiptData] = useState<any>(null);
+  const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedStudent) {
@@ -108,6 +121,8 @@ export default function CollectFee() {
               amount: paymentData.amount,
               method: paymentData.method,
               date: paymentData.date,
+              type: paymentData.type,
+              itemName: paymentData.itemName
             };
             return currentFee;
           }
@@ -125,6 +140,8 @@ export default function CollectFee() {
           amount: paymentData.amount,
           method: paymentData.method,
           date: paymentData.date,
+          type: paymentData.type,
+          itemName: paymentData.itemName,
           transactionId: transactionId || `TXN-${Math.floor(Math.random() * 1000000)}`,
           timestamp: new Date().toISOString()
         };
@@ -151,7 +168,9 @@ export default function CollectFee() {
         amount: "",
         method: "Cash",
         date: new Date().toISOString().split('T')[0],
-        month: new Date().toISOString().slice(0, 7)
+        month: new Date().toISOString().slice(0, 7),
+        type: "Monthly Tuition",
+        itemName: ""
       });
       
     } catch (error) {
@@ -176,7 +195,9 @@ export default function CollectFee() {
       amount: fee.amount.toString(),
       method: fee.method,
       date: fee.date,
-      month: fee.month
+      month: fee.month,
+      type: fee.type || "Monthly Tuition",
+      itemName: fee.itemName || ""
     });
   };
 
@@ -319,6 +340,64 @@ export default function CollectFee() {
                   {/* Payment Inputs */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                     <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Fee Type <span className="text-red-500">*</span></label>
+                      <select 
+                        value={paymentData.type}
+                        onChange={(e) => {
+                          const type = e.target.value;
+                          let amount = paymentData.amount;
+                          let itemName = "";
+                          
+                          if (type === "Subject Fee") {
+                            // Default to first subject if none selected
+                            if (subjects.length > 0) itemName = subjects[0].name;
+                          } else {
+                            // Find matching fee from settings
+                            const preset = feeSettings.find(f => f.label.includes(selectedStudent.grade));
+                            if (preset) amount = preset.amount.replace(/\D/g, '');
+                          }
+                          
+                          setPaymentData({
+                            ...paymentData, 
+                            type, 
+                            amount,
+                            itemName
+                          });
+                        }}
+                        className="w-full border border-gray-300 rounded-md px-4 py-2.5 focus:ring-blue-500 focus:border-blue-500 bg-white transition-shadow font-bold"
+                      >
+                        <option value="Monthly Tuition">Monthly Tuition</option>
+                        <option value="Subject Fee">Specific Subject Fee</option>
+                        <option value="Admission">Admission Fee</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    {paymentData.type === "Subject Fee" && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Select Subject <span className="text-red-500">*</span></label>
+                        <select 
+                          value={paymentData.itemName}
+                          onChange={(e) => {
+                            const sub = subjects.find(s => s.name === e.target.value);
+                            setPaymentData({
+                              ...paymentData, 
+                              itemName: e.target.value,
+                              amount: sub?.fee || paymentData.amount
+                            });
+                          }}
+                          className="w-full border border-gray-300 rounded-md px-4 py-2.5 focus:ring-blue-500 focus:border-blue-500 bg-white transition-shadow font-bold"
+                        >
+                          <option value="">-- Select Subject --</option>
+                          {subjects.map(s => (
+                            <option key={s.id} value={s.name}>{s.name} (LKR {s.fee || "0"})</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {paymentData.type === "Monthly Tuition" && (
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Fee Month <span className="text-red-500">*</span></label>
                       <input 
                         type="month" 
@@ -328,6 +407,7 @@ export default function CollectFee() {
                         className="w-full border border-gray-300 rounded-md px-4 py-2.5 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
                       />
                     </div>
+                    )}
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paying Now <span className="text-red-500">*</span></label>
@@ -550,13 +630,19 @@ export default function CollectFee() {
                   <span className="font-medium text-gray-800">{receiptData.date}</span>
                 </div>
                 <div className="flex justify-between">
+                  <span className="text-gray-500">Type</span>
+                  <span className="font-medium text-gray-800 tracking-tight">{receiptData.type} {receiptData.itemName ? `- ${receiptData.itemName}` : ""}</span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-gray-500">Payment Method</span>
                   <span className="font-medium text-gray-800">{receiptData.method}</span>
                 </div>
+                {receiptData.type === "Monthly Tuition" && (
                 <div className="flex justify-between">
                   <span className="text-gray-500">Fee Month</span>
                   <span className="font-medium text-gray-800">{receiptData.month}</span>
                 </div>
+                )}
               </div>
               
               <div className="mb-6">
@@ -626,7 +712,8 @@ export default function CollectFee() {
                           <div class="row"><span class="label">Receipt No:</span><span class="value">${receiptData.transactionId}</span></div>
                           <div class="row"><span class="label">Date:</span><span class="value">${receiptData.date}</span></div>
                           <div class="row"><span class="label">Payment Method:</span><span class="value">${receiptData.method}</span></div>
-                          <div class="row"><span class="label">Fee Month:</span><span class="value">${receiptData.month}</span></div>
+                          <div class="row"><span class="label">Payment for:</span><span class="value">${receiptData.type} ${receiptData.itemName ? `(${receiptData.itemName})` : ""}</span></div>
+                          ${receiptData.type === 'Monthly Tuition' ? `<div class="row"><span class="label">Fee Month:</span><span class="value">${receiptData.month}</span></div>` : ''}
                           
                           <div class="box">
                             <div style="font-weight:bold; margin-bottom:5px;">Student Details</div>

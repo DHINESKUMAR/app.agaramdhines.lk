@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { getStudents, getFees, getClasses, getAdminSettings } from "../../lib/db";
-import { Search, X, ExternalLink, CheckCircle, FileText, Download, Printer } from "lucide-react";
+import { getStudents, getFees, getClasses, getAdminSettings, getSubjects } from "../../lib/db";
+import { Search, X, ExternalLink, CheckCircle, FileText, Download, Printer, Trash2 } from "lucide-react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
@@ -9,10 +9,12 @@ export default function FeeDefaulters() {
   const [students, setStudents] = useState<any[]>([]);
   const [fees, setFees] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
   
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [defaulters, setDefaulters] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
@@ -22,20 +24,35 @@ export default function FeeDefaulters() {
   const receiptRef = useRef<HTMLDivElement>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [selectedStudentForReceipt, setSelectedStudentForReceipt] = useState<any>(null);
-  const [receiptMonths, setReceiptMonths] = useState<string[]>([]);
+  const [receiptItems, setReceiptItems] = useState<any[]>([]); // New state for unified items
   const [monthlyFee, setMonthlyFee] = useState(1500);
 
   useEffect(() => {
     if (selectedStudentForReceipt) {
-      setReceiptMonths(selectedStudentForReceipt.unpaidMonths || []);
+      // Build receipt items from unpaid months and subjects
+      const items = [
+        ...(selectedStudentForReceipt.unpaidMonths || []).map((m: string) => ({
+          type: 'monthly',
+          label: 'Monthly Tuition Fee',
+          subLabel: new Date(m + "-01").toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+          amount: selectedStudentForReceipt.totalFee || 1500,
+          id: m
+        })),
+        ...(selectedStudentForReceipt.unpaidSubjects || []).map((s: any) => ({
+          type: 'subject',
+          label: s.name,
+          subLabel: 'Special Subject Fee',
+          amount: Number(s.fee) || 0,
+          id: s.id
+        }))
+      ];
+      setReceiptItems(items);
       setMonthlyFee(selectedStudentForReceipt.totalFee || 1500);
     }
   }, [selectedStudentForReceipt]);
 
-  const toggleReceiptMonth = (month: string) => {
-    setReceiptMonths(prev => 
-      prev.includes(month) ? prev.filter(m => m !== month) : [...prev, month].sort()
-    );
+  const toggleReceiptItem = (itemId: string, type: 'monthly' | 'subject') => {
+    setReceiptItems(prev => prev.filter(item => !(item.id === itemId && item.type === type)));
   };
 
   // WhatsApp Modal State
@@ -44,11 +61,18 @@ export default function FeeDefaulters() {
   const [sentStatus, setSentStatus] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    Promise.all([getStudents(), getFees(), getClasses(), getAdminSettings()]).then(([studentsData, feesData, classesData, settings]) => {
+    Promise.all([
+      getStudents(), 
+      getFees(), 
+      getClasses(), 
+      getAdminSettings(),
+      getSubjects()
+    ]).then(([studentsData, feesData, classesData, settings, subjectsData]) => {
       setStudents(studentsData || []);
       setFees(feesData || []);
       setClasses(classesData || []);
       setAdminSettings(settings);
+      setSubjects(subjectsData || []);
     });
   }, []);
 
@@ -90,8 +114,8 @@ export default function FeeDefaulters() {
   };
 
   const handleSearch = () => {
-    if (!selectedClass || selectedMonths.length === 0) {
-      alert("Please select Class and at least one Month to search.");
+    if (!selectedClass || (selectedMonths.length === 0 && selectedSubjects.length === 0)) {
+      alert("Please select Class and at least one Month or Subject to search.");
       return;
     }
 
@@ -102,25 +126,34 @@ export default function FeeDefaulters() {
     // Find students in the selected class
     const classStudents = students.filter(s => s.grade === selectedClass);
     
-    // Find students who haven't paid for any of these selected months
+    // Find students who haven't paid for any of these selected months or subjects
     const defaultersList = classStudents.map(student => {
       const studentId = student.student_id || student.id;
+      const studentFees = fees.filter(f => f.studentId === studentId);
       
       // Filter out months from the selection that have been paid
       const unpaidMonths = selectedMonths.filter(m => {
-        return !fees.some(fee => 
-          (fee.studentId === studentId) && 
-          fee.month === m
-        );
+        return !studentFees.some(fee => fee.month === m && (fee.type === "Monthly Tuition" || !fee.type));
       });
 
-      if (unpaidMonths.length === 0) return null;
+      // Filter out subjects from the selection that have been paid
+      const unpaidSubjects = subjects
+        .filter(s => selectedSubjects.includes(s.name))
+        .filter(s => {
+          return !studentFees.some(fee => fee.itemName === s.name && fee.type === "Subject Fee");
+        });
+
+      if (unpaidMonths.length === 0 && unpaidSubjects.length === 0) return null;
+
+      const monthsAmount = unpaidMonths.length * classFee;
+      const subjectsAmount = unpaidSubjects.reduce((sum, s) => sum + (Number(s.fee) || 0), 0);
 
       return {
         ...student,
         unpaidMonths,
+        unpaidSubjects,
         totalFee: classFee,
-        dueAmount: unpaidMonths.length * classFee
+        dueAmount: monthsAmount + subjectsAmount
       };
     }).filter(Boolean);
 
@@ -160,11 +193,16 @@ export default function FeeDefaulters() {
   const handleSendWhatsApp = () => {
     if (!currentStudent) return;
 
-    const monthsText = currentStudent.unpaidMonths?.length > 1 
-      ? `your fees for ${currentStudent.unpaidMonths.length} months are pending`
-      : `your fee for the month is pending`;
+    let monthsText = "";
+    if (currentStudent.unpaidMonths?.length > 0 && currentStudent.unpaidSubjects?.length > 0) {
+      monthsText = `your fees for ${currentStudent.unpaidMonths.length} months and ${currentStudent.unpaidSubjects.length} subjects are pending`;
+    } else if (currentStudent.unpaidMonths?.length > 0) {
+      monthsText = `your fees for ${currentStudent.unpaidMonths.length} months are pending`;
+    } else {
+      monthsText = `your subject fees for ${currentStudent.unpaidSubjects.map((s:any) => s.name).join(', ')} are pending`;
+    }
 
-    const message = `Dear ${currentStudent.name}, ${monthsText}. Please pay the due amount of LKR ${currentStudent.dueAmount} as soon as possible. Thank you.`;
+    const message = `Dear ${currentStudent.name}, ${monthsText}. Total due amount is LKR ${currentStudent.dueAmount}. Please pay as soon as possible. Thank you.`;
     const encodedMessage = encodeURIComponent(message);
     
     // Use phone number if available, otherwise just open WhatsApp Web to select contact
@@ -211,81 +249,120 @@ export default function FeeDefaulters() {
       
       {/* Top Section: Filters */}
       <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200 mb-6 font-sans">
-        <div className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="w-full md:w-1/5">
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Select Class</label>
-            <select 
-              value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 bg-white font-bold"
-            >
-              <option value="">-- Select Class --</option>
-              {classes.length > 0 ? (
-                classes.map((cls) => (
-                  <option key={cls.id} value={cls.name}>{cls.name}</option>
-                ))
-              ) : (
-                GRADES.map(grade => (
-                  <option key={grade} value={grade}>{grade}</option>
-                ))
-              )}
-            </select>
-          </div>
+        <div className="flex flex-col gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-4 border-b border-gray-100">
+            <div className="w-full">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Select Class</label>
+              <select 
+                value={selectedClass}
+                onChange={(e) => setSelectedClass(e.target.value)}
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 bg-white font-bold text-gray-700"
+              >
+                <option value="">-- Select Class --</option>
+                {classes.length > 0 ? (
+                  classes.map((cls) => (
+                    <option key={cls.id} value={cls.name}>{cls.name}</option>
+                  ))
+                ) : (
+                  GRADES.map(grade => (
+                    <option key={grade} value={grade}>{grade}</option>
+                  ))
+                )}
+              </select>
+            </div>
 
-          <div className="w-full md:w-1/5">
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Select Year</label>
-            <select 
-              value={selectedYear}
-              onChange={(e) => {
-                setSelectedYear(e.target.value);
-                setSelectedMonths([]); // Reset month selection when year changes
-              }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 bg-white font-bold"
-            >
-              {[2024, 2025, 2026, 2027, 2028].map(year => (
-                <option key={year} value={year.toString()}>{year}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="flex-1 w-full">
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Select Months</label>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 border border-blue-50 bg-blue-50/30 rounded-lg p-2 max-h-32 overflow-y-auto">
-              {Array.from({ length: 12 }, (_, i) => {
-                const date = new Date(parseInt(selectedYear), i, 1);
-                const monthVal = `${selectedYear}-${(i + 1).toString().padStart(2, '0')}`;
-                
-                const isSelected = selectedMonths.includes(monthVal);
-                return (
-                  <label key={monthVal} className={`flex items-center gap-1.5 p-1.5 rounded-md border cursor-pointer transition-all ${isSelected ? 'bg-blue-600 border-blue-600 shadow-sm shadow-blue-500/20' : 'bg-white border-gray-100 hover:border-gray-200'}`}>
-                    <input 
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => {
-                        setSelectedMonths(prev => 
-                          prev.includes(monthVal) ? prev.filter(m => m !== monthVal) : [...prev, monthVal].sort()
-                        );
-                      }}
-                      className="hidden"
-                    />
-                    <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border-2 ${isSelected ? 'bg-white border-white' : 'bg-gray-100 border-gray-300'}`}>
-                      {isSelected && <CheckCircle size={10} strokeWidth={3} className="text-blue-600" />}
-                    </div>
-                    <span className={`text-[10px] font-black uppercase tracking-tighter truncate ${isSelected ? 'text-white' : 'text-gray-500'}`}>
-                      {date.toLocaleString('en-US', { month: 'short' })}
-                    </span>
-                  </label>
-                );
-              })}
+            <div className="w-full">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Select Year</label>
+              <select 
+                value={selectedYear}
+                onChange={(e) => {
+                  setSelectedYear(e.target.value);
+                  setSelectedMonths([]); // Reset month selection when year changes
+                }}
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 bg-white font-bold text-gray-700"
+              >
+                {[2024, 2025, 2026, 2027, 2028].map(year => (
+                  <option key={year} value={year.toString()}>{year}</option>
+                ))}
+              </select>
             </div>
           </div>
           
-          <div className="w-full md:w-auto">
+          <div className="flex flex-col lg:flex-row gap-8">
+            <div className="flex-1">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+                <span>Select Months</span>
+                <span className="text-blue-500 lowercase font-bold tracking-normal italic text-[9px]">{selectedMonths.length} months selected</span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 border border-blue-50 bg-blue-50/30 rounded-xl p-3 max-h-64 overflow-y-auto">
+                {Array.from({ length: 12 }, (_, i) => {
+                  const date = new Date(parseInt(selectedYear), i, 1);
+                  const monthVal = `${selectedYear}-${(i + 1).toString().padStart(2, '0')}`;
+                  
+                  const isSelected = selectedMonths.includes(monthVal);
+                  return (
+                    <label key={monthVal} className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-blue-600 border-blue-600 shadow-md shadow-blue-500/10' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+                      <input 
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {
+                          setSelectedMonths(prev => 
+                            prev.includes(monthVal) ? prev.filter(m => m !== monthVal) : [...prev, monthVal].sort()
+                          );
+                        }}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className={`text-xs font-black uppercase tracking-tight ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+                        {date.toLocaleString('en-US', { month: 'long' })}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {subjects.length > 0 && (
+              <div className="flex-1">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Select Subjects (Extra Fees)</label>
+                <div className="flex flex-col gap-2 border border-pink-50 bg-pink-50/30 rounded-xl p-3 max-h-64 overflow-y-auto">
+                  {subjects.map((sub) => {
+                    const isSelected = selectedSubjects.includes(sub.name);
+                    return (
+                      <label key={sub.id} className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-pink-600 border-pink-600 shadow-md shadow-pink-500/10' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+                        <input 
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            setSelectedSubjects(prev => 
+                              prev.includes(sub.name) ? prev.filter(s => s !== sub.name) : [...prev, sub.name]
+                            );
+                          }}
+                          className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                        />
+                        <div className="flex-1 flex justify-between items-center">
+                          <span className={`text-xs font-black uppercase tracking-tight ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+                            {sub.name}
+                          </span>
+                          {sub.fee && sub.fee !== "0" && (
+                            <span className={`text-[10px] font-bold ${isSelected ? 'text-pink-100' : 'text-blue-500'}`}>
+                              LKR {sub.fee}
+                            </span>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="pt-2">
             <button 
               onClick={handleSearch}
-              className="h-[44px] bg-blue-600 hover:bg-blue-700 text-white font-black px-10 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 hover:scale-105"
+              className="w-full md:w-auto min-w-[200px] h-[52px] bg-blue-600 hover:bg-blue-700 text-white font-black px-10 rounded-xl transition-all flex items-center justify-center gap-2 shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-100"
             >
-              <Search size={18} /> SEARCH
+              <Search size={20} /> SEARCH DEFAULTERS
             </button>
           </div>
         </div>
@@ -491,10 +568,13 @@ export default function FeeDefaulters() {
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-2">Message Preview</p>
                     <div className="bg-white border border-gray-200 rounded-md p-3 text-sm text-gray-700 whitespace-pre-wrap">
-                      Dear {currentStudent.name}, {currentStudent.unpaidMonths?.length > 1 
-                        ? `your fees for ${currentStudent.unpaidMonths.length} months are pending`
-                        : `your fee for the month is pending`
-                      }. Please pay the due amount of LKR {currentStudent.dueAmount} as soon as possible. Thank you.
+                      Dear {currentStudent.name}, {
+                        (currentStudent.unpaidMonths?.length > 0 && currentStudent.unpaidSubjects?.length > 0)
+                        ? `your fees for ${currentStudent.unpaidMonths.length} months and ${currentStudent.unpaidSubjects.length} subjects are pending`
+                        : currentStudent.unpaidMonths?.length > 0
+                          ? `your fees for ${currentStudent.unpaidMonths.length} months are pending`
+                          : `your subject fees for ${currentStudent.unpaidSubjects.map((s:any) => s.name).join(', ')} are pending`
+                      }. Total due amount is LKR {currentStudent.dueAmount}. Please pay as soon as possible. Thank you.
                     </div>
                   </div>
                 </div>
@@ -613,15 +693,23 @@ export default function FeeDefaulters() {
                     <span>Amount</span>
                   </div>
                   <div className="divide-y divide-gray-100 text-[11px]">
-                    {receiptMonths.map((m) => (
-                      <div key={m} className="py-3 flex justify-between items-center group">
+                    {receiptItems.map((item, idx) => (
+                      <div key={`${item.type}-${item.id}-${idx}`} className="py-3 flex justify-between items-center group relative">
                         <div>
-                          <p className="font-black text-gray-800 uppercase tracking-tighter">Monthly Tuition Fee</p>
+                          <p className="font-black text-gray-800 uppercase tracking-tighter">{item.label}</p>
                           <p className="text-[9px] text-gray-400 font-bold italic tracking-wider">
-                            {new Date(m + "-01").toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                            {item.subLabel}
                           </p>
                         </div>
-                        <p className="font-black text-gray-900">LKR {monthlyFee}.00</p>
+                        <div className="flex items-center gap-4">
+                          <p className="font-black text-gray-900">LKR {item.amount}.00</p>
+                          <button 
+                            onClick={() => toggleReceiptItem(item.id, item.type as any)}
+                            className="text-red-400 hover:text-red-600 transition-colors md:opacity-0 group-hover:opacity-100 print:hidden"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -632,11 +720,11 @@ export default function FeeDefaulters() {
                   <div className="w-52 space-y-2">
                     <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                       <span>Sub Total</span>
-                      <span className="text-gray-900 font-black">LKR {receiptMonths.length * monthlyFee}.00</span>
+                      <span className="text-gray-900 font-black">LKR {receiptItems.reduce((acc, curr) => acc + curr.amount, 0)}.00</span>
                     </div>
                     <div className="bg-pink-600 text-white p-3 rounded-lg flex justify-between items-center shadow-lg transform rotate-1">
                       <span className="text-[9px] font-black uppercase tracking-widest italic">Total Due</span>
-                      <span className="text-lg font-black tracking-tighter">LKR {receiptMonths.length * monthlyFee}.00</span>
+                      <span className="text-lg font-black tracking-tighter">LKR {receiptItems.reduce((acc, curr) => acc + curr.amount, 0)}.00</span>
                     </div>
                   </div>
                 </div>
