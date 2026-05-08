@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { getStudents, saveStudents, getFees, saveFees, getClasses, getAdminSettings, getSubjects } from "../../lib/db";
-import { Search, Calendar, CreditCard, User, BookOpen, DollarSign, CheckCircle, Printer, Plus } from "lucide-react";
+import { Search, Calendar, CreditCard, User, BookOpen, DollarSign, CheckCircle, Printer } from "lucide-react";
 
 export default function CollectFee() {
   const [students, setStudents] = useState<any[]>([]);
@@ -21,8 +21,6 @@ export default function CollectFee() {
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
   const [totalAmount, setTotalAmount] = useState(0);
   const [isManualAmount, setIsManualAmount] = useState(false);
-  const [customItem, setCustomItem] = useState({ name: "", amount: "" });
-  const [showCustomForm, setShowCustomForm] = useState(false);
 
   const [subjects, setSubjects] = useState<any[]>([]);
   const [feeSettings, setFeeSettings] = useState<any[]>([]);
@@ -167,23 +165,6 @@ export default function CollectFee() {
         }
       });
     }
-  };
-
-  const addCustomItem = () => {
-    if (!customItem.name || !customItem.amount) return;
-    
-    setSelectedItems(prev => [...prev, {
-      id: `custom-${Date.now()}`,
-      type: 'Other',
-      label: customItem.name,
-      itemName: customItem.name,
-      amount: parseInt(customItem.amount) || 0,
-      category: 'Other'
-    }]);
-    
-    setCustomItem({ name: "", amount: "" });
-    setShowCustomForm(false);
-    setIsManualAmount(false);
   };
 
   const handleSubmitPayment = async (e: React.FormEvent) => {
@@ -517,64 +498,6 @@ export default function CollectFee() {
                          </div>
                        </div>
 
-                       {/* Custom Item Form */}
-                       <div className="border-t border-dashed border-gray-200 pt-4 mt-2">
-                         {!showCustomForm ? (
-                           <button 
-                             type="button"
-                             onClick={() => setShowCustomForm(true)}
-                             className="text-[10px] font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest flex items-center gap-1 transition-colors group"
-                           >
-                             <Plus size={14} className="group-hover:rotate-90 transition-transform" /> Add Manual Extra Class Fee (e.g. வினா விடை வகுப்பு)
-                           </button>
-                         ) : (
-                           <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 shadow-sm space-y-3">
-                             <div className="flex justify-between items-center">
-                               <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Add Manual Special Fee</h4>
-                               <p className="text-[9px] text-blue-400 font-bold italic">Ex: 30-Day Course / Q&A Class</p>
-                             </div>
-                             <div className="grid grid-cols-2 gap-3">
-                               <input 
-                                 type="text"
-                                 placeholder="Fee Name (e.g. 30 நாள் பாடநெறி)"
-                                 value={customItem.name}
-                                 onChange={(e) => setCustomItem({ ...customItem, name: e.target.value })}
-                                 className="border border-blue-200 rounded px-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 outline-none bg-white font-medium"
-                               />
-                               <div className="relative">
-                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">LKR</span>
-                                 <input 
-                                   type="number"
-                                   placeholder="Amount"
-                                   value={customItem.amount}
-                                   onChange={(e) => setCustomItem({ ...customItem, amount: e.target.value })}
-                                   className="w-full border border-blue-200 rounded pl-10 pr-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 outline-none bg-white font-bold"
-                                 />
-                               </div>
-                             </div>
-                             <div className="flex gap-2">
-                               <button 
-                                 type="button"
-                                 onClick={addCustomItem}
-                                 disabled={!customItem.name || !customItem.amount}
-                                 className="bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                               >
-                                 Add to List
-                               </button>
-                               <button 
-                                 type="button"
-                                 onClick={() => {
-                                   setShowCustomForm(false);
-                                   setCustomItem({ name: "", amount: "" });
-                                 }}
-                                 className="text-gray-500 text-[10px] font-black uppercase tracking-widest px-4 py-2 hover:text-gray-700"
-                               >
-                                 Cancel
-                               </button>
-                             </div>
-                           </div>
-                         )}
-                       </div>
                     </div>
 
                     <div>
