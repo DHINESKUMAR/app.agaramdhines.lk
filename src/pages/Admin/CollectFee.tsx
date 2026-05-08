@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { getStudents, saveStudents, getFees, saveFees, getClasses, getAdminSettings, getSubjects } from "../../lib/db";
-import { Search, Calendar, CreditCard, User, BookOpen, DollarSign, CheckCircle, Printer } from "lucide-react";
+import { Search, Calendar, CreditCard, User, BookOpen, DollarSign, CheckCircle, Printer, Plus } from "lucide-react";
 
 export default function CollectFee() {
   const [students, setStudents] = useState<any[]>([]);
@@ -21,6 +21,8 @@ export default function CollectFee() {
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
   const [totalAmount, setTotalAmount] = useState(0);
   const [isManualAmount, setIsManualAmount] = useState(false);
+  const [customItem, setCustomItem] = useState({ name: "", amount: "" });
+  const [showCustomForm, setShowCustomForm] = useState(false);
 
   const [subjects, setSubjects] = useState<any[]>([]);
   const [feeSettings, setFeeSettings] = useState<any[]>([]);
@@ -100,18 +102,22 @@ export default function CollectFee() {
       amount: tuitionAmount
     }];
 
-    // Also auto-add sub subjects student is enrolled in
+    // Also auto-add subjects student is enrolled in (Main or Sub)
     if (student.subjects && student.subjects.length > 0) {
       student.subjects.forEach((subName: string) => {
-        const subData = subjects.find(s => s.name === subName && s.category === 'Sub');
+        const subData = subjects.find(s => s.name === subName);
         if (subData) {
-          items.push({
-            id: `sub-${subName}-${Date.now()}`,
-            type: 'Subject Fee',
-            label: subName,
-            itemName: subName,
-            amount: parseInt(subData.fee) || 0
-          });
+          // Check if it's already added as tuition (usually not, but good to be safe)
+          if (!items.find(i => i.itemName === subName)) {
+            items.push({
+              id: `sub-${subName}-${Date.now()}`,
+              type: 'Subject Fee',
+              label: subName,
+              itemName: subName,
+              amount: parseInt(subData.fee) || 0,
+              category: subData.category
+            });
+          }
         }
       });
     }
@@ -126,7 +132,7 @@ export default function CollectFee() {
     }
   }, [selectedItems, isManualAmount]);
 
-  const toggleItem = (itemType: string, itemName: string, amount: number, isSubject: boolean) => {
+  const toggleItem = (itemType: string, itemName: string, amount: number, isSubject: boolean, category?: string) => {
     setIsManualAmount(false); // Reset manual override when changing selection
     if (isSubject) {
       setSelectedItems(prev => {
@@ -139,7 +145,8 @@ export default function CollectFee() {
             type: 'Subject Fee',
             label: itemName,
             itemName: itemName,
-            amount: amount
+            amount: amount,
+            category: category
           }];
         }
       });
@@ -160,6 +167,23 @@ export default function CollectFee() {
         }
       });
     }
+  };
+
+  const addCustomItem = () => {
+    if (!customItem.name || !customItem.amount) return;
+    
+    setSelectedItems(prev => [...prev, {
+      id: `custom-${Date.now()}`,
+      type: 'Other',
+      label: customItem.name,
+      itemName: customItem.name,
+      amount: parseInt(customItem.amount) || 0,
+      category: 'Other'
+    }]);
+    
+    setCustomItem({ name: "", amount: "" });
+    setShowCustomForm(false);
+    setIsManualAmount(false);
   };
 
   const handleSubmitPayment = async (e: React.FormEvent) => {
@@ -416,56 +440,140 @@ export default function CollectFee() {
 
                   {/* Payment Inputs */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div className="md:col-span-2">
-                       <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Select Items to Pay</label>
-                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                         {/* Monthly Tuition Checkbox */}
-                         <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedItems.find(i => i.type === 'Monthly Tuition') ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
-                           <input 
-                             type="checkbox"
-                             checked={!!selectedItems.find(i => i.type === 'Monthly Tuition')}
-                             onChange={() => toggleItem('Monthly Tuition', '', 0, false)}
-                             className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                           />
-                           <div className="flex-1">
-                             <p className="text-sm font-bold text-gray-800">Monthly Tuition</p>
-                             <div className="flex items-center gap-2 mt-1">
+                    <div className="md:col-span-2 space-y-6">
+                       <div>
+                         <label className="block text-xs font-black text-blue-500 uppercase tracking-widest mb-3 border-l-4 border-blue-500 pl-2">Main Subjects & Tuition</label>
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                           {/* Monthly Tuition Checkbox */}
+                           <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedItems.find(i => i.type === 'Monthly Tuition') ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+                             <input 
+                               type="checkbox"
+                               checked={!!selectedItems.find(i => i.type === 'Monthly Tuition')}
+                               onChange={() => toggleItem('Monthly Tuition', '', 0, false)}
+                               className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                             />
+                             <div className="flex-1">
+                               <p className="text-sm font-bold text-gray-800">Monthly Tuition</p>
+                               <div className="flex items-center gap-2 mt-1">
+                                 <input 
+                                   type="month" 
+                                   value={paymentData.month}
+                                   onClick={(e) => e.stopPropagation()}
+                                   onChange={(e) => {
+                                     e.stopPropagation();
+                                     setPaymentData({...paymentData, month: e.target.value});
+                                   }}
+                                   className="text-[10px] border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                 />
+                               </div>
+                             </div>
+                             <p className="font-bold text-blue-600">LKR {feeSettings.find(f => f.label.includes(selectedStudent?.grade))?.amount.replace(/\D/g, '') || 1500}</p>
+                           </label>
+
+                           {/* Main Subjects Checkboxes */}
+                           {subjects.filter(s => s.category === "Main").map((sub) => {
+                             const isSelected = !!selectedItems.find(i => i.itemName === sub.name && i.type === 'Subject Fee');
+                             return (
+                               <label key={sub.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+                                 <input 
+                                   type="checkbox"
+                                   checked={isSelected}
+                                   onChange={() => toggleItem('Subject Fee', sub.name, parseInt(sub.fee) || 0, true, 'Main')}
+                                   className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                 />
+                                 <div className="flex-1">
+                                   <p className="text-sm font-bold text-gray-800">{sub.name}</p>
+                                   <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500">Main Subject</p>
+                                 </div>
+                                 <p className="font-bold text-blue-600">LKR {sub.fee || 0}</p>
+                               </label>
+                             );
+                           })}
+                         </div>
+                       </div>
+
+                       <div>
+                         <label className="block text-xs font-black text-pink-500 uppercase tracking-widest mb-3 border-l-4 border-pink-500 pl-2">Sub Subjects (Extra Classes)</label>
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                           {/* Sub Subjects Checkboxes */}
+                           {subjects.filter(s => s.category === "Sub").map((sub) => {
+                             const isSelected = !!selectedItems.find(i => i.itemName === sub.name && i.type === 'Subject Fee');
+                             return (
+                               <label key={sub.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-pink-50 border-pink-200 shadow-sm' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+                                 <input 
+                                   type="checkbox"
+                                   checked={isSelected}
+                                   onChange={() => toggleItem('Subject Fee', sub.name, parseInt(sub.fee) || 0, true, 'Sub')}
+                                   className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                                 />
+                                 <div className="flex-1">
+                                   <p className="text-sm font-bold text-gray-800">{sub.name}</p>
+                                   <p className="text-[10px] font-bold uppercase tracking-widest text-pink-500">Sub Subject</p>
+                                 </div>
+                                 <p className="font-bold text-pink-600">LKR {sub.fee || 0}</p>
+                               </label>
+                             );
+                           })}
+                         </div>
+                       </div>
+
+                       {/* Custom Item Form */}
+                       <div className="border-t border-dashed border-gray-200 pt-4 mt-2">
+                         {!showCustomForm ? (
+                           <button 
+                             type="button"
+                             onClick={() => setShowCustomForm(true)}
+                             className="text-[10px] font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest flex items-center gap-1 transition-colors group"
+                           >
+                             <Plus size={14} className="group-hover:rotate-90 transition-transform" /> Add Manual Extra Class Fee (e.g. வினா விடை வகுப்பு)
+                           </button>
+                         ) : (
+                           <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 shadow-sm space-y-3">
+                             <div className="flex justify-between items-center">
+                               <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Add Manual Special Fee</h4>
+                               <p className="text-[9px] text-blue-400 font-bold italic">Ex: 30-Day Course / Q&A Class</p>
+                             </div>
+                             <div className="grid grid-cols-2 gap-3">
                                <input 
-                                 type="month" 
-                                 value={paymentData.month}
-                                 onClick={(e) => e.stopPropagation()}
-                                 onChange={(e) => {
-                                   e.stopPropagation();
-                                   setPaymentData({...paymentData, month: e.target.value});
-                                 }}
-                                 className="text-[10px] border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                 type="text"
+                                 placeholder="Fee Name (e.g. 30 நாள் பாடநெறி)"
+                                 value={customItem.name}
+                                 onChange={(e) => setCustomItem({ ...customItem, name: e.target.value })}
+                                 className="border border-blue-200 rounded px-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 outline-none bg-white font-medium"
                                />
+                               <div className="relative">
+                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">LKR</span>
+                                 <input 
+                                   type="number"
+                                   placeholder="Amount"
+                                   value={customItem.amount}
+                                   onChange={(e) => setCustomItem({ ...customItem, amount: e.target.value })}
+                                   className="w-full border border-blue-200 rounded pl-10 pr-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 outline-none bg-white font-bold"
+                                 />
+                               </div>
+                             </div>
+                             <div className="flex gap-2">
+                               <button 
+                                 type="button"
+                                 onClick={addCustomItem}
+                                 disabled={!customItem.name || !customItem.amount}
+                                 className="bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                               >
+                                 Add to List
+                               </button>
+                               <button 
+                                 type="button"
+                                 onClick={() => {
+                                   setShowCustomForm(false);
+                                   setCustomItem({ name: "", amount: "" });
+                                 }}
+                                 className="text-gray-500 text-[10px] font-black uppercase tracking-widest px-4 py-2 hover:text-gray-700"
+                               >
+                                 Cancel
+                               </button>
                              </div>
                            </div>
-                           <p className="font-bold text-blue-600">LKR {feeSettings.find(f => f.label.includes(selectedStudent?.grade))?.amount.replace(/\D/g, '') || 1500}</p>
-                         </label>
-
-                         {/* Sub Subjects Checkboxes */}
-                         {subjects.filter(s => s.category === "Sub").map((sub) => {
-                           const isSelected = !!selectedItems.find(i => i.itemName === sub.name && i.type === 'Subject Fee');
-                           return (
-                             <label key={sub.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-pink-50 border-pink-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
-                               <input 
-                                 type="checkbox"
-                                 checked={isSelected}
-                                 onChange={() => toggleItem('Subject Fee', sub.name, parseInt(sub.fee) || 0, true)}
-                                 className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-                               />
-                               <div className="flex-1">
-                                 <p className="text-sm font-bold text-gray-800">{sub.name}</p>
-                                 <p className={`text-[10px] font-bold uppercase tracking-widest ${sub.category === 'Main' ? 'text-blue-500' : 'text-pink-500'}`}>
-                                   {sub.category === 'Main' ? 'Main Subject' : 'Sub Subject'}
-                                 </p>
-                               </div>
-                               <p className="font-bold text-pink-600">LKR {sub.fee || 0}</p>
-                             </label>
-                           );
-                         })}
+                         )}
                        </div>
                     </div>
 
@@ -859,7 +967,7 @@ export default function CollectFee() {
                                   <tr>
                                     <td>
                                       <div class="item-name">${item.label.toUpperCase()}</div>
-                                      <div class="item-desc">${item.type === 'Monthly Tuition' ? receiptData.month : (item.type === 'Subject Fee' ? 'Subject Special Fee' : 'Course Fee')}</div>
+                                      <div class="item-desc">${item.type === 'Monthly Tuition' ? receiptData.month : (item.category === 'Main' ? 'Main Subject Fee' : 'Sub Subject Special Fee')}</div>
                                     </td>
                                     <td class="item-amount">LKR ${item.amount}.00</td>
                                   </tr>
