@@ -13,13 +13,13 @@ export default function CollectFee() {
   const [studentFeeHistory, setStudentFeeHistory] = useState<any[]>([]);
   
   const [paymentData, setPaymentData] = useState({
-    amount: "",
     method: "Cash",
     date: new Date().toISOString().split('T')[0],
     month: new Date().toISOString().slice(0, 7), // YYYY-MM format
-    type: "Monthly Tuition", // Default type
-    itemName: "" // Optional name of the subject/course
   });
+
+  const [selectedItems, setSelectedItems] = useState<any[]>([]);
+  const [totalAmount, setTotalAmount] = useState(0);
 
   const [subjects, setSubjects] = useState<any[]>([]);
   const [feeSettings, setFeeSettings] = useState<any[]>([]);
@@ -87,14 +87,82 @@ export default function CollectFee() {
 
   const handleSelectStudent = (student: any) => {
     setSelectedStudent(student);
-    // Don't clear selectedGrade so the list stays visible for easy navigation
+    
+    // Default to Tuition fee for the selected grade
+    const preset = feeSettings.find(f => f.label.includes(student.grade));
+    const tuitionAmount = preset ? parseInt(preset.amount.replace(/\D/g, '')) : 1500;
+    
+    const items = [{
+      id: 'tuition',
+      type: 'Monthly Tuition',
+      label: 'Monthly Tuition',
+      amount: tuitionAmount
+    }];
+
+    // Also auto-add sub subjects student is enrolled in
+    if (student.subjects && student.subjects.length > 0) {
+      student.subjects.forEach((subName: string) => {
+        const subData = subjects.find(s => s.name === subName && s.category === 'Sub');
+        if (subData) {
+          items.push({
+            id: `sub-${subName}-${Date.now()}`,
+            type: 'Subject Fee',
+            label: subName,
+            itemName: subName,
+            amount: parseInt(subData.fee) || 0
+          });
+        }
+      });
+    }
+    
+    setSelectedItems(items);
+  };
+
+  useEffect(() => {
+    const total = selectedItems.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0);
+    setTotalAmount(total);
+  }, [selectedItems]);
+
+  const toggleItem = (itemType: string, itemName: string, amount: number, isSubject: boolean) => {
+    if (isSubject) {
+      setSelectedItems(prev => {
+        const exists = prev.find(i => i.itemName === itemName && i.type === 'Subject Fee');
+        if (exists) {
+          return prev.filter(i => !(i.itemName === itemName && i.type === 'Subject Fee'));
+        } else {
+          return [...prev, {
+            id: Date.now() + Math.random().toString(),
+            type: 'Subject Fee',
+            label: itemName,
+            itemName: itemName,
+            amount: amount
+          }];
+        }
+      });
+    } else if (itemType === 'Monthly Tuition') {
+      setSelectedItems(prev => {
+        const exists = prev.find(i => i.type === 'Monthly Tuition');
+        if (exists) {
+          return prev.filter(i => i.type !== 'Monthly Tuition');
+        } else {
+          const preset = feeSettings.find(f => f.label.includes(selectedStudent?.grade));
+          const tuitionAmount = preset ? parseInt(preset.amount.replace(/\D/g, '')) : 1500;
+          return [...prev, {
+            id: 'tuition',
+            type: 'Monthly Tuition',
+            label: 'Monthly Tuition',
+            amount: tuitionAmount
+          }];
+        }
+      });
+    }
   };
 
   const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedStudent || !paymentData.amount || !paymentData.date || !paymentData.month) {
-      alert("Please fill in all required fields.");
+    if (!selectedStudent || selectedItems.length === 0 || !paymentData.date || !paymentData.month) {
+      alert("Please select at least one item and fill in all required fields.");
       return;
     }
 
@@ -108,46 +176,26 @@ export default function CollectFee() {
   const processPayment = async (transactionId?: string) => {
     try {
       const existingFees = await getFees() || [];
-      let updatedFees;
-      let currentFee;
+      const batchId = `BATCH-${Date.now()}`;
+      const txnIdBase = transactionId || `TXN-${Math.floor(Math.random() * 1000000)}`;
+      
+      const newFeeRecords = selectedItems.map((item, idx) => ({
+        id: `${Date.now()}-${idx}`,
+        studentId: selectedStudent.student_id || selectedStudent.id,
+        studentName: selectedStudent.name,
+        grade: selectedStudent.grade,
+        month: item.type === 'Monthly Tuition' ? paymentData.month : "",
+        amount: item.amount.toString(),
+        method: paymentData.method,
+        date: paymentData.date,
+        type: item.type,
+        itemName: item.itemName || "",
+        transactionId: selectedItems.length > 1 ? `${txnIdBase}-${idx + 1}` : txnIdBase,
+        batchId: batchId,
+        timestamp: new Date().toISOString()
+      }));
 
-      if (editingFeeId) {
-        // Edit existing fee
-        updatedFees = existingFees.map((fee: any) => {
-          if (fee.id === editingFeeId) {
-            currentFee = {
-              ...fee,
-              month: paymentData.month,
-              amount: paymentData.amount,
-              method: paymentData.method,
-              date: paymentData.date,
-              type: paymentData.type,
-              itemName: paymentData.itemName
-            };
-            return currentFee;
-          }
-          return fee;
-        });
-        setEditingFeeId(null);
-      } else {
-        // Create new fee
-        currentFee = {
-          id: Date.now().toString(),
-          studentId: selectedStudent.student_id || selectedStudent.id,
-          studentName: selectedStudent.name,
-          grade: selectedStudent.grade,
-          month: paymentData.month,
-          amount: paymentData.amount,
-          method: paymentData.method,
-          date: paymentData.date,
-          type: paymentData.type,
-          itemName: paymentData.itemName,
-          transactionId: transactionId || `TXN-${Math.floor(Math.random() * 1000000)}`,
-          timestamp: new Date().toISOString()
-        };
-        updatedFees = [...existingFees, currentFee];
-      }
-
+      const updatedFees = [...existingFees, ...newFeeRecords];
       await saveFees(updatedFees);
       setAllFees(updatedFees);
 
@@ -160,17 +208,20 @@ export default function CollectFee() {
       );
       await saveStudents(updatedStudents);
 
-      setReceiptData(currentFee);
+      setReceiptData({
+        ...newFeeRecords[0],
+        items: selectedItems,
+        totalAmount: totalAmount,
+        transactionId: txnIdBase
+      });
       setShowReceipt(true);
       
       // Reset form
+      setSelectedItems([]);
       setPaymentData({
-        amount: "",
         method: "Cash",
         date: new Date().toISOString().split('T')[0],
         month: new Date().toISOString().slice(0, 7),
-        type: "Monthly Tuition",
-        itemName: ""
       });
       
     } catch (error) {
@@ -192,13 +243,18 @@ export default function CollectFee() {
   const handleEditFee = (fee: any) => {
     setEditingFeeId(fee.id);
     setPaymentData({
-      amount: fee.amount.toString(),
       method: fee.method,
       date: fee.date,
-      month: fee.month,
-      type: fee.type || "Monthly Tuition",
-      itemName: fee.itemName || ""
+      month: fee.month || new Date().toISOString().slice(0, 7),
     });
+    
+    setSelectedItems([{
+      id: fee.id,
+      type: fee.type || 'Monthly Tuition',
+      label: fee.type === 'Subject Fee' ? fee.itemName : fee.type,
+      itemName: fee.itemName,
+      amount: parseInt(fee.amount) || 0
+    }]);
   };
 
   const handleLoadReceipt = (fee: any) => {
@@ -339,108 +395,72 @@ export default function CollectFee() {
 
                   {/* Payment Inputs */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Fee Type <span className="text-red-500">*</span></label>
-                      <select 
-                        value={paymentData.type}
-                        onChange={(e) => {
-                          const type = e.target.value;
-                          let amount = paymentData.amount;
-                          let itemName = "";
-                          
-                          if (type === "Subject Fee") {
-                            // Default to first subject if none selected
-                            if (subjects.length > 0) itemName = subjects[0].name;
-                          } else {
-                            // Find matching fee from settings
-                            const preset = feeSettings.find(f => f.label.includes(selectedStudent.grade));
-                            if (preset) amount = preset.amount.replace(/\D/g, '');
-                          }
-                          
-                          setPaymentData({
-                            ...paymentData, 
-                            type, 
-                            amount,
-                            itemName
-                          });
-                        }}
-                        className="w-full border border-gray-300 rounded-md px-4 py-2.5 focus:ring-blue-500 focus:border-blue-500 bg-white transition-shadow font-bold"
-                      >
-                        <option value="Monthly Tuition">Monthly Tuition</option>
-                        <option value="Subject Fee">Specific Subject Fee</option>
-                        <option value="Admission">Admission Fee</option>
-                        <option value="Other">Other</option>
-                      </select>
+                    <div className="md:col-span-2">
+                       <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Select Items to Pay</label>
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                         {/* Monthly Tuition Checkbox */}
+                         <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedItems.find(i => i.type === 'Monthly Tuition') ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+                           <input 
+                             type="checkbox"
+                             checked={!!selectedItems.find(i => i.type === 'Monthly Tuition')}
+                             onChange={() => toggleItem('Monthly Tuition', '', 0, false)}
+                             className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                           />
+                           <div className="flex-1">
+                             <p className="text-sm font-bold text-gray-800">Monthly Tuition</p>
+                             <div className="flex items-center gap-2 mt-1">
+                               <input 
+                                 type="month" 
+                                 value={paymentData.month}
+                                 onClick={(e) => e.stopPropagation()}
+                                 onChange={(e) => {
+                                   e.stopPropagation();
+                                   setPaymentData({...paymentData, month: e.target.value});
+                                 }}
+                                 className="text-[10px] border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                               />
+                             </div>
+                           </div>
+                           <p className="font-bold text-blue-600">LKR {feeSettings.find(f => f.label.includes(selectedStudent?.grade))?.amount.replace(/\D/g, '') || 1500}</p>
+                         </label>
+
+                         {/* Sub Subjects Checkboxes */}
+                         {subjects.filter(s => s.category === "Sub").map((sub) => {
+                           const isSelected = !!selectedItems.find(i => i.itemName === sub.name && i.type === 'Subject Fee');
+                           return (
+                             <label key={sub.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-pink-50 border-pink-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+                               <input 
+                                 type="checkbox"
+                                 checked={isSelected}
+                                 onChange={() => toggleItem('Subject Fee', sub.name, parseInt(sub.fee) || 0, true)}
+                                 className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                               />
+                               <div className="flex-1">
+                                 <p className="text-sm font-bold text-gray-800">{sub.name}</p>
+                                 <p className={`text-[10px] font-bold uppercase tracking-widest ${sub.category === 'Main' ? 'text-blue-500' : 'text-pink-500'}`}>
+                                   {sub.category === 'Main' ? 'Main Subject' : 'Sub Subject'}
+                                 </p>
+                               </div>
+                               <p className="font-bold text-pink-600">LKR {sub.fee || 0}</p>
+                             </label>
+                           );
+                         })}
+                       </div>
                     </div>
 
-                    {paymentData.type === "Subject Fee" && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Select Subject <span className="text-red-500">*</span></label>
-                        <select 
-                          value={paymentData.itemName}
-                          onChange={(e) => {
-                            const sub = subjects.find(s => s.name === e.target.value);
-                            setPaymentData({
-                              ...paymentData, 
-                              itemName: e.target.value,
-                              amount: sub?.fee || paymentData.amount
-                            });
-                          }}
-                          className="w-full border border-gray-300 rounded-md px-4 py-2.5 focus:ring-blue-500 focus:border-blue-500 bg-white transition-shadow font-bold"
-                        >
-                          <option value="">-- Select Subject --</option>
-                          {subjects
-                            .filter(s => s.category === "Sub")
-                            .map(s => (
-                              <option key={s.id} value={s.name}>{s.name} (LKR {s.fee || "0"})</option>
-                            ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {paymentData.type === "Monthly Tuition" && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Fee Month <span className="text-red-500">*</span></label>
-                      <input 
-                        type="month" 
-                        required
-                        value={paymentData.month}
-                        onChange={(e) => setPaymentData({...paymentData, month: e.target.value})}
-                        className="w-full border border-gray-300 rounded-md px-4 py-2.5 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
-                      />
-                    </div>
-                    )}
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paying Now <span className="text-red-500">*</span></label>
-                      <div className="relative mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount Selected</label>
+                      <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                           <span className="text-gray-500 font-medium">LKR</span>
                         </div>
                         <input 
-                          type="number" 
-                          required
-                          min="1"
-                          placeholder="0.00"
-                          value={paymentData.amount}
-                          onChange={(e) => setPaymentData({...paymentData, amount: e.target.value})}
-                          className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition-shadow font-medium text-gray-900"
+                          type="text" 
+                          readOnly
+                          value={totalAmount}
+                          className="w-full pl-12 pr-4 py-2.5 border border-gray-200 bg-gray-50 rounded-md font-black text-blue-700 text-xl"
                         />
                       </div>
-                      {settings?.fees?.items && settings.fees.items.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {settings.fees.items.map((item: any, idx: number) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => setPaymentData({...paymentData, amount: item.amount})}
-                              className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100 transition-colors"
-                            >
-                              {item.label}: LKR {item.amount}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
 
                     <div>
@@ -558,7 +578,7 @@ export default function CollectFee() {
             <div className="p-6">
               <div className="flex justify-between mb-6 pb-4 border-b border-gray-100">
                 <span className="text-gray-600">Amount to Pay</span>
-                <span className="text-2xl font-bold text-gray-800">LKR {paymentData.amount}</span>
+                <span className="text-2xl font-bold text-gray-800">LKR {totalAmount}</span>
               </div>
               
               {isProcessingPayment ? (
@@ -599,7 +619,7 @@ export default function CollectFee() {
                       onClick={handleMockPayment}
                       className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-md shadow-blue-200"
                     >
-                      Pay LKR {paymentData.amount}
+                      Pay LKR {totalAmount}
                     </button>
                   </div>
                 </>
@@ -631,20 +651,21 @@ export default function CollectFee() {
                   <span className="text-gray-500">Date</span>
                   <span className="font-medium text-gray-800">{receiptData.date}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Type</span>
-                  <span className="font-medium text-gray-800 tracking-tight">{receiptData.type} {receiptData.itemName ? `- ${receiptData.itemName}` : ""}</span>
+                <div className="space-y-2 pt-2">
+                  <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Paid Items</span>
+                  <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+                    {receiptData.items?.map((item: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center p-2 text-xs bg-gray-50">
+                        <span className="font-bold text-gray-700">{item.label} {item.type === 'Monthly Tuition' ? `(${receiptData.month})` : ''}</span>
+                        <span className="font-black text-blue-600">LKR {item.amount}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Payment Method</span>
                   <span className="font-medium text-gray-800">{receiptData.method}</span>
                 </div>
-                {receiptData.type === "Monthly Tuition" && (
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Fee Month</span>
-                  <span className="font-medium text-gray-800">{receiptData.month}</span>
-                </div>
-                )}
               </div>
               
               <div className="mb-6">
@@ -658,7 +679,7 @@ export default function CollectFee() {
               
               <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg border border-blue-100">
                 <span className="font-bold text-blue-900">Amount Paid</span>
-                <span className="text-2xl font-black text-blue-700">LKR {receiptData.amount}</span>
+                <span className="text-2xl font-black text-blue-700">LKR {receiptData.totalAmount || receiptData.amount}</span>
               </div>
             </div>
             
@@ -694,42 +715,152 @@ export default function CollectFee() {
                         <head>
                           <title>Fee Receipt - ${receiptData.studentName}</title>
                           <style>
-                            body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; color: #333; }
-                            .header { text-align: center; margin-bottom: 30px; }
-                            .title { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
-                            .subtitle { color: #666; margin-bottom: 20px; }
-                            .row { display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
-                            .label { color: #666; }
-                            .value { font-weight: bold; }
-                            .box { background: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 20px; }
-                            .total { display: flex; justify-content: space-between; margin-top: 30px; padding: 20px; background: #f0f7ff; border-radius: 8px; font-weight: bold; font-size: 18px; }
-                            @media print { body { padding: 0; } }
+                            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+                            body { font-family: 'Inter', sans-serif; padding: 0; margin: 0; color: #1a1a1a; background: #fff; }
+                            .receipt { max-width: 800px; margin: 0 auto; padding: 40px; position: relative; border: 1px solid #eee; }
+                            
+                            .paid-banner {
+                              position: absolute;
+                              top: 20px;
+                              right: -30px;
+                              background: #ef008c;
+                              color: white;
+                              padding: 5px 60px;
+                              transform: rotate(45deg);
+                              font-weight: 900;
+                              text-transform: uppercase;
+                              letter-spacing: 2px;
+                              font-size: 14px;
+                              box-shadow: 0 2px 10px rgba(239, 0, 140, 0.3);
+                            }
+
+                            .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #f8f8f8; padding-bottom: 30px; }
+                            .logo-placeholder { 
+                              width: 80px; 
+                              height: 80px; 
+                              background: #fff; 
+                              border-radius: 50%; 
+                              margin: 0 auto 15px;
+                              display: flex;
+                              align-items: center;
+                              justify-content: center;
+                              border: 4px solid #f0f0f0;
+                              overflow: hidden;
+                            }
+                            .logo-placeholder img { width: 100%; height: 100%; object-fit: cover; }
+                            
+                            .academy-name { font-size: 28px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: -0.5px; }
+                            .slogan { font-size: 12px; color: #ef008c; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; margin-top: 5px; }
+                            
+                            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 40px; padding: 0 10px; }
+                            .info-label { font-size: 11px; font-weight: 900; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px; margin-bottom: 5px; }
+                            .info-value { font-size: 15px; font-weight: 700; color: #1e293b; }
+                            
+                            .table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+                            .table th { text-align: left; background: #f8fafc; padding: 12px 15px; font-size: 11px; font-weight: 900; text-transform: uppercase; color: #64748b; letter-spacing: 1px; border-top: 1px solid #f1f5f9; }
+                            .table td { padding: 15px; border-bottom: 1px solid #f1f5f9; }
+                            .item-name { font-weight: 700; font-size: 14px; color: #334155; }
+                            .item-desc { font-size: 11px; color: #94a3b8; font-style: italic; margin-top: 2px; }
+                            .item-amount { font-weight: 900; font-size: 14px; color: #0f172a; text-align: right; }
+                            
+                            .totals-container { margin-left: auto; width: 300px; padding: 0 10px; }
+                            .total-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; }
+                            .total-label { font-size: 12px; font-weight: 900; text-transform: uppercase; color: #94a3b8; }
+                            .total-value-sub { font-size: 14px; font-weight: 900; color: #334155; }
+                            
+                            .grand-total { 
+                              background: #ef008c; 
+                              color: white; 
+                              padding: 15px 20px; 
+                              border-radius: 12px; 
+                              margin-top: 15px;
+                              box-shadow: 0 10px 15px -3px rgba(239, 0, 140, 0.3);
+                            }
+                            .grand-total .total-label { color: #fff; opacity: 0.8; }
+                            .grand-total .total-value { font-size: 22px; font-weight: 900; }
+                            
+                            .footer { border-top: 1px dashed #e2e8f0; margin-top: 60px; padding-top: 30px; text-align: center; }
+                            .footer-icon { color: #ef008c; font-size: 20px; margin-bottom: 15px; display: block; }
+                            .footer-note { font-size: 10px; font-weight: 900; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px; margin-bottom: 10px; }
+                            .thanks { font-size: 14px; font-weight: 800; color: #1e293b; margin-top: 5px; }
+
+                            @media print {
+                              .receipt { border: none; padding: 0; }
+                              .paid-banner { -webkit-print-color-adjust: exact; }
+                              .grand-total { -webkit-print-color-adjust: exact; background-color: #ef008c !important; color: white !important; }
+                            }
                           </style>
                         </head>
                         <body>
-                          <div class="header">
-                            <div class="title">Agaram Dhines Academy</div>
-                            <div class="subtitle">Fee Payment Receipt</div>
-                          </div>
-                          <div class="row"><span class="label">Receipt No:</span><span class="value">${receiptData.transactionId}</span></div>
-                          <div class="row"><span class="label">Date:</span><span class="value">${receiptData.date}</span></div>
-                          <div class="row"><span class="label">Payment Method:</span><span class="value">${receiptData.method}</span></div>
-                          <div class="row"><span class="label">Payment for:</span><span class="value">${receiptData.type} ${receiptData.itemName ? `(${receiptData.itemName})` : ""}</span></div>
-                          ${receiptData.type === 'Monthly Tuition' ? `<div class="row"><span class="label">Fee Month:</span><span class="value">${receiptData.month}</span></div>` : ''}
-                          
-                          <div class="box">
-                            <div style="font-weight:bold; margin-bottom:5px;">Student Details</div>
-                            <div>${receiptData.studentName}</div>
-                            <div style="color:#666; font-size:14px;">ID: ${receiptData.studentId} | Class: ${receiptData.grade}</div>
-                          </div>
-                          
-                          <div class="total">
-                            <span>Amount Paid</span>
-                            <span>LKR ${receiptData.amount}</span>
-                          </div>
-                          
-                          <div style="text-align:center; margin-top:50px; color:#888; font-size:12px;">
-                            This is a computer generated receipt and does not require a physical signature.
+                          <div class="receipt">
+                            <div class="paid-banner">PAID</div>
+                            
+                            <div class="header">
+                              <div class="logo-placeholder">
+                                <img src="https://firebasestorage.googleapis.com/v0/b/ais-dev-rclyuuaiyzobly4teokhoa.appspot.com/o/admin%2Flogo.png?alt=media" onerror="this.src='https://ui-avatars.com/api/?name=AD&background=ef008c&color=fff'" />
+                              </div>
+                              <div class="academy-name">AGARAM DHINES ONLINE ACADEMY</div>
+                              <div class="slogan">EXCELLENCE IN DIGITAL LEARNING</div>
+                            </div>
+                            
+                            <div class="info-grid">
+                              <div>
+                                <div class="info-label">INVOICED TO</div>
+                                <div class="info-value">${receiptData.studentName}</div>
+                                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
+                                  ID: ${receiptData.studentId}<br>
+                                  Class: ${receiptData.grade}
+                                </div>
+                              </div>
+                              <div style="text-align: right;">
+                                <div class="info-label">RECEIPT INFO</div>
+                                <div class="info-value">Date: ${receiptData.date}</div>
+                                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
+                                  Receipt No: ${receiptData.transactionId}<br>
+                                  Method: ${receiptData.method}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <table class="table">
+                              <thead>
+                                <tr>
+                                  <th>DESCRIPTION</th>
+                                  <th style="text-align: right;">AMOUNT</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                ${receiptData.items?.map((item: any) => `
+                                  <tr>
+                                    <td>
+                                      <div class="item-name">${item.label.toUpperCase()}</div>
+                                      <div class="item-desc">${item.type === 'Monthly Tuition' ? receiptData.month : (item.type === 'Subject Fee' ? 'Subject Special Fee' : 'Course Fee')}</div>
+                                    </td>
+                                    <td class="item-amount">LKR ${item.amount}.00</td>
+                                  </tr>
+                                `).join('')}
+                              </tbody>
+                            </table>
+                            
+                            <div class="totals-container">
+                              <div class="total-row">
+                                <span class="total-label">SUB TOTAL</span>
+                                <span class="total-value-sub">LKR ${receiptData.totalAmount || receiptData.amount}.00</span>
+                              </div>
+                              <div class="total-row grand-total">
+                                <span class="total-label">TOTAL PAID</span>
+                                <span class="total-value">LKR ${receiptData.totalAmount || receiptData.amount}</span>
+                              </div>
+                            </div>
+                            
+                            <div class="footer">
+                              <span class="footer-icon">✓</span>
+                              <div class="footer-note">GENERATED VIA AGARAM ACADEMY PORTAL</div>
+                              <div class="thanks">THANK YOU FOR YOUR PAYMENT</div>
+                              <div style="font-size: 10px; color: #94a3b8; margin-top: 15px; font-weight: bold;">
+                                excellence in digital learning • www.agaramdhines.lk
+                              </div>
+                            </div>
                           </div>
                         </body>
                       </html>
