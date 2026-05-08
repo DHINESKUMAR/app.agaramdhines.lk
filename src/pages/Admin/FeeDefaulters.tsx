@@ -567,54 +567,6 @@ export default function FeeDefaulters() {
             </div>
             
             <div className="flex-1 overflow-y-auto bg-slate-100 p-4 md:p-8 flex flex-col items-center">
-              {/* Month Selection Area */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8 w-full max-w-[210mm]">
-                <h3 className="text-sm font-black text-gray-700 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <CheckCircle size={18} className="text-pink-600" />
-                  Select Months for Receipt
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {Array.from({ length: 12 }, (_, i) => {
-                    const date = new Date();
-                    date.setMonth(i);
-                    const monthVal = `${selectedYear}-${(i + 1).toString().padStart(2, '0')}`;
-                    const isSelected = receiptMonths.includes(monthVal);
-                    return (
-                      <button
-                        key={monthVal}
-                        onClick={() => toggleReceiptMonth(monthVal)}
-                        className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border-2 flex items-center justify-between ${
-                          isSelected 
-                            ? 'bg-pink-50 border-pink-500 text-pink-700 shadow-sm' 
-                            : 'bg-white border-gray-100 text-gray-500 hover:border-gray-200'
-                        }`}
-                      >
-                        {date.toLocaleString('en-US', { month: 'long' })}
-                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-pink-500 border-pink-500' : 'border-gray-200'}`}>
-                          {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                
-                <div className="mt-6 pt-6 border-t border-gray-100 flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Monthly Fee (LKR)</label>
-                    <input 
-                      type="number"
-                      value={monthlyFee}
-                      onChange={(e) => setMonthlyFee(Number(e.target.value))}
-                      className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-lg font-black text-gray-900 w-32 focus:ring-2 focus:ring-pink-500 outline-none"
-                    />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Total Unpaid Amount</p>
-                    <p className="text-3xl font-black text-gray-900 tracking-tighter">LKR {receiptMonths.length * monthlyFee}.00</p>
-                  </div>
-                </div>
-              </div>
-
               {/* Receipt Preview Container */}
               <div 
                 ref={receiptRef}
