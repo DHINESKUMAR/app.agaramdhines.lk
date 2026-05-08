@@ -92,8 +92,8 @@ export default function CollectFee() {
     setSelectedStudent(student);
     
     // Default to Tuition fee for the selected grade
-    const preset = feeSettings.find(f => f.label.includes(student.grade));
-    const tuitionAmount = preset ? parseInt(preset.amount.replace(/\D/g, '')) : 1500;
+    const classData = classes.find(c => c.name === student.grade);
+    const tuitionAmount = classData ? parseInt(classData.monthlyTuitionFees.toString().replace(/\D/g, '')) : 1500;
     
     const items: any[] = [{
       id: 'tuition',
@@ -156,8 +156,8 @@ export default function CollectFee() {
         if (exists) {
           return prev.filter(i => i.type !== 'Monthly Tuition');
         } else {
-          const preset = feeSettings.find(f => f.label.includes(selectedStudent?.grade));
-          const tuitionAmount = preset ? parseInt(preset.amount.replace(/\D/g, '')) : 1500;
+          const classData = classes.find(c => c.name === selectedStudent?.grade);
+          const tuitionAmount = classData ? parseInt(classData.monthlyTuitionFees.toString().replace(/\D/g, '')) : 1500;
           return [...prev, {
             id: 'tuition',
             type: 'Monthly Tuition',
@@ -467,7 +467,7 @@ export default function CollectFee() {
                                  />
                                </div>
                              </div>
-                             <p className="font-bold text-blue-600">LKR {feeSettings.find(f => f.label.includes(selectedStudent?.grade))?.amount.replace(/\D/g, '') || 1500}</p>
+                             <p className="font-bold text-blue-600">LKR {classes.find(c => c.name === selectedStudent?.grade)?.monthlyTuitionFees || 1500}</p>
                            </label>
 
                            {/* Main Subjects Checkboxes */}
