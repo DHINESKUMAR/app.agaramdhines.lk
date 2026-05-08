@@ -171,24 +171,20 @@ export default function FeeDefaulters() {
     const rawPhone = currentStudent.phone || currentStudent.username || '';
     const cleanPhone = rawPhone.replace(/\D/g, '');
     
-    // If the phone number starts with 0, replace it with Sri Lanka country code 94 (assuming Sri Lanka based on previous context)
-    // Or just pass the clean phone number if it already has a country code
+    // If the phone number starts with 0, replace it with Sri Lanka country code 94
+    // If it's 9 digits and starts with 7, add 94
     let formattedPhone = cleanPhone || '';
     if (formattedPhone.startsWith('0')) {
       formattedPhone = '94' + formattedPhone.substring(1);
+    } else if (formattedPhone.length === 9 && (formattedPhone.startsWith('7') || formattedPhone.startsWith('1') || formattedPhone.startsWith('4'))) {
+      formattedPhone = '94' + formattedPhone;
     }
     
     const phoneParam = formattedPhone ? `phone=${formattedPhone}&` : '';
     const whatsappUrl = `https://api.whatsapp.com/send?${phoneParam}text=${encodedMessage}`;
     
-    // Create an anchor element and click it to avoid popup blockers in some browsers
-    const link = document.createElement('a');
-    link.href = whatsappUrl;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Use window.open for better reliability across browsers
+    window.open(whatsappUrl, '_blank');
     
     // Mark as sent
     setSentStatus(prev => ({ ...prev, [currentStudent.id]: true }));
@@ -292,18 +288,42 @@ export default function FeeDefaulters() {
       </div>
 
       {/* Action Bar */}
-      <div className="mb-6 flex justify-end">
+      <div className="mb-6 flex flex-col sm:flex-row justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-100 gap-4">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => {
+              if (selectedIds.length === defaulters.length) {
+                setSelectedIds([]);
+              } else {
+                setSelectedIds(defaulters.map(d => d.id));
+              }
+            }}
+            disabled={defaulters.length === 0}
+            className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-blue-600 hover:text-blue-700 disabled:opacity-50"
+          >
+            {selectedIds.length === defaulters.length && defaulters.length > 0 ? (
+              <><X size={16} /> Deselect All</>
+            ) : (
+              <><CheckCircle size={16} /> Select All Members</>
+            )}
+          </button>
+          <div className="h-4 w-px bg-gray-300" />
+          <span className="text-xs font-black uppercase tracking-widest text-gray-500">
+            {selectedIds.length} Students Selected
+          </span>
+        </div>
+
         <button 
           onClick={handleBulkWhatsApp}
           disabled={selectedIds.length === 0}
-          className={`flex items-center gap-2 font-medium py-2.5 px-6 rounded-md shadow-sm transition-colors ${
+          className={`flex items-center gap-2 font-black uppercase text-xs tracking-widest py-3 px-8 rounded-lg shadow-lg transition-all group ${
             selectedIds.length > 0 
-              ? 'bg-green-500 hover:bg-green-600 text-white' 
-              : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              ? 'bg-[#25D366] hover:bg-[#128C7E] text-white shadow-[#25D366]/20' 
+              : 'bg-gray-200 text-gray-500 cursor-not-allowed shadow-none'
           }`}
         >
-          <WhatsAppIcon size={20} />
-          Send Bulk WhatsApp Reminder
+          <WhatsAppIcon size={18} className="group-hover:scale-110 transition-transform" />
+          Send Bulk Reminders
         </button>
       </div>
 
@@ -493,6 +513,15 @@ export default function FeeDefaulters() {
                 >
                   Cancel
                 </button>
+
+                {currentWhatsAppIndex < selectedStudentsData.length - 1 && (
+                  <button
+                    onClick={() => setCurrentWhatsAppIndex(prev => prev + 1)}
+                    className="px-4 py-2 text-blue-600 font-bold hover:bg-blue-50 rounded-md transition-colors"
+                  >
+                    Skip
+                  </button>
+                )}
                 
                 {currentWhatsAppIndex === selectedStudentsData.length - 1 && sentStatus[currentStudent?.id] ? (
                   <button
