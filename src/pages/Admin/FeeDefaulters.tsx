@@ -3,7 +3,7 @@ import { getStudents, getFees, getClasses, getAdminSettings } from "../../lib/db
 import { Search, X, ExternalLink, CheckCircle, FileText, Download, Printer } from "lucide-react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
 import { toPng } from 'html-to-image';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 
 export default function FeeDefaulters() {
   const [students, setStudents] = useState<any[]>([]);
@@ -201,6 +201,10 @@ export default function FeeDefaulters() {
     "தரம் 11", "தரம் 12", "தரம் 13"
   ];
 
+  const completionPercentage = selectedStudentsData.length > 0 
+    ? Math.round((currentWhatsAppIndex / selectedStudentsData.length) * 100)
+    : 0;
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Fee Defaulters / Unpaid Fees</h1>
@@ -265,7 +269,7 @@ export default function FeeDefaulters() {
                       className="hidden"
                     />
                     <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border-2 ${isSelected ? 'bg-white border-white' : 'bg-gray-100 border-gray-300'}`}>
-                      {isSelected && <CheckCircle size={10} className="text-blue-600 font-bold" />}
+                      {isSelected && <CheckCircle size={10} strokeWidth={3} className="text-blue-600" />}
                     </div>
                     <span className={`text-[10px] font-black uppercase tracking-tighter truncate ${isSelected ? 'text-white' : 'text-gray-500'}`}>
                       {date.toLocaleString('en-US', { month: 'short' })}
@@ -445,7 +449,7 @@ export default function FeeDefaulters() {
                   Student {currentWhatsAppIndex + 1} of {selectedStudentsData.length}
                 </span>
                 <span className="text-sm font-medium bg-gray-100 px-3 py-1 rounded-full text-gray-600">
-                  {Math.round(((currentWhatsAppIndex) / selectedStudentsData.length) * 100)}% Complete
+                  {completionPercentage}% Complete
                 </span>
               </div>
 
@@ -453,7 +457,7 @@ export default function FeeDefaulters() {
               <div className="w-full bg-gray-200 rounded-full h-2.5 mb-8">
                 <div 
                   className="bg-[#25D366] h-2.5 rounded-full transition-all duration-300" 
-                  style={{ width: `${((currentWhatsAppIndex) / selectedStudentsData.length) * 100}%` }}
+                  style={{ width: `${completionPercentage}%` }}
                 ></div>
               </div>
 
@@ -573,7 +577,7 @@ export default function FeeDefaulters() {
                   {Array.from({ length: 12 }, (_, i) => {
                     const date = new Date();
                     date.setMonth(i);
-                    const monthVal = `${new Date().getFullYear()}-${(i + 1).toString().padStart(2, '0')}`;
+                    const monthVal = `${selectedYear}-${(i + 1).toString().padStart(2, '0')}`;
                     const isSelected = receiptMonths.includes(monthVal);
                     return (
                       <button

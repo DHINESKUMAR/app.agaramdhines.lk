@@ -50,18 +50,6 @@ import { initDB } from "./lib/db";
 initDB();
 
 export default function App() {
-  // --- சேர்த்துள்ள மாற்றம் ஆரம்பம் ---
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  if (!isClient) {
-    return null; // பிரவுசர் லோட் ஆகும் வரை திரையில் எதுவும் காட்டாது (வெள்ளை திரை வராது)
-  }
-  // --- சேர்த்துள்ள மாற்றம் முடிவு ---
-
   return (
     <Router>
       <Routes>
