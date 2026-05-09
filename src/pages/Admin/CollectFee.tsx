@@ -760,11 +760,16 @@ export default function CollectFee() {
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col max-h-[90vh]">
             <div id="receipt-content" className="p-8 bg-white overflow-y-auto">
               <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle size={32} />
+                <img 
+                  src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s" 
+                  alt="Logo" 
+                  className="w-20 h-20 mx-auto mb-2 object-contain"
+                />
+                <h2 className="text-sm font-black text-gray-800 uppercase tracking-tight">AGARAM DHINES ONLINE ACADEMY</h2>
+                <div className="flex items-center justify-center gap-1 text-green-600 mt-2">
+                  <CheckCircle size={16} />
+                  <span className="text-xs font-bold uppercase tracking-widest">Payment Successful</span>
                 </div>
-                <h2 className="text-2xl font-bold text-gray-800">Payment Successful</h2>
-                <p className="text-gray-500">Thank you for your payment</p>
               </div>
               
               <div className="border-t border-b border-gray-100 py-4 mb-6 space-y-3">
@@ -922,7 +927,7 @@ export default function CollectFee() {
                             
                             <div class="header">
                               <div class="logo-placeholder">
-                                <img src="https://firebasestorage.googleapis.com/v0/b/ais-dev-rclyuuaiyzobly4teokhoa.appspot.com/o/admin%2Flogo.png?alt=media" onerror="this.src='https://ui-avatars.com/api/?name=AD&background=ef008c&color=fff'" />
+                                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s" onerror="this.src='https://ui-avatars.com/api/?name=AD&background=ef008c&color=fff'" />
                               </div>
                               <div class="academy-name">AGARAM DHINES ONLINE ACADEMY</div>
                               <div class="slogan">EXCELLENCE IN DIGITAL LEARNING</div>
