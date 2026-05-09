@@ -215,11 +215,12 @@ export default function CollectFee() {
           studentName: selectedStudent.name,
           grade: selectedStudent.grade,
           rollNo: selectedStudent.rollNo || "",
-          month: item.type === 'Monthly Tuition' ? paymentData.month : "",
+          month: (item.type === 'Monthly Tuition' || item.type === 'Subject Fee' || item.category === 'Main') ? paymentData.month : "",
           amount: finalAmount.toString(),
           method: paymentData.method,
           date: paymentData.date,
           type: item.type,
+          category: item.category || "",
           itemName: item.itemName || "",
           transactionId: selectedItems.length > 1 ? `${txnIdBase}-${idx + 1}` : txnIdBase,
           batchId: batchId,
@@ -452,7 +453,7 @@ export default function CollectFee() {
               </div>
               <input 
                 type="text" 
-                placeholder="Search by Name or ID..." 
+                placeholder="Search by Name or Roll No..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"

@@ -41,9 +41,9 @@ export default function FeeDefaulters() {
         ...(selectedStudentForReceipt.unpaidSubjects || []).map((s: any) => ({
           type: 'subject',
           label: s.name,
-          subLabel: 'Special Subject Fee',
+          subLabel: s.missedMonth ? `${new Date(s.missedMonth + "-01").toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}` : 'Special Subject Fee',
           amount: Number(s.fee) || 0,
-          id: s.id
+          id: s.missedMonth ? `${s.id}-${s.missedMonth}` : s.id
         }))
       ];
       setReceiptItems(items);
@@ -147,16 +147,37 @@ export default function FeeDefaulters() {
       
       // Filter out months from the selection that have been paid
       const unpaidMonths = selectedMonths.filter(m => {
-        return !studentFees.some(fee => fee.month === m && (fee.type === "Monthly Tuition" || !fee.type));
+        return !studentFees.some(fee => fee.month === m && (fee.type === "Monthly Tuition" || fee.type === "Subject Fee" || fee.category === "Main" || !fee.type));
       });
 
-      // Filter out subjects from the selection that have been paid
-      const unpaidSubjects = subjects
-        .filter(s => s.category === "Sub") // Only calculate extra fee subjects
-        .filter(s => selectedSubjects.includes(s.name))
-        .filter(s => {
-          return !studentFees.some(fee => fee.itemName === s.name && fee.type === "Subject Fee");
+      // Filter out subjects from the selection that have been paid for EACH selected month
+      const unpaidSubjects: any[] = [];
+      
+      // If we have selected months, check each subject for each month
+      if (selectedMonths.length > 0) {
+        selectedMonths.forEach(m => {
+          const missedForThisMonth = subjects
+            .filter(s => s.category === "Sub")
+            .filter(s => selectedSubjects.includes(s.name))
+            .filter(s => {
+              return !studentFees.some(fee => fee.itemName === s.name && fee.type === "Subject Fee" && fee.month === m);
+            });
+          
+          missedForThisMonth.forEach(sub => {
+            unpaidSubjects.push({ ...sub, missedMonth: m });
+          });
         });
+      } else {
+        // Fallback for when no months are selected (unlikely given handleSearch alert)
+        subjects
+          .filter(s => s.category === "Sub")
+          .filter(s => selectedSubjects.includes(s.name))
+          .forEach(sub => {
+            if (!studentFees.some(fee => fee.itemName === sub.name && fee.type === "Subject Fee")) {
+              unpaidSubjects.push(sub);
+            }
+          });
+      }
 
       if (unpaidMonths.length === 0 && unpaidSubjects.length === 0) return null;
 

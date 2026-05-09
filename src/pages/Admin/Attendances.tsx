@@ -236,7 +236,7 @@ export default function Attendances() {
                                     </div>
                                     <div>
                                       <p className="font-bold text-gray-800 text-base">{student.name}</p>
-                                      <p className="text-xs text-gray-500 font-medium">ID: {student.student_id || student.id}</p>
+                                      <p className="text-[10px] text-blue-500 font-bold uppercase mt-0.5">Roll No: {student.rollNo || "N/A"}</p>
                                     </div>
                                   </div>
                                 </td>

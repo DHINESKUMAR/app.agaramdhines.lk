@@ -176,7 +176,7 @@ export default function Fees() {
   if (view === "status") {
     // Filter students who haven't paid for the selected month
     const paidStudentIds = feesHistory
-      .filter(fee => fee.month === statusMonth)
+      .filter(fee => fee.month === statusMonth || (!fee.month && fee.date && fee.date.startsWith(statusMonth)))
       .map(fee => fee.studentId);
       
     const outstandingStudents = allStudents.filter(
@@ -546,7 +546,7 @@ export default function Fees() {
   if (view === "zoom_control") {
     // Filter students who haven't paid for the selected month
     const paidStudentIds = feesHistory
-      .filter(fee => fee.month === statusMonth)
+      .filter(fee => fee.month === statusMonth || (!fee.month && fee.date && fee.date.startsWith(statusMonth)))
       .map(fee => fee.studentId);
       
     const classFilteredStudents = zoomControlClass 

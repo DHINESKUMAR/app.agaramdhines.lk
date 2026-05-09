@@ -1036,7 +1036,7 @@ export default function Students() {
             <div className="flex items-center space-x-2 w-full sm:w-auto">
               <input
                 type="text"
-                placeholder="Search by Name or ID..."
+                placeholder="Search by Name or Roll No..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white w-full sm:w-64"
