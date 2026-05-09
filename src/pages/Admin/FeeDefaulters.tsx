@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { getStudents, getFees, getClasses, getAdminSettings, getSubjects } from "../../lib/db";
-import { Search, X, ExternalLink, CheckCircle, FileText, Download, Printer, Trash2 } from "lucide-react";
+import { Search, X, ExternalLink, CheckCircle, FileText, Download, Printer, Trash2, Copy, Image as ImageIcon, Share2, Plus } from "lucide-react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
-import { toPng } from 'html-to-image';
+import { toPng, toBlob } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
 export default function FeeDefaulters() {
@@ -96,19 +96,33 @@ export default function FeeDefaulters() {
         const imgData = await toPng(receiptRef.current, { pixelRatio: 3, backgroundColor: 'white' });
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const pdfHeight = (pdf.internal.pageSize.getHeight());
         
         const imgProps = pdf.getImageProperties(imgData);
-        const ratio = Math.min((pdfWidth - 20) / imgProps.width, (pdfHeight - 40) / imgProps.height);
-        const width = imgProps.width * ratio;
-        const height = imgProps.height * ratio;
-        const x = (pdfWidth - width) / 2;
-        const y = 20;
+        const pdfW = pdf.internal.pageSize.getWidth();
+        const pdfH = (imgProps.height * pdfW) / imgProps.width;
 
-        pdf.addImage(imgData, 'PNG', x, y, width, height);
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
         pdf.save(`Unpaid_Receipt_${selectedStudentForReceipt.name}.pdf`);
       } catch (error) {
         console.error("Error generating receipt PDF:", error);
+      }
+    }
+  };
+
+  const copyAsImage = async () => {
+    if (receiptRef.current && selectedStudentForReceipt) {
+      try {
+        const blob = await toBlob(receiptRef.current, { pixelRatio: 2, backgroundColor: '#ffffff' });
+        if (blob) {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ]);
+          alert("Image copied to clipboard!");
+        }
+      } catch (err) {
+        console.error('Copy failed', err);
+        alert("Failed to copy image. Try downloading instead.");
       }
     }
   };
@@ -628,130 +642,207 @@ export default function FeeDefaulters() {
 
       {/* Unpaid Receipt Modal */}
       {showReceiptModal && selectedStudentForReceipt && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[95vh]">
-            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                <FileText size={20} className="text-pink-600" />
-                Unpaid Receipt Preview
-              </h2>
-              <button 
-                onClick={() => setShowReceiptModal(false)}
-                className="text-gray-400 hover:text-gray-600 p-1 rounded-full transition-colors"
-              >
-                <X size={24} />
-              </button>
-            </div>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col my-auto relative">
+            <button 
+              onClick={() => setShowReceiptModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10"
+            >
+              <div className="bg-gray-100 p-1 rounded-full"><Plus className="rotate-45" size={20} /></div>
+            </button>
             
-            <div className="flex-1 overflow-y-auto bg-slate-100 p-4 md:p-8 flex flex-col items-center">
-              {/* Receipt Preview Container */}
-              <div 
-                ref={receiptRef}
-                className="bg-white shadow-2xl relative p-8 font-sans border-t-[6px] border-pink-500 rounded-b-xl"
-                style={{ width: '148mm', minHeight: '210mm', transform: 'scale(1)', transformOrigin: 'top center' }}
-              >
-                {/* UNPAID Corner Ribbon */}
-                <div className="absolute top-0 right-0 overflow-hidden w-32 h-32 pointer-events-none">
-                  <div className="bg-red-600 text-white font-black py-1 px-10 text-center transform rotate-45 translate-x-8 translate-y-4 shadow-md uppercase text-xs border-2 border-white tracking-widest">
-                    UNPAID
+            <div className="flex flex-col md:flex-row h-full">
+              {/* Left Side: Preview */}
+              <div className="flex-1 p-6 bg-slate-100 border-r border-gray-100 overflow-y-auto max-h-[80vh] flex justify-center">
+                <div 
+                  ref={receiptRef}
+                  id="receipt-download-version"
+                  className="bg-white shadow-2xl relative p-8 font-sans border-t-[6px] border-pink-500 rounded-b-xl"
+                  style={{ width: '450px', minHeight: '600px' }}
+                >
+                  {/* UNPAID Corner Ribbon */}
+                  <div className="absolute top-6 right-[-35px] rotate-45 text-white font-black text-[10px] uppercase tracking-widest px-10 py-1 shadow-md z-20 bg-red-600 border-2 border-white">
+                    UNPAID / INVOICE
                   </div>
-                </div>
 
-                {/* Header */}
-                <div className="flex flex-col items-center text-center mb-8">
-                  <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s" alt="Academy Logo" className="w-16 h-16 object-contain mb-3" />
-                  <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">
-                    {adminSettings?.instituteName || "AGARAM DHINES ONLINE ACADEMY"}
-                  </h1>
-                  <p className="text-[10px] text-pink-600 font-black tracking-[0.3em] uppercase mt-1">Excellence in Digital Learning</p>
-                </div>
-
-                <div className="h-px bg-gray-100 mb-6" />
-
-                {/* Invoice Details */}
-                <div className="flex justify-between items-start mb-8 text-[11px]">
-                  <div className="space-y-1">
-                    <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Invoiced To</h2>
-                    <p className="text-sm font-black text-gray-900">{selectedStudentForReceipt.name}</p>
-                    <p className="text-gray-600 font-bold">Roll No: {selectedStudentForReceipt.rollNo || "N/A"}</p>
-                    <p className="text-gray-600 font-bold">Class: {selectedStudentForReceipt.grade}</p>
+                  {/* Header */}
+                  <div className="flex flex-col items-center text-center mb-6 pt-4">
+                    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s" alt="Academy Logo" className="w-16 h-16 object-contain mb-3" />
+                    <h1 className="text-sm font-black text-gray-800 tracking-tight leading-none uppercase">
+                      {adminSettings?.instituteName || "AGARAM DHINES ONLINE ACADEMY"}
+                    </h1>
+                    <p className="text-[9px] text-pink-600 font-black tracking-[3px] uppercase mt-1 italic">Excellence in Digital Learning</p>
                   </div>
-                  <div className="text-right space-y-1">
-                    <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Receipt Info</h2>
-                    <p className="text-gray-600 font-bold">Date: {new Date().toLocaleDateString()}</p>
-                    <p className="text-red-600 font-black uppercase">Status: Overdue</p>
-                  </div>
-                </div>
 
-                {/* Table */}
-                <div className="mb-8">
-                  <div className="bg-gray-50 p-2 border-b border-gray-200 flex justify-between text-[9px] font-black text-gray-500 uppercase tracking-widest">
-                    <span>Description</span>
-                    <span>Amount</span>
+                  <div className="h-px bg-gray-100 mb-6" />
+
+                  {/* Invoice Details */}
+                  <div className="grid grid-cols-2 gap-4 mb-6 border-y border-gray-50 py-4 text-[11px]">
+                    <div className="space-y-1">
+                      <h2 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 font-bold">Invoiced To</h2>
+                      <p className="text-sm font-black text-gray-900">{selectedStudentForReceipt.name}</p>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase">Roll No: {selectedStudentForReceipt.rollNo || "N/A"}</p>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase">Class: {selectedStudentForReceipt.grade}</p>
+                    </div>
+                    <div className="text-right space-y-1">
+                      <h2 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 font-bold">Details</h2>
+                      <p className="text-[10px] text-gray-800 font-bold uppercase">Date: {new Date().toLocaleDateString()}</p>
+                      <p className="text-red-600 font-black uppercase text-[10px]">Status: Overdue</p>
+                    </div>
                   </div>
-                  <div className="divide-y divide-gray-100 text-[11px]">
-                    {receiptItems.map((item, idx) => (
-                      <div key={`${item.type}-${item.id}-${idx}`} className="py-3 flex justify-between items-center group relative">
-                        <div>
-                          <p className="font-black text-gray-800 uppercase tracking-tighter">{item.label}</p>
-                          <p className="text-[9px] text-gray-400 font-bold italic tracking-wider">
-                            {item.subLabel}
-                          </p>
+
+                  {/* Table */}
+                  <div className="mb-6">
+                    <div className="bg-gray-50 p-2 border-b border-gray-200 flex justify-between text-[9px] font-black text-gray-500 uppercase tracking-widest">
+                      <span>Description</span>
+                      <span>Amount</span>
+                    </div>
+                    <div className="divide-y divide-gray-50 text-[11px]">
+                      {receiptItems.map((item, idx) => (
+                        <div key={`${item.type}-${item.id}-${idx}`} className="py-3 flex justify-between items-center group relative">
+                          <div>
+                            <p className="text-xs font-black text-gray-800 uppercase tracking-tighter">{item.label}</p>
+                            <p className="text-[9px] text-gray-400 font-bold italic tracking-wider">
+                              {item.subLabel}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <p className="text-xs font-black text-gray-900">LKR {item.amount}.00</p>
+                            <button 
+                              onClick={() => toggleReceiptItem(item.id, item.type as any)}
+                              className="text-red-400 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100 print:hidden"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <p className="font-black text-gray-900">LKR {item.amount}.00</p>
-                          <button 
-                            onClick={() => toggleReceiptItem(item.id, item.type as any)}
-                            className="text-red-400 hover:text-red-600 transition-colors md:opacity-0 group-hover:opacity-100 print:hidden"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Totals */}
+                  <div className="space-y-2 border-t-2 border-gray-100 pt-4 mb-10 text-right flex flex-col items-end">
+                    <div className="w-52 space-y-2">
+                      <div className="flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        <span>Sub Total</span>
+                        <span className="text-xs font-black text-gray-600">LKR {receiptItems.reduce((acc, curr) => acc + curr.amount, 0)}.00</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Totals */}
-                <div className="mt-auto pt-6 border-t border-gray-100 flex flex-col items-end">
-                  <div className="w-52 space-y-2">
-                    <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                      <span>Sub Total</span>
-                      <span className="text-gray-900 font-black">LKR {receiptItems.reduce((acc, curr) => acc + curr.amount, 0)}.00</span>
-                    </div>
-                    <div className="bg-pink-600 text-white p-3 rounded-lg flex justify-between items-center shadow-lg transform rotate-1">
-                      <span className="text-[9px] font-black uppercase tracking-widest italic">Total Due</span>
-                      <span className="text-lg font-black tracking-tighter">LKR {receiptItems.reduce((acc, curr) => acc + curr.amount, 0)}.00</span>
+                      <div className="bg-red-600 text-white p-3 rounded-xl shadow-lg flex justify-between items-center border border-red-500 shadow-red-100">
+                        <span className="text-[9px] font-black uppercase tracking-widest italic">Amount Due</span>
+                        <span className="text-lg font-black tracking-tighter">LKR {receiptItems.reduce((acc, curr) => acc + curr.amount, 0)}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Aesthetic Footer */}
-                <div className="mt-12 text-center">
-                  <div className="flex items-center justify-center gap-2 mb-4">
-                    <div className="h-px w-8 bg-gray-100" />
-                    <CheckCircle size={14} className="text-pink-500" />
-                    <div className="h-px w-8 bg-gray-100" />
+                  {/* Aesthetic Footer */}
+                  <div className="text-center pt-6 border-t border-dashed border-gray-100">
+                    <div className="mb-2">
+                       <CheckCircle size={20} className="mx-auto text-red-500" />
+                    </div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[2px]">PLEASE PAY BEFORE DUEDATE</p>
+                    <p className="text-[8px] text-gray-300 font-bold uppercase tracking-widest mt-2 font-bold italic">Generated via Agaram Academy Portal</p>
                   </div>
-                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-[0.2em] mb-1 italic">Generated via Agaram Academy Portal</p>
-                  <p className="text-[10px] text-gray-800 font-black">PLEASE SETTLE THE DUES AT YOUR EARLIEST</p>
                 </div>
               </div>
-            </div>
 
-            <div className="p-6 bg-white border-t border-gray-100 flex justify-center gap-4">
-              <button
-                onClick={handleDownloadReceiptImage}
-                className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl font-black hover:bg-slate-800 transition-all shadow-xl hover:-translate-y-1 active:translate-y-0 text-sm uppercase tracking-widest"
-              >
-                <Download size={18} /> Download Image
-              </button>
-              <button
-                onClick={handleDownloadReceiptPDF}
-                className="flex items-center gap-2 bg-pink-600 text-white px-6 py-3 rounded-xl font-black hover:bg-pink-700 transition-all shadow-xl hover:-translate-y-1 active:translate-y-0 text-sm uppercase tracking-widest"
-              >
-                <Printer size={18} /> Download PDF
-              </button>
+              {/* Right Side: Actions */}
+              <div className="w-full md:w-64 p-6 bg-white flex flex-col gap-3 justify-center shadow-inner">
+                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 border-b pb-2 italic">Invoice Actions</h3>
+                
+                <button 
+                  onClick={copyAsImage}
+                  className="flex items-center gap-3 w-full p-3 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 transition-all group shadow-sm border border-blue-100"
+                >
+                  <div className="bg-white p-2 rounded-lg shadow-sm group-hover:scale-110 transition-transform">
+                    <Copy size={18} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-tight leading-tight">Copy Image</p>
+                    <p className="text-[9px] font-bold text-blue-400">Copy to Clipboard</p>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={handleDownloadReceiptImage}
+                  className="flex items-center gap-3 w-full p-3 bg-pink-50 text-pink-700 rounded-xl hover:bg-pink-100 transition-all group shadow-sm border border-pink-100"
+                >
+                  <div className="bg-white p-2 rounded-lg shadow-sm group-hover:scale-110 transition-transform">
+                    <ImageIcon size={18} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-tight leading-tight">Save Photo</p>
+                    <p className="text-[9px] font-bold text-pink-400">Download as PNG</p>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={handleDownloadReceiptPDF}
+                  className="flex items-center gap-3 w-full p-3 bg-purple-50 text-purple-700 rounded-xl hover:bg-purple-100 transition-all group shadow-sm border border-purple-100"
+                >
+                  <div className="bg-white p-2 rounded-lg shadow-sm group-hover:scale-110 transition-transform">
+                    <FileText size={18} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-tight leading-tight">PDF Document</p>
+                    <p className="text-[9px] font-bold text-purple-400">Download as PDF</p>
+                  </div>
+                </button>
+
+                <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col gap-2">
+                  <button 
+                    onClick={() => {
+                      const content = document.getElementById('receipt-download-version');
+                      let printIframe = document.getElementById('receipt-print-iframe') as HTMLIFrameElement;
+                      if (!printIframe) {
+                        printIframe = document.createElement('iframe');
+                        printIframe.id = 'receipt-print-iframe';
+                        printIframe.style.position = 'absolute';
+                        printIframe.style.top = '-9999px';
+                        printIframe.style.left = '-9999px';
+                        document.body.appendChild(printIframe);
+                      }
+                      
+                      const printDoc = printIframe.contentWindow?.document;
+                      if (printDoc && content) {
+                        printDoc.open();
+                        printDoc.write(`
+                          <html>
+                            <head>
+                              <title>Invoice - ${selectedStudentForReceipt.name}</title>
+                              <style>
+                                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+                                body { font-family: 'Inter', sans-serif; background: white; margin: 0; padding: 20px; }
+                                .print-container { width: 100%; display: flex; justify-content: center; }
+                                #print-node { width: 450px; border: 1px solid #eee; position: relative; }
+                              </style>
+                            </head>
+                            <body>
+                              <div class="print-container">
+                                <div id="print-node">${content.innerHTML}</div>
+                              </div>
+                            </body>
+                          </html>
+                        `);
+                        printDoc.close();
+                        setTimeout(() => {
+                          printIframe.contentWindow?.focus();
+                          printIframe.contentWindow?.print();
+                        }, 500);
+                      }
+                    }}
+                    className="flex items-center justify-center gap-2 w-full py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg transition-all hover:bg-gray-50 active:scale-95"
+                  >
+                    <Printer size={16} />
+                    Traditional Print
+                  </button>
+
+                  <div className="bg-red-50 p-2.5 rounded-xl border border-red-100 mt-2">
+                    <p className="text-[9px] text-center text-red-600 font-black uppercase tracking-[0.1em] leading-relaxed">
+                      This is a payment reminder invoice. Please settle the dues at your earliest convenience to avoid service interruption.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
