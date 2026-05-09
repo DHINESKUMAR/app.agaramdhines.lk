@@ -176,15 +176,18 @@ export default function Fees() {
   if (view === "status") {
     // Filter students who haven't paid for the selected month
     const paidStudentIds = feesHistory
-      .filter(fee => fee.month === statusMonth || (!fee.month && fee.date && fee.date.startsWith(statusMonth)))
+      .filter(fee => {
+        const isMatch = fee.month === statusMonth || (!fee.month && fee.date && fee.date.startsWith(statusMonth));
+        return isMatch && (fee.type === "Monthly Tuition" || fee.type === "Subject Fee" || fee.category === "Main");
+      })
       .map(fee => fee.studentId);
       
     const outstandingStudents = allStudents.filter(
-      student => !paidStudentIds.includes(student.student_id || student.id)
+      student => !paidStudentIds.includes(student.student_id || student.id) && !paidStudentIds.includes(student.id)
     );
     
     const paidStudents = allStudents.filter(
-      student => paidStudentIds.includes(student.student_id || student.id)
+      student => paidStudentIds.includes(student.student_id || student.id) || paidStudentIds.includes(student.id)
     );
 
     const exportToExcel = () => {
@@ -546,7 +549,10 @@ export default function Fees() {
   if (view === "zoom_control") {
     // Filter students who haven't paid for the selected month
     const paidStudentIds = feesHistory
-      .filter(fee => fee.month === statusMonth || (!fee.month && fee.date && fee.date.startsWith(statusMonth)))
+      .filter(fee => {
+        const isMatch = fee.month === statusMonth || (!fee.month && fee.date && fee.date.startsWith(statusMonth));
+        return isMatch && (fee.type === "Monthly Tuition" || fee.type === "Subject Fee" || fee.category === "Main");
+      })
       .map(fee => fee.studentId);
       
     const classFilteredStudents = zoomControlClass 
@@ -554,11 +560,11 @@ export default function Fees() {
       : allStudents;
 
     const outstandingStudents = classFilteredStudents.filter(
-      student => !paidStudentIds.includes(student.student_id || student.id)
+      student => !paidStudentIds.includes(student.student_id || student.id) && !paidStudentIds.includes(student.id)
     );
     
     const paidStudents = classFilteredStudents.filter(
-      student => paidStudentIds.includes(student.student_id || student.id)
+      student => paidStudentIds.includes(student.student_id || student.id) || paidStudentIds.includes(student.id)
     );
 
     const handleSelectUnpaid = (studentId: string) => {
