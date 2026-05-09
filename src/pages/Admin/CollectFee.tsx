@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { getStudents, saveStudents, getFees, saveFees, getClasses, getAdminSettings, getSubjects } from "../../lib/db";
-import { Search, Calendar, CreditCard, User, BookOpen, DollarSign, CheckCircle, Printer } from "lucide-react";
+import { Search, Calendar, CreditCard, User, BookOpen, DollarSign, CheckCircle, Printer, Download, Copy, FileText, Image as ImageIcon, Share2, Plus } from "lucide-react";
+import { toPng, toBlob } from 'html-to-image';
+import jsPDF from 'jspdf';
 
 export default function CollectFee() {
   const [students, setStudents] = useState<any[]>([]);
@@ -55,6 +57,7 @@ export default function CollectFee() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
   const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
+  const [isUnpaidReceipt, setIsUnpaidReceipt] = useState(false);
 
   useEffect(() => {
     if (selectedStudent) {
@@ -211,6 +214,7 @@ export default function CollectFee() {
           studentId: selectedStudent.student_id || selectedStudent.id,
           studentName: selectedStudent.name,
           grade: selectedStudent.grade,
+          rollNo: selectedStudent.rollNo || "",
           month: item.type === 'Monthly Tuition' ? paymentData.month : "",
           amount: finalAmount.toString(),
           method: paymentData.method,
@@ -329,6 +333,7 @@ export default function CollectFee() {
   };
 
   const handleLoadReceipt = (fee: any) => {
+    setIsUnpaidReceipt(false);
     if (fee.items) {
       setReceiptData({
         ...fee,
@@ -344,6 +349,74 @@ export default function CollectFee() {
       });
     }
     setShowReceipt(true);
+  };
+
+  const handlePreviewUnpaid = () => {
+    if (!selectedStudent || selectedItems.length === 0) {
+      alert("Please select a student and at least one item to preview the invoice.");
+      return;
+    }
+    
+    setIsUnpaidReceipt(true);
+    setReceiptData({
+      studentId: selectedStudent.student_id || selectedStudent.id,
+      studentName: selectedStudent.name,
+      grade: selectedStudent.grade,
+      rollNo: selectedStudent.rollNo || "",
+      month: paymentData.month,
+      date: paymentData.date,
+      items: selectedItems,
+      totalAmount: totalAmount,
+      transactionId: "PREVIEW-INVOICE"
+    });
+    setShowReceipt(true);
+  };
+
+  const downloadAsImage = async () => {
+    const node = document.getElementById('receipt-download-version');
+    if (!node) return;
+    try {
+      const dataUrl = await toPng(node, { pixelRatio: 2, backgroundColor: '#ffffff' });
+      const link = document.createElement('a');
+      link.download = `Receipt-${receiptData.studentName}-${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('oops, something went wrong!', err);
+    }
+  };
+
+  const copyAsImage = async () => {
+    const node = document.getElementById('receipt-download-version');
+    if (!node) return;
+    try {
+      const blob = await toBlob(node, { pixelRatio: 2, backgroundColor: '#ffffff' });
+      if (blob) {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob })
+        ]);
+        alert("Image copied to clipboard!");
+      }
+    } catch (err) {
+      console.error('Copy failed', err);
+      alert("Failed to copy image to clipboard. Try downloading instead.");
+    }
+  };
+
+  const downloadAsPDF = async () => {
+    const node = document.getElementById('receipt-download-version');
+    if (!node) return;
+    try {
+      const dataUrl = await toPng(node, { pixelRatio: 2, backgroundColor: '#ffffff' });
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Receipt-${receiptData.studentName}-${Date.now()}.pdf`);
+    } catch (err) {
+      console.error('PDF creation failed', err);
+    }
   };
 
   const groupedHistory = useMemo(() => groupFeesByBatch(studentFeeHistory), [studentFeeHistory]);
@@ -610,7 +683,15 @@ export default function CollectFee() {
                     </div>
                   </div>
 
-          <div className="pt-4 border-t border-gray-100 flex justify-end">
+          <div className="pt-4 border-t border-gray-100 flex flex-wrap gap-3 justify-end">
+                    <button 
+                      type="button"
+                      onClick={handlePreviewUnpaid}
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-6 rounded-md shadow-sm transition-colors flex items-center gap-2"
+                    >
+                      <Share2 size={18} />
+                      Unpaid Preview
+                    </button>
                     <button 
                       type="submit" 
                       className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-md shadow-sm transition-colors flex items-center gap-2"
@@ -756,259 +837,197 @@ export default function CollectFee() {
 
       {/* Receipt Modal */}
       {showReceipt && receiptData && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col max-h-[90vh]">
-            <div id="receipt-content" className="p-8 bg-white overflow-y-auto">
-              <div className="text-center mb-6">
-                <img 
-                  src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s" 
-                  alt="Logo" 
-                  className="w-20 h-20 mx-auto mb-2 object-contain"
-                />
-                <h2 className="text-sm font-black text-gray-800 uppercase tracking-tight">AGARAM DHINES ONLINE ACADEMY</h2>
-                <div className="flex items-center justify-center gap-1 text-green-600 mt-2">
-                  <CheckCircle size={16} />
-                  <span className="text-xs font-bold uppercase tracking-widest">Payment Successful</span>
-                </div>
-              </div>
-              
-              <div className="border-t border-b border-gray-100 py-4 mb-6 space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Receipt No</span>
-                  <span className="font-medium text-gray-800">{receiptData.transactionId}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Date</span>
-                  <span className="font-medium text-gray-800">{receiptData.date}</span>
-                </div>
-                <div className="space-y-2 pt-2">
-                  <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Paid Items</span>
-                  <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
-                    {receiptData.items?.map((item: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center p-2 text-xs bg-gray-50">
-                        <span className="font-bold text-gray-700">{item.label} {item.type === 'Monthly Tuition' ? `(${receiptData.month})` : ''}</span>
-                        <span className="font-black text-blue-600">LKR {item.amount}</span>
-                      </div>
-                    ))}
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col my-auto relative">
+            <button 
+              onClick={() => setShowReceipt(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10"
+            >
+              <div className="bg-gray-100 p-1 rounded-full"><Plus className="rotate-45" size={20} /></div>
+            </button>
+
+            <div className="flex flex-col md:flex-row h-full">
+              {/* Left Side: Preview */}
+              <div className="flex-1 p-6 bg-gray-50 border-r border-gray-100 overflow-y-auto max-h-[80vh]">
+                <div id="receipt-download-version" className="bg-white shadow-lg mx-auto p-8 rounded-sm relative overflow-hidden" style={{ width: '450px', minHeight: '600px' }}>
+                  {/* Watermark/Banner */}
+                  <div className={`absolute top-6 right-[-35px] rotate-45 text-white font-black text-[10px] uppercase tracking-widest px-10 py-1 shadow-md z-20 ${isUnpaidReceipt ? 'bg-red-600' : 'bg-green-600'}`}>
+                    {isUnpaidReceipt ? 'UNPAID / INVOICE' : 'OFFICIAL RECEIPT'}
+                  </div>
+
+                  <div className="text-center mb-6 pt-4">
+                    <img 
+                      src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s" 
+                      alt="Logo" 
+                      className="w-16 h-16 mx-auto mb-2 object-contain"
+                    />
+                    <h2 className="text-sm font-black text-gray-800 uppercase tracking-tight">AGARAM DHINES ONLINE ACADEMY</h2>
+                    <p className="text-[9px] font-bold text-pink-600 uppercase tracking-[3px] mt-1 italic">excellence in digital learning</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-6 border-y border-gray-100 py-4">
+                    <div>
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 font-bold">Invoiced To:</p>
+                      <p className="text-sm font-black text-gray-800">{receiptData.studentName}</p>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase">Roll No: {receiptData.rollNo || "N/A"}</p>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase">ID: {receiptData.studentId}</p>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase">Class: {receiptData.grade}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 font-bold">Details:</p>
+                      <p className="text-[10px] text-gray-800 font-bold uppercase">No: {receiptData.transactionId}</p>
+                      <p className="text-[10px] text-gray-800 font-bold uppercase">Date: {receiptData.date}</p>
+                      {!isUnpaidReceipt && <p className="text-[10px] text-gray-800 font-bold uppercase">Via: {receiptData.method}</p>}
+                    </div>
+                  </div>
+
+                  <table className="w-full text-left mb-6">
+                    <thead>
+                      <tr className="border-b-2 border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        <th className="pb-2">Description</th>
+                        <th className="pb-2 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {receiptData.items?.map((item: any, idx: number) => (
+                        <tr key={idx}>
+                          <td className="py-3">
+                            <p className="text-xs font-black text-gray-800 uppercase">{item.label}</p>
+                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight italic">
+                              {item.type === 'Monthly Tuition' ? receiptData.month : (item.category === 'Main' ? 'Main Subject Fee' : 'Sub Subject Special Fee')}
+                            </p>
+                          </td>
+                          <td className="py-3 text-right text-xs font-black text-gray-800">LKR {item.amount}.00</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div className="space-y-2 border-t-2 border-gray-100 pt-4 mb-10">
+                    <div className="flex justify-between items-center px-2">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest font-bold">Sub Total</span>
+                      <span className="text-xs font-black text-gray-600">LKR {receiptData.totalAmount || receiptData.amount}.00</span>
+                    </div>
+                    <div className={`flex justify-between items-center p-3 rounded-xl shadow-lg border ${isUnpaidReceipt ? 'bg-red-600 border-red-500 shadow-red-100' : 'bg-green-600 border-green-500 shadow-green-100'}`}>
+                      <span className="text-[10px] font-black text-white uppercase tracking-widest font-bold">{isUnpaidReceipt ? 'Amount Due' : 'Total Paid'}</span>
+                      <span className="text-xl font-black text-white">LKR {receiptData.totalAmount || receiptData.amount}</span>
+                    </div>
+                  </div>
+
+                  <div className="text-center pt-6 border-t border-dashed border-gray-100">
+                    <div className="mb-2">
+                       <CheckCircle size={20} className={`mx-auto ${isUnpaidReceipt ? 'text-red-500' : 'text-green-500'}`} />
+                    </div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[2px]">{isUnpaidReceipt ? 'PLEASE PAY BEFORE DUEDATE' : 'THANK YOU FOR YOUR PAYMENT'}</p>
+                    <p className="text-[8px] text-gray-300 font-bold uppercase tracking-widest mt-2 font-bold">www.agaramdhines.lk | excelence in digital learning</p>
                   </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Payment Method</span>
-                  <span className="font-medium text-gray-800">{receiptData.method}</span>
+              </div>
+
+              {/* Right Side: Actions */}
+              <div className="w-full md:w-64 p-6 bg-white flex flex-col gap-3 justify-center">
+                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 border-b pb-2">Receipt Actions</h3>
+                
+                <button 
+                  onClick={copyAsImage}
+                  className="flex items-center gap-3 w-full p-3 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 transition-all group"
+                >
+                  <div className="bg-white p-2 rounded-lg shadow-sm group-hover:scale-110 transition-transform">
+                    <Copy size={18} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-tight">Copy Image</p>
+                    <p className="text-[9px] font-bold text-blue-400">Copy to Clipboard</p>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={downloadAsImage}
+                  className="flex items-center gap-3 w-full p-3 bg-pink-50 text-pink-700 rounded-xl hover:bg-pink-100 transition-all group"
+                >
+                  <div className="bg-white p-2 rounded-lg shadow-sm group-hover:scale-110 transition-transform">
+                    <ImageIcon size={18} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-tight">Save Photo</p>
+                    <p className="text-[9px] font-bold text-pink-400">Download as PNG</p>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={downloadAsPDF}
+                  className="flex items-center gap-3 w-full p-3 bg-purple-50 text-purple-700 rounded-xl hover:bg-purple-100 transition-all group"
+                >
+                  <div className="bg-white p-2 rounded-lg shadow-sm group-hover:scale-110 transition-transform">
+                    <FileText size={18} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-tight">PDF Document</p>
+                    <p className="text-[9px] font-bold text-purple-400">Download as PDF</p>
+                  </div>
+                </button>
+
+                <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col gap-2">
+                  <button 
+                    onClick={() => {
+                      const content = document.getElementById('receipt-download-version');
+                      
+                      let printIframe = document.getElementById('receipt-print-iframe') as HTMLIFrameElement;
+                      if (!printIframe) {
+                        printIframe = document.createElement('iframe');
+                        printIframe.id = 'receipt-print-iframe';
+                        printIframe.style.position = 'absolute';
+                        printIframe.style.top = '-9999px';
+                        printIframe.style.left = '-9999px';
+                        document.body.appendChild(printIframe);
+                      }
+                      
+                      const printDoc = printIframe.contentWindow?.document;
+                      if (printDoc && content) {
+                        printDoc.open();
+                        printDoc.write(`
+                          <html>
+                            <head>
+                              <title>Receipt - ${receiptData.studentName}</title>
+                              <style>
+                                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+                                body { font-family: 'Inter', sans-serif; background: white; margin: 0; padding: 20px; }
+                                .print-container { width: 100%; display: flex; justify-content: center; }
+                                #print-node { width: 450px; border: 1px solid #eee; }
+                              </style>
+                            </head>
+                            <body>
+                              <div class="print-container">
+                                <div id="print-node">${content.innerHTML}</div>
+                              </div>
+                            </body>
+                          </html>
+                        `);
+                        printDoc.close();
+                        setTimeout(() => {
+                          printIframe.contentWindow?.focus();
+                          printIframe.contentWindow?.print();
+                        }, 500);
+                      }
+                    }}
+                    className="flex items-center justify-center gap-2 w-full py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg"
+                  >
+                    <Printer size={16} />
+                    Traditional Print
+                  </button>
+
+                  {!isUnpaidReceipt && (
+                    <p className="text-[10px] text-center text-gray-400 font-bold bg-gray-50 p-2 rounded-lg mt-2">
+                      Official transaction record for student reference.
+                    </p>
+                  )}
+                  {isUnpaidReceipt && (
+                    <p className="text-[10px] text-center text-red-500 font-bold bg-red-50 p-2 rounded-lg mt-2 uppercase tracking-widest">
+                      Payment Pending
+                    </p>
+                  )}
                 </div>
               </div>
-              
-              <div className="mb-6">
-                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Student Details</h4>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="font-bold text-gray-800">{receiptData.studentName}</p>
-                  <p className="text-sm text-gray-600">ID: {receiptData.studentId}</p>
-                  <p className="text-sm text-gray-600">Class: {receiptData.grade}</p>
-                </div>
-              </div>
-              
-              <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg border border-blue-100">
-                <span className="font-bold text-blue-900">Amount Paid</span>
-                <span className="text-2xl font-black text-blue-700">LKR {receiptData.totalAmount || receiptData.amount}</span>
-              </div>
-            </div>
-            
-            <div className="p-4 bg-gray-50 border-t border-gray-200 flex gap-3">
-              <button 
-                onClick={() => {
-                  setShowReceipt(false);
-                  setSelectedStudent(null);
-                }}
-                className="flex-1 py-2.5 px-4 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-white transition-colors"
-              >
-                Close
-              </button>
-              <button 
-                onClick={() => {
-                  const content = document.getElementById('receipt-content');
-                  
-                  let printIframe = document.getElementById('receipt-print-iframe') as HTMLIFrameElement;
-                  if (!printIframe) {
-                    printIframe = document.createElement('iframe');
-                    printIframe.id = 'receipt-print-iframe';
-                    printIframe.style.position = 'absolute';
-                    printIframe.style.top = '-9999px';
-                    printIframe.style.left = '-9999px';
-                    document.body.appendChild(printIframe);
-                  }
-                  
-                  const printDoc = printIframe.contentWindow?.document;
-                  if (printDoc && content) {
-                    printDoc.open();
-                    printDoc.write(`
-                      <html>
-                        <head>
-                          <title>Fee Receipt - ${receiptData.studentName}</title>
-                          <style>
-                            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-                            body { font-family: 'Inter', sans-serif; padding: 0; margin: 0; color: #1a1a1a; background: #fff; }
-                            .receipt { max-width: 800px; margin: 0 auto; padding: 40px; position: relative; border: 1px solid #eee; }
-                            
-                            .paid-banner {
-                              position: absolute;
-                              top: 20px;
-                              right: -30px;
-                              background: #ef008c;
-                              color: white;
-                              padding: 5px 60px;
-                              transform: rotate(45deg);
-                              font-weight: 900;
-                              text-transform: uppercase;
-                              letter-spacing: 2px;
-                              font-size: 14px;
-                              box-shadow: 0 2px 10px rgba(239, 0, 140, 0.3);
-                            }
-
-                            .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #f8f8f8; padding-bottom: 30px; }
-                            .logo-placeholder { 
-                              width: 80px; 
-                              height: 80px; 
-                              background: #fff; 
-                              border-radius: 50%; 
-                              margin: 0 auto 15px;
-                              display: flex;
-                              align-items: center;
-                              justify-content: center;
-                              border: 4px solid #f0f0f0;
-                              overflow: hidden;
-                            }
-                            .logo-placeholder img { width: 100%; height: 100%; object-fit: cover; }
-                            
-                            .academy-name { font-size: 28px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: -0.5px; }
-                            .slogan { font-size: 12px; color: #ef008c; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; margin-top: 5px; }
-                            
-                            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 40px; padding: 0 10px; }
-                            .info-label { font-size: 11px; font-weight: 900; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px; margin-bottom: 5px; }
-                            .info-value { font-size: 15px; font-weight: 700; color: #1e293b; }
-                            
-                            .table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-                            .table th { text-align: left; background: #f8fafc; padding: 12px 15px; font-size: 11px; font-weight: 900; text-transform: uppercase; color: #64748b; letter-spacing: 1px; border-top: 1px solid #f1f5f9; }
-                            .table td { padding: 15px; border-bottom: 1px solid #f1f5f9; }
-                            .item-name { font-weight: 700; font-size: 14px; color: #334155; }
-                            .item-desc { font-size: 11px; color: #94a3b8; font-style: italic; margin-top: 2px; }
-                            .item-amount { font-weight: 900; font-size: 14px; color: #0f172a; text-align: right; }
-                            
-                            .totals-container { margin-left: auto; width: 300px; padding: 0 10px; }
-                            .total-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; }
-                            .total-label { font-size: 12px; font-weight: 900; text-transform: uppercase; color: #94a3b8; }
-                            .total-value-sub { font-size: 14px; font-weight: 900; color: #334155; }
-                            
-                            .grand-total { 
-                              background: #ef008c; 
-                              color: white; 
-                              padding: 15px 20px; 
-                              border-radius: 12px; 
-                              margin-top: 15px;
-                              box-shadow: 0 10px 15px -3px rgba(239, 0, 140, 0.3);
-                            }
-                            .grand-total .total-label { color: #fff; opacity: 0.8; }
-                            .grand-total .total-value { font-size: 22px; font-weight: 900; }
-                            
-                            .footer { border-top: 1px dashed #e2e8f0; margin-top: 60px; padding-top: 30px; text-align: center; }
-                            .footer-icon { color: #ef008c; font-size: 20px; margin-bottom: 15px; display: block; }
-                            .footer-note { font-size: 10px; font-weight: 900; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px; margin-bottom: 10px; }
-                            .thanks { font-size: 14px; font-weight: 800; color: #1e293b; margin-top: 5px; }
-
-                            @media print {
-                              .receipt { border: none; padding: 0; }
-                              .paid-banner { -webkit-print-color-adjust: exact; }
-                              .grand-total { -webkit-print-color-adjust: exact; background-color: #ef008c !important; color: white !important; }
-                            }
-                          </style>
-                        </head>
-                        <body>
-                          <div class="receipt">
-                            <div class="paid-banner">PAID</div>
-                            
-                            <div class="header">
-                              <div class="logo-placeholder">
-                                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s" onerror="this.src='https://ui-avatars.com/api/?name=AD&background=ef008c&color=fff'" />
-                              </div>
-                              <div class="academy-name">AGARAM DHINES ONLINE ACADEMY</div>
-                              <div class="slogan">EXCELLENCE IN DIGITAL LEARNING</div>
-                            </div>
-                            
-                            <div class="info-grid">
-                              <div>
-                                <div class="info-label">INVOICED TO</div>
-                                <div class="info-value">${receiptData.studentName}</div>
-                                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
-                                  ID: ${receiptData.studentId}<br>
-                                  Class: ${receiptData.grade}
-                                </div>
-                              </div>
-                              <div style="text-align: right;">
-                                <div class="info-label">RECEIPT INFO</div>
-                                <div class="info-value">Date: ${receiptData.date}</div>
-                                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
-                                  Receipt No: ${receiptData.transactionId}<br>
-                                  Method: ${receiptData.method}
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <table class="table">
-                              <thead>
-                                <tr>
-                                  <th>DESCRIPTION</th>
-                                  <th style="text-align: right;">AMOUNT</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                ${receiptData.items?.map((item: any) => `
-                                  <tr>
-                                    <td>
-                                      <div class="item-name">${item.label.toUpperCase()}</div>
-                                      <div class="item-desc">${item.type === 'Monthly Tuition' ? receiptData.month : (item.category === 'Main' ? 'Main Subject Fee' : 'Sub Subject Special Fee')}</div>
-                                    </td>
-                                    <td class="item-amount">LKR ${item.amount}.00</td>
-                                  </tr>
-                                `).join('')}
-                              </tbody>
-                            </table>
-                            
-                            <div class="totals-container">
-                              <div class="total-row">
-                                <span class="total-label">SUB TOTAL</span>
-                                <span class="total-value-sub">LKR ${receiptData.totalAmount || receiptData.amount}.00</span>
-                              </div>
-                              <div class="total-row grand-total">
-                                <span class="total-label">TOTAL PAID</span>
-                                <span class="total-value">LKR ${receiptData.totalAmount || receiptData.amount}</span>
-                              </div>
-                            </div>
-                            
-                            <div class="footer">
-                              <span class="footer-icon">✓</span>
-                              <div class="footer-note">GENERATED VIA AGARAM ACADEMY PORTAL</div>
-                              <div class="thanks">THANK YOU FOR YOUR PAYMENT</div>
-                              <div style="font-size: 10px; color: #94a3b8; margin-top: 15px; font-weight: bold;">
-                                excellence in digital learning • www.agaramdhines.lk
-                              </div>
-                            </div>
-                          </div>
-                        </body>
-                      </html>
-                    `);
-                    printDoc.close();
-                    setTimeout(() => {
-                      printIframe.contentWindow?.focus();
-                      printIframe.contentWindow?.print();
-                    }, 500);
-                  } else if (!printDoc) {
-                    alert('Unable to print. Please check your security settings.');
-                  }
-                }}
-                className="flex-1 py-2.5 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-              >
-                <Printer size={18} />
-                Print Receipt
-              </button>
             </div>
           </div>
         </div>

@@ -426,6 +426,7 @@ export default function FeeDefaulters() {
                   />
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Student ID</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Roll Number</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Name</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Phone Number</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Total Fee</th>
@@ -459,6 +460,7 @@ export default function FeeDefaulters() {
                           />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{student.student_id || student.id}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-bold">{student.rollNo || "N/A"}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{student.name}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{student.phone || student.username || "N/A"}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">LKR {student.totalFee}</td>
@@ -679,6 +681,7 @@ export default function FeeDefaulters() {
                   <div className="space-y-1">
                     <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Invoiced To</h2>
                     <p className="text-sm font-black text-gray-900">{selectedStudentForReceipt.name}</p>
+                    <p className="text-gray-600 font-bold">Roll No: {selectedStudentForReceipt.rollNo || "N/A"}</p>
                     <p className="text-gray-600 font-bold">ID: {selectedStudentForReceipt.student_id || selectedStudentForReceipt.id}</p>
                     <p className="text-gray-600 font-bold">Class: {selectedStudentForReceipt.grade}</p>
                   </div>
