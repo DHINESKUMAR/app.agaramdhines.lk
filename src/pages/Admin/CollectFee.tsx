@@ -470,7 +470,7 @@ export default function CollectFee() {
                         className={`p-3 hover:bg-blue-50 cursor-pointer transition-colors flex flex-col ${selectedStudent?.id === student.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
                       >
                         <span className="font-medium text-gray-800">{student.name}</span>
-                        <span className="text-xs text-gray-500">Roll No: {student.rollNo || "N/A"} | ID: {student.student_id || student.id} | Class: {student.grade}</span>
+                        <span className="text-xs text-gray-500">Roll No: {student.rollNo || "N/A"} | Class: {student.grade}</span>
                       </li>
                     ))}
                   </ul>
@@ -496,7 +496,6 @@ export default function CollectFee() {
                   <div>
                     <h3 className="font-bold text-gray-800 leading-tight">{selectedStudent.name}</h3>
                     <p className="text-xs text-gray-500">Roll No: {selectedStudent.rollNo || "N/A"}</p>
-                    <p className="text-xs text-gray-500">ID: {selectedStudent.student_id || selectedStudent.id}</p>
                   </div>
                 </div>
               </div>
@@ -870,7 +869,6 @@ export default function CollectFee() {
                       <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 font-bold">Invoiced To:</p>
                       <p className="text-sm font-black text-gray-800">{receiptData.studentName}</p>
                       <p className="text-[10px] text-gray-500 font-bold uppercase">Roll No: {receiptData.rollNo || "N/A"}</p>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase">ID: {receiptData.studentId}</p>
                       <p className="text-[10px] text-gray-500 font-bold uppercase">Class: {receiptData.grade}</p>
                     </div>
                     <div className="text-right">

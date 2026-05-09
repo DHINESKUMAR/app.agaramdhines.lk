@@ -425,10 +425,8 @@ export default function FeeDefaulters() {
                     className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
                   />
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Student ID</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Roll Number</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Phone Number</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Total Fee</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Due Amount</th>
                     <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Payments</th>
@@ -438,13 +436,13 @@ export default function FeeDefaulters() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {!hasSearched ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                      <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                         Please select a class and month to view defaulters.
                       </td>
                     </tr>
                   ) : defaulters.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center text-green-600 font-medium">
+                      <td colSpan={7} className="px-6 py-12 text-center text-green-600 font-medium">
                         No defaulters found! All students in this class have paid for the selected month.
                       </td>
                     </tr>
@@ -459,10 +457,8 @@ export default function FeeDefaulters() {
                             className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
                           />
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{student.student_id || student.id}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-bold">{student.rollNo || "N/A"}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{student.name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{student.phone || student.username || "N/A"}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">LKR {student.totalFee}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <div className="flex flex-col">
@@ -549,10 +545,6 @@ export default function FeeDefaulters() {
                     <div>
                       <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Student Name</p>
                       <p className="font-medium text-gray-900">{currentStudent.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Phone Number</p>
-                      <p className="font-medium text-gray-900">{currentStudent.phone || currentStudent.username || <span className="text-red-500 italic">Not Provided</span>}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Due Amount</p>
@@ -682,7 +674,6 @@ export default function FeeDefaulters() {
                     <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Invoiced To</h2>
                     <p className="text-sm font-black text-gray-900">{selectedStudentForReceipt.name}</p>
                     <p className="text-gray-600 font-bold">Roll No: {selectedStudentForReceipt.rollNo || "N/A"}</p>
-                    <p className="text-gray-600 font-bold">ID: {selectedStudentForReceipt.student_id || selectedStudentForReceipt.id}</p>
                     <p className="text-gray-600 font-bold">Class: {selectedStudentForReceipt.grade}</p>
                   </div>
                   <div className="text-right space-y-1">

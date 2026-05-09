@@ -75,7 +75,7 @@ export default function Fees() {
             feesHistory.map((fee: any) => (
               <div key={fee.id} className="border border-gray-200 rounded-lg p-4 flex justify-between items-center">
                 <div>
-                  <h3 className="font-bold text-[#1e3a8a]">{fee.studentName} (ID: {fee.studentId}{fee.rollNo ? ` | Roll: ${fee.rollNo}` : ''})</h3>
+                  <h3 className="font-bold text-[#1e3a8a]">{fee.studentName}{fee.rollNo ? ` (Roll: ${fee.rollNo})` : ''}</h3>
                   <p className="text-sm text-gray-500">Month: {fee.month} | Grade: {fee.grade}</p>
                 </div>
                 <div className="text-right">
@@ -109,7 +109,6 @@ export default function Fees() {
         ...paidStudents.map(s => ({
           "Student Name": s.name,
           "Roll Number": s.rollNo || "N/A",
-          "Student ID": s.student_id || s.id,
           "Grade": s.grade,
           "Status": "Paid",
           "Month": statusMonth
@@ -117,7 +116,6 @@ export default function Fees() {
         ...outstandingStudents.map(s => ({
           "Student Name": s.name,
           "Roll Number": s.rollNo || "N/A",
-          "Student ID": s.student_id || s.id,
           "Grade": s.grade,
           "Status": "Unpaid",
           "Month": statusMonth
@@ -134,13 +132,13 @@ export default function Fees() {
       doc.text(`Student Fee Status - ${statusMonth}`, 14, 15);
       
       const tableData = [
-        ...paidStudents.map(s => [s.name, s.rollNo || "N/A", s.student_id || s.id, s.grade, "Paid"]),
-        ...outstandingStudents.map(s => [s.name, s.rollNo || "N/A", s.student_id || s.id, s.grade, "Unpaid"])
+        ...paidStudents.map(s => [s.name, s.rollNo || "N/A", s.grade, "Paid"]),
+        ...outstandingStudents.map(s => [s.name, s.rollNo || "N/A", s.grade, "Unpaid"])
       ];
-
+      
       autoTable(doc, {
         startY: 20,
-        head: [['Student Name', 'Roll No', 'Student ID', 'Grade', 'Status']],
+        head: [['Student Name', 'Roll No', 'Grade', 'Status']],
         body: tableData,
         theme: 'grid',
         styles: { fontSize: 10 },
@@ -210,7 +208,7 @@ export default function Fees() {
                   <div key={student.id} className="flex justify-between items-center border-b border-gray-100 pb-2 last:border-0 last:pb-0">
                     <div>
                       <p className="font-medium text-gray-800">{student.name}</p>
-                      <p className="text-xs text-gray-500">Roll: {student.rollNo || "N/A"} | ID: {student.student_id || student.id} | {student.grade}</p>
+                      <p className="text-xs text-gray-500">Roll: {student.rollNo || "N/A"} | {student.grade}</p>
                     </div>
                     <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded">Unpaid</span>
                   </div>
@@ -233,7 +231,7 @@ export default function Fees() {
                   <div key={student.id} className="flex justify-between items-center border-b border-gray-100 pb-2 last:border-0 last:pb-0">
                     <div>
                       <p className="font-medium text-gray-800">{student.name}</p>
-                      <p className="text-xs text-gray-500">Roll: {student.rollNo || "N/A"} | ID: {student.student_id || student.id} | {student.grade}</p>
+                      <p className="text-xs text-gray-500">Roll: {student.rollNo || "N/A"} | {student.grade}</p>
                     </div>
                     <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">Paid</span>
                   </div>
@@ -387,7 +385,7 @@ export default function Fees() {
                       />
                       <div>
                         <p className="font-medium text-gray-800">{student.name}</p>
-                        <p className="text-xs text-gray-500">Roll: {student.rollNo || "N/A"} | ID: {student.student_id || student.id} | {student.grade}</p>
+                        <p className="text-xs text-gray-500">Roll: {student.rollNo || "N/A"} | {student.grade}</p>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
@@ -425,7 +423,7 @@ export default function Fees() {
                   <div key={student.id} className="flex justify-between items-center border-b border-gray-100 pb-2 last:border-0 last:pb-0">
                     <div>
                       <p className="font-medium text-gray-800">{student.name}</p>
-                      <p className="text-xs text-gray-500">Roll: {student.rollNo || "N/A"} | ID: {student.student_id || student.id} | {student.grade}</p>
+                      <p className="text-xs text-gray-500">Roll: {student.rollNo || "N/A"} | {student.grade}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100">Paid</span>

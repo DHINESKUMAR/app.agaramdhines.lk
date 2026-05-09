@@ -371,13 +371,11 @@ export default function Students() {
     });
 
     const dataToExport = filteredStudents.map(s => ({
-      "Student ID": s.id,
       "Roll No": s.rollNo || "",
       "Name": s.name,
       "Grade": s.grade || "",
       "Username": s.username,
       "Password": s.password,
-      "Phone": s.phone || "",
       "Guardian Name": s.guardianName || "",
       "Address": s.address || "",
       "DOB": s.dob || "",
@@ -419,15 +417,13 @@ export default function Students() {
     });
 
     const doc = new jsPDF();
-    const tableColumn = ["Student ID", "Roll No", "Name", "Grade", "Username", "Password", "Phone"];
+    const tableColumn = ["Roll No", "Name", "Grade", "Username", "Password"];
     const tableRows = filteredStudents.map(s => [
-      s.id,
       s.rollNo || "",
       s.name,
       s.grade || "",
       s.username,
-      s.password,
-      s.phone || ""
+      s.password
     ]);
 
     doc.text(`Student List - ${filterClass || "All Classes"}`, 14, 15);
@@ -1083,7 +1079,7 @@ export default function Students() {
                     <span className="text-gray-500 font-bold text-xl">{student.name.charAt(0)}</span>
                   )}
                 </div>
-                <p className="text-gray-500 text-sm mt-2">{student.id}</p>
+                <p className="text-gray-500 text-sm mt-2">Roll No: {student.rollNo || "N/A"}</p>
                 <p className="font-bold uppercase text-sm mt-1">{student.name}</p>
                 <p className="text-indigo-600 text-xs font-semibold mt-1 px-2 py-0.5 bg-indigo-50 rounded-full inline-block">{student.grade}</p>
                 
@@ -1192,10 +1188,6 @@ export default function Students() {
                             <span className="text-xs font-bold text-gray-800">{docModal.student.rollNo || 'N/A'}</span>
                           </div>
                           <div className="flex justify-between border-b border-gray-100 pb-1">
-                            <span className="text-xs text-gray-500 font-medium">PHONE</span>
-                            <span className="text-xs font-bold text-gray-800">{docModal.student.phone || 'N/A'}</span>
-                          </div>
-                          <div className="flex justify-between border-b border-gray-100 pb-1">
                             <span className="text-xs text-gray-500 font-medium">USER</span>
                             <span className="text-xs font-bold text-gray-800">{docModal.student.username}</span>
                           </div>
@@ -1245,7 +1237,6 @@ export default function Students() {
                       
                       <div className="flex gap-6 text-sm text-gray-700 mb-8 bg-gray-50 p-4 rounded-lg border border-gray-200">
                         <p><span className="font-bold text-indigo-900">Roll No:</span> {docModal.student.rollNo || 'N/A'}</p>
-                        <p><span className="font-bold text-indigo-900">Phone:</span> {docModal.student.phone || 'N/A'}</p>
                         <p><span className="font-bold text-indigo-900">User:</span> <span className="font-mono">{docModal.student.username}</span></p>
                         <p><span className="font-bold text-indigo-900">Pass:</span> <span className="font-mono">{docModal.student.password}</span></p>
                       </div>
@@ -1287,9 +1278,6 @@ export default function Students() {
                         <div className="text-white">
                           <h2 className="text-2xl font-bold">{docModal.student.name}</h2>
                           <p className="opacity-90">{docModal.student.grade}</p>
-                          <span className="inline-block mt-2 px-2 py-1 bg-white/20 rounded text-xs font-medium">
-                            {docModal.student.id}
-                          </span>
                         </div>
                       </div>
                       
@@ -1305,9 +1293,6 @@ export default function Students() {
                             
                             <span className="text-gray-500 font-medium">Gender:</span>
                             <span className="text-gray-900 capitalize">{docModal.student.gender || 'N/A'}</span>
-                            
-                            <span className="text-gray-500 font-medium">Phone:</span>
-                            <span className="text-gray-900">{docModal.student.phone || 'N/A'}</span>
                           </div>
                         </div>
                         
@@ -1634,7 +1619,6 @@ export default function Students() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student ID</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QR Code</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
@@ -1647,7 +1631,6 @@ export default function Students() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {students.map((student) => (
                   <tr key={student.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{student.id}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div id={`qr-${student.id}`} className="bg-white p-1 inline-block">
                         <QRCodeSVG value={student.id} size={40} />
