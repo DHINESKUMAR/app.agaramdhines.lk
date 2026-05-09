@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { getStudents, saveStudents, getFees, saveFees, getClasses, getAdminSettings, getSubjects } from "../../lib/db";
 import { Search, Calendar, CreditCard, User, BookOpen, DollarSign, CheckCircle, Printer } from "lucide-react";
 
@@ -65,8 +65,10 @@ export default function CollectFee() {
     }
   }, [selectedStudent, allFees]);
 
-  const filteredStudents = (searchQuery || selectedGrade)
-    ? students.filter(s => {
+  const filteredStudents = useMemo(() => {
+    if (!(searchQuery || selectedGrade)) return [];
+    
+    return students.filter(s => {
         const searchLow = searchQuery.toLowerCase().trim();
         const matchesSearch = searchQuery 
           ? s.name?.toLowerCase().includes(searchLow) || 
@@ -83,8 +85,8 @@ export default function CollectFee() {
           return (a.grade || "").localeCompare(b.grade || "");
         }
         return (a.name || "").localeCompare(b.name || "");
-      })
-    : [];
+      });
+  }, [students, searchQuery, selectedGrade]);
 
   const handleSelectStudent = (student: any) => {
     setSelectedStudent(student);
@@ -344,7 +346,7 @@ export default function CollectFee() {
     setShowReceipt(true);
   };
 
-  const groupedHistory = groupFeesByBatch(studentFeeHistory);
+  const groupedHistory = useMemo(() => groupFeesByBatch(studentFeeHistory), [studentFeeHistory]);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
