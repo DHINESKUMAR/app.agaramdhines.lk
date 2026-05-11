@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Trash2, RefreshCw, FileText, Copy, Download, Printer, Search, Filter } from 'lucide-react';
-import { getIncomeExpense, getFees, getClasses } from '../../lib/db';
+import { getIncomeExpense, saveIncomeExpense, getFees, saveFees, getClasses } from '../../lib/db';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -13,52 +13,80 @@ export default function AccountStatement() {
   const [loading, setLoading] = useState(true);
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedGrade, setSelectedGrade] = useState('All');
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [incomeExpense, fees, classesData] = await Promise.all([
+        getIncomeExpense(),
+        getFees(),
+        getClasses()
+      ]);
+      
+      if (classesData) setClasses(classesData);
+
+      // Combine and format data
+      const combinedData = [
+        ...(incomeExpense || []).map((item: any) => ({
+          id: item.id,
+          date: item.date,
+          description: item.description || (item.type === 'Income' ? 'Other Income' : 'Expense'),
+          type: item.type, // 'Income' or 'Expense'
+          amount: Number(item.amount),
+          grade: 'N/A', // General income/expense doesn't have a grade
+          origin: 'incomeExpense'
+        })),
+        ...(fees || []).map((fee: any) => ({
+          id: fee.id,
+          date: fee.date || fee.month + '-01', // Fallback to month if exact date not available
+          description: `Fee Collection - ${fee.studentName || 'Student'}`,
+          type: 'Income',
+          amount: Number(fee.amount),
+          grade: fee.grade || 'N/A',
+          origin: 'fees'
+        }))
+      ];
+
+      // Sort by date descending
+      combinedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      setTransactions(combinedData);
+    } catch (error) {
+      console.error("Error loading account statement data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const [incomeExpense, fees, classesData] = await Promise.all([
-          getIncomeExpense(),
-          getFees(),
-          getClasses()
-        ]);
-        
-        if (classesData) setClasses(classesData);
-
-        // Combine and format data
-        const combinedData = [
-          ...(incomeExpense || []).map((item: any) => ({
-            id: item.id,
-            date: item.date,
-            description: item.description || (item.type === 'Income' ? 'Other Income' : 'Expense'),
-            type: item.type, // 'Income' or 'Expense'
-            amount: Number(item.amount),
-            grade: 'N/A' // General income/expense doesn't have a grade
-          })),
-          ...(fees || []).map((fee: any) => ({
-            id: fee.id,
-            date: fee.date || fee.month + '-01', // Fallback to month if exact date not available
-            description: `Fee Collection - ${fee.studentName || 'Student'}`,
-            type: 'Income',
-            amount: Number(fee.amount),
-            grade: fee.grade || 'N/A'
-          }))
-        ];
-
-        // Sort by date descending
-        combinedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-        setTransactions(combinedData);
-      } catch (error) {
-        console.error("Error loading account statement data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadData();
   }, []);
+
+  const handleDelete = async (transaction: any) => {
+    if (!window.confirm("இந்த விபரத்தை நிச்சயமாக நீக்க வேண்டுமா?")) return;
+    
+    setIsDeleting(transaction.id);
+    try {
+      if (transaction.origin === 'incomeExpense') {
+        const currentData = await getIncomeExpense() || [];
+        const updatedData = currentData.filter((item: any) => item.id !== transaction.id);
+        await saveIncomeExpense(updatedData);
+      } else if (transaction.origin === 'fees') {
+        const currentData = await getFees() || [];
+        const updatedData = currentData.filter((item: any) => item.id !== transaction.id);
+        await saveFees(updatedData);
+      }
+      
+      // Refresh local state
+      await loadData();
+      alert("விபரம் நீக்கப்பட்டது.");
+    } catch (error: any) {
+      alert("பிழை: " + error.message);
+    } finally {
+      setIsDeleting(null);
+    }
+  };
 
   // Filter by search term and selected grade
   const filteredTransactions = transactions.filter(t => {
@@ -244,12 +272,13 @@ export default function AccountStatement() {
                 <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Debit (Expense)</th>
                 <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Credit (Income)</th>
                 <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Net Balance</th>
+                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500 bg-gray-50/30">
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500 bg-gray-50/30">
                     <div className="flex flex-col items-center justify-center">
                       <RefreshCw size={32} className="text-blue-500 mb-3 animate-spin" />
                       <p className="text-base font-medium text-gray-600">Loading data...</p>
@@ -258,7 +287,7 @@ export default function AccountStatement() {
                 </tr>
               ) : transactionsWithBalance.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500 bg-gray-50/30">
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500 bg-gray-50/30">
                     <div className="flex flex-col items-center justify-center">
                       <FileText size={32} className="text-gray-300 mb-3" />
                       <p className="text-base font-medium text-gray-600">No data available in table</p>
@@ -268,7 +297,7 @@ export default function AccountStatement() {
                 </tr>
               ) : (
                 transactionsWithBalance.map((t, index) => (
-                  <tr key={t.id || index} className="hover:bg-gray-50 transition-colors">
+                  <tr key={t.id || index} className="hover:bg-gray-50 transition-colors group">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{t.date}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">{t.description}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
@@ -277,13 +306,23 @@ export default function AccountStatement() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-red-600 font-medium">
-                      {t.type === 'Expense' ? `₹${t.amount.toFixed(2)}` : '-'}
+                      {t.type === 'Expense' ? `Rs ${t.amount.toFixed(2)}` : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-green-600 font-medium">
-                      {t.type === 'Income' ? `₹${t.amount.toFixed(2)}` : '-'}
+                      {t.type === 'Income' ? `Rs ${t.amount.toFixed(2)}` : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">
-                      ₹{t.balance.toFixed(2)}
+                      Rs {t.balance.toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <button
+                        onClick={() => handleDelete(t)}
+                        disabled={isDeleting === t.id}
+                        className="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                        title="Delete Record"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -292,9 +331,10 @@ export default function AccountStatement() {
             <tfoot className="bg-gray-50 border-t border-gray-200">
               <tr>
                 <th colSpan={3} className="px-6 py-3 text-right text-sm font-bold text-gray-700">Total:</th>
-                <th className="px-6 py-3 text-right text-sm font-bold text-red-600">₹{totalExpense.toFixed(2)}</th>
-                <th className="px-6 py-3 text-right text-sm font-bold text-green-600">₹{totalIncome.toFixed(2)}</th>
-                <th className="px-6 py-3 text-right text-sm font-bold text-gray-900">₹{netBalance.toFixed(2)}</th>
+                <th className="px-6 py-3 text-right text-sm font-bold text-red-600">Rs {totalExpense.toFixed(2)}</th>
+                <th className="px-6 py-3 text-right text-sm font-bold text-green-600">Rs {totalIncome.toFixed(2)}</th>
+                <th className="px-6 py-3 text-right text-sm font-bold text-gray-900">Rs {netBalance.toFixed(2)}</th>
+                <th className="px-6 py-3"></th>
               </tr>
             </tfoot>
           </table>

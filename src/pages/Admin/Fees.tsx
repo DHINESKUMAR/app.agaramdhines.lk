@@ -18,6 +18,7 @@ export default function Fees() {
   const [statusMonth, setStatusMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [zoomControlClass, setZoomControlClass] = useState<string>("");
   const [selectedUnpaidStudents, setSelectedUnpaidStudents] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   // Receipt Modal State for Unpaid Preview
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -29,6 +30,22 @@ export default function Fees() {
   useEffect(() => {
     getAdminSettings().then(data => setAdminSettings(data));
   }, []);
+
+  const handleDeleteFee = async (id: string) => {
+    if (!window.confirm("இந்த கட்டண விபரத்தை நிச்சயமாக நீக்க வேண்டுமா?")) return;
+    
+    setIsDeleting(id);
+    try {
+      const updatedHistory = feesHistory.filter(f => f.id !== id);
+      await saveFees(updatedHistory);
+      setFeesHistory(updatedHistory);
+      alert("கட்டண விபரம் நீக்கப்பட்டது.");
+    } catch (error: any) {
+      alert("பிழை: " + error.message);
+    } finally {
+      setIsDeleting(null);
+    }
+  };
 
   const handlePreviewUnpaid = (student: any) => {
     setSelectedStudentForReceipt(student);
@@ -156,14 +173,24 @@ export default function Fees() {
             <div className="text-center text-gray-500 py-8">வரலாறு எதுவும் இல்லை.</div>
           ) : (
             feesHistory.map((fee: any) => (
-              <div key={fee.id} className="border border-gray-200 rounded-lg p-4 flex justify-between items-center">
+              <div key={fee.id} className="border border-gray-200 rounded-lg p-4 flex justify-between items-center group relative">
                 <div>
                   <h3 className="font-bold text-[#1e3a8a]">{fee.studentName}{fee.rollNo ? ` (Roll: ${fee.rollNo})` : ''}</h3>
                   <p className="text-sm text-gray-500">Month: {fee.month} | Grade: {fee.grade}</p>
                 </div>
-                <div className="text-right">
-                  <span className="text-green-600 font-bold bg-green-50 px-3 py-1 rounded text-sm">Rs. {fee.amount}</span>
-                  <p className="text-xs text-gray-400 mt-1">{new Date(fee.date).toLocaleDateString()}</p>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <span className="text-green-600 font-bold bg-green-50 px-3 py-1 rounded text-sm">Rs. {fee.amount}</span>
+                    <p className="text-xs text-gray-400 mt-1">{new Date(fee.date).toLocaleDateString()}</p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteFee(fee.id)}
+                    disabled={isDeleting === fee.id}
+                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                    title="Delete Record"
+                  >
+                    <Trash2 size={18} />
+                  </button>
                 </div>
               </div>
             ))

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { getStudents, saveStudents, getFees, saveFees, getClasses, getAdminSettings, getSubjects } from "../../lib/db";
-import { Search, Calendar, CreditCard, User, BookOpen, DollarSign, CheckCircle, Printer, Download, Copy, FileText, Image as ImageIcon, Share2, Plus } from "lucide-react";
+import { Search, Calendar, CreditCard, User, BookOpen, DollarSign, CheckCircle, Printer, Download, Copy, FileText, Image as ImageIcon, Share2, Plus, Trash2 } from "lucide-react";
 import { toPng, toBlob } from 'html-to-image';
 import jsPDF from 'jspdf';
 
@@ -58,6 +58,32 @@ export default function CollectFee() {
   const [receiptData, setReceiptData] = useState<any>(null);
   const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
   const [isUnpaidReceipt, setIsUnpaidReceipt] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
+  const handleDeleteFee = async (fee: any) => {
+    if (!window.confirm("இந்த கட்டண விபரத்தை நிச்சயமாக நீக்க வேண்டுமா?")) return;
+    
+    // Determine what to delete (batch or single)
+    const idToDelete = fee.batchId || fee.id;
+    setIsDeleting(idToDelete);
+    
+    try {
+      let updatedFees;
+      if (fee.batchId) {
+        updatedFees = allFees.filter(f => f.batchId !== fee.batchId);
+      } else {
+        updatedFees = allFees.filter(f => f.id !== fee.id);
+      }
+      
+      await saveFees(updatedFees);
+      setAllFees(updatedFees);
+      alert("கட்டண விபரம் நீக்கப்பட்டது.");
+    } catch (error: any) {
+      alert("பிழை: " + error.message);
+    } finally {
+      setIsDeleting(null);
+    }
+  };
 
   useEffect(() => {
     if (selectedStudent) {
@@ -755,7 +781,15 @@ export default function CollectFee() {
                             </td>
                             <td className="px-4 py-4 text-sm text-right space-x-3 whitespace-nowrap">
                               <button onClick={() => handleEditFee(fee)} className="text-blue-600 hover:text-blue-800 font-bold uppercase text-[10px] tracking-widest">Edit</button>
-                              <button onClick={() => handleLoadReceipt(fee)} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-md hover:bg-blue-100 font-black uppercase text-[10px] tracking-widest transition-colors">Receipt</button>
+                              <button onClick={() => handleLoadReceipt(fee)} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-md hover:bg-blue-100 font-black uppercase text-[10px] tracking-widest transition-colors mr-2">Receipt</button>
+                              <button 
+                                onClick={() => handleDeleteFee(fee)} 
+                                disabled={isDeleting === (fee.batchId || fee.id)}
+                                className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-full transition-colors disabled:opacity-50"
+                                title="Delete Record"
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </td>
                           </tr>
                         ))}
