@@ -1907,7 +1907,13 @@ export default function StudentDashboard() {
                         if (!acc[folder]) acc[folder] = [];
                         acc[folder].push(link);
                         return acc;
-                      }, {})).map(([folder, folderLinks]: [string, any]) => {
+                      }, {})).sort(([folderA, linksA]: any[], [folderB, linksB]: any[]) => {
+                        const dateA = linksA.map((l: any) => l.date).filter(Boolean).sort((x: any, y: any) => new Date(y).getTime() - new Date(x).getTime())[0];
+                        const dateB = linksB.map((l: any) => l.date).filter(Boolean).sort((x: any, y: any) => new Date(y).getTime() - new Date(x).getTime())[0];
+                        const tA = dateA ? new Date(dateA).getTime() : 0;
+                        const tB = dateB ? new Date(dateB).getTime() : 0;
+                        return tB - tA;
+                      }).map(([folder, folderLinks]: [string, any]) => {
                         const isExpanded = expandedFolders[folder];
                         const folderColor = getFolderColor(folder);
                         return (
@@ -1922,23 +1928,23 @@ export default function StudentDashboard() {
                                   <Megaphone size={28} className={isExpanded ? "animate-pulse" : ""} />
                                 </div>
                                 <div>
-                                  <h3 className={`text-xl font-black ${folderColor.text} leading-tight`}>
-                                    {folder}
-                                  </h3>
-                                  <p className="text-slate-500 text-sm font-medium mt-1">
-                                    {folderLinks.length} அலகுகள் மற்றும் RECORDING
-                                  </p>
                                   {(() => {
                                     const latestDate = folderLinks
                                       .map((l: any) => l.date)
                                       .filter(Boolean)
                                       .sort((a: any, b: any) => new Date(b).getTime() - new Date(a).getTime())[0];
                                     return latestDate ? (
-                                      <p className="text-slate-400 text-xs font-semibold mt-1">
+                                      <p className="text-slate-400 text-xs font-semibold mb-1">
                                         கடைசியாகப் புதுப்பிக்கப்பட்டது: {new Date(latestDate).toLocaleDateString()} {new Date(latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                       </p>
                                     ) : null;
                                   })()}
+                                  <h3 className={`text-xl font-black ${folderColor.text} leading-tight`}>
+                                    {folder}
+                                  </h3>
+                                  <p className="text-slate-500 text-sm font-medium mt-1">
+                                    {folderLinks.length} அலகுகள் மற்றும் RECORDING
+                                  </p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-6">
@@ -1962,7 +1968,11 @@ export default function StudentDashboard() {
                                   className="overflow-hidden"
                                 >
                                   <div className="p-6 sm:p-8 pt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 bg-slate-50/50">
-                                    {folderLinks.map((link: any, index: number) => {
+                                    {[...folderLinks].sort((a: any, b: any) => {
+                                      const tA = a.date ? new Date(a.date).getTime() : 0;
+                                      const tB = b.date ? new Date(b.date).getTime() : 0;
+                                      return tB - tA;
+                                    }).map((link: any, index: number) => {
                                       const videoId = link.link.includes('youtu.be/') 
                                         ? link.link.split('youtu.be/')[1].split('?')[0] 
                                         : (link.link.includes('v=') ? link.link.split('v=')[1].split('&')[0] : null);
@@ -2071,7 +2081,13 @@ export default function StudentDashboard() {
                         if (!acc[folder]) acc[folder] = [];
                         acc[folder].push(post);
                         return acc;
-                      }, {})).map(([folder, folderPosts]: [string, any]) => {
+                      }, {})).sort(([folderA, postsA]: any[], [folderB, postsB]: any[]) => {
+                        const dateA = postsA.map((p: any) => p.date).filter(Boolean).sort((x: any, y: any) => new Date(y).getTime() - new Date(x).getTime())[0];
+                        const dateB = postsB.map((p: any) => p.date).filter(Boolean).sort((x: any, y: any) => new Date(y).getTime() - new Date(x).getTime())[0];
+                        const tA = dateA ? new Date(dateA).getTime() : 0;
+                        const tB = dateB ? new Date(dateB).getTime() : 0;
+                        return tB - tA;
+                      }).map(([folder, folderPosts]: [string, any]) => {
                         const latestDate = folderPosts
                           .map((p: any) => p.date)
                           .filter(Boolean)
@@ -2080,15 +2096,15 @@ export default function StudentDashboard() {
                           <div key={folder} className="space-y-4">
                             <div className="flex items-center justify-between px-1">
                               <div>
+                                {latestDate && (
+                                  <p className="text-[10px] font-semibold text-slate-400 mb-1">
+                                    கடைசியாகப் புதுப்பிக்கப்பட்டது: {new Date(latestDate).toLocaleDateString()} {new Date(latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                )}
                                 <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
                                    <div className="w-2 h-6 bg-emerald-500 rounded-full"></div>
                                    {folder}
                                 </h3>
-                                {latestDate && (
-                                  <p className="text-[10px] font-semibold text-slate-400 mt-1">
-                                    கடைசியாகப் புதுப்பிக்கப்பட்டது: {new Date(latestDate).toLocaleDateString()} {new Date(latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                  </p>
-                                )}
                               </div>
                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
                                 {folderPosts.length} Posts
@@ -2097,7 +2113,11 @@ export default function StudentDashboard() {
 
                           <div className="relative group">
                             <div className="flex overflow-x-auto gap-6 pb-6 pt-2 px-1 snap-x no-scrollbar scroll-smooth" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                              {folderPosts.map((post: any) => (
+                              {[...folderPosts].sort((a: any, b: any) => {
+                                const tA = a.date ? new Date(a.date).getTime() : 0;
+                                const tB = b.date ? new Date(b.date).getTime() : 0;
+                                return tB - tA;
+                              }).map((post: any) => (
                                 <motion.div 
                                   initial={{ opacity: 0, scale: 0.95 }}
                                   animate={{ opacity: 1, scale: 1 }}

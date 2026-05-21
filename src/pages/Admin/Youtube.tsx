@@ -453,7 +453,13 @@ export default function Youtube() {
                    <p className="text-gray-500">Your categorized videos will appear here.</p>
                 </div>
               ) : (
-                Object.keys(folders).sort().map(folderName => {
+                Object.keys(folders).sort((a, b) => {
+                  const dateA = folders[a].map(l => l.date).filter(Boolean).sort((x, y) => new Date(y).getTime() - new Date(x).getTime())[0];
+                  const dateB = folders[b].map(l => l.date).filter(Boolean).sort((x, y) => new Date(y).getTime() - new Date(x).getTime())[0];
+                  const tA = dateA ? new Date(dateA).getTime() : 0;
+                  const tB = dateB ? new Date(dateB).getTime() : 0;
+                  return tB - tA;
+                }).map(folderName => {
                   const isExpanded = expandedFolders[folderName];
                   const folderColor = getFolderColor(folderName);
                   return (
@@ -467,22 +473,22 @@ export default function Youtube() {
                              <Folder size={24} />
                           </div>
                           <div>
-                            <h3 className={`font-black uppercase tracking-wider ${folderColor.text}`}>{folderName}</h3>
-                            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-0.5">
-                               {folders[folderName].length} Videos included
-                            </p>
                             {(() => {
                               const latestDate = folders[folderName]
                                 .map(l => l.date)
                                 .filter(Boolean)
                                 .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
                               return latestDate ? (
-                                <p className="text-slate-500 text-[10px] font-bold mt-0.5 flex items-center gap-1">
+                                <p className="text-slate-500 text-[10px] font-bold mb-1 flex items-center gap-1">
                                   <span>கடைசியாக கூட்டப்பட்டது:</span>
                                   <span>{new Date(latestDate).toLocaleDateString()} {new Date(latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 </p>
                               ) : null;
                             })()}
+                            <h3 className={`font-black uppercase tracking-wider ${folderColor.text}`}>{folderName}</h3>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-0.5">
+                               {folders[folderName].length} Videos included
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -504,7 +510,11 @@ export default function Youtube() {
 
                       {isExpanded && (
                         <div className="p-6 pt-2 grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/30">
-                          {folders[folderName].map(link => {
+                          {[...folders[folderName]].sort((a, b) => {
+                            const tA = a.date ? new Date(a.date).getTime() : 0;
+                            const tB = b.date ? new Date(b.date).getTime() : 0;
+                            return tB - tA;
+                          }).map(link => {
                             const videoId = extractVideoId(link.link);
                             const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&q=80';
                             return (
@@ -614,7 +624,13 @@ export default function Youtube() {
                     );
                   }
 
-                  return Object.keys(postFolders).sort().map(folderName => {
+                  return Object.keys(postFolders).sort((a, b) => {
+                    const dateA = postFolders[a].map(p => p.date).filter(Boolean).sort((x, y) => new Date(y).getTime() - new Date(x).getTime())[0];
+                    const dateB = postFolders[b].map(p => p.date).filter(Boolean).sort((x, y) => new Date(y).getTime() - new Date(x).getTime())[0];
+                    const tA = dateA ? new Date(dateA).getTime() : 0;
+                    const tB = dateB ? new Date(dateB).getTime() : 0;
+                    return tB - tA;
+                  }).map(folderName => {
                     const latestDate = postFolders[folderName]
                       .map(p => p.date)
                       .filter(Boolean)
@@ -625,12 +641,12 @@ export default function Youtube() {
                           <div className="flex items-center gap-2">
                             <Folder size={20} className="text-indigo-600" />
                             <div>
-                              <h3 className="text-lg font-black uppercase tracking-wider">{folderName}</h3>
                               {latestDate && (
-                                <p className="text-[10px] text-slate-500 font-bold uppercase mt-0.5">
+                                <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">
                                   கடைசியாக கூட்டப்பட்டது: {new Date(latestDate).toLocaleDateString()} {new Date(latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </p>
                               )}
+                              <h3 className="text-lg font-black uppercase tracking-wider">{folderName}</h3>
                             </div>
                           </div>
                           <button
@@ -643,7 +659,11 @@ export default function Youtube() {
                           </button>
                         </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {postFolders[folderName].map(post => (
+                        {[...postFolders[folderName]].sort((a, b) => {
+                          const tA = a.date ? new Date(a.date).getTime() : 0;
+                          const tB = b.date ? new Date(b.date).getTime() : 0;
+                          return tB - tA;
+                        }).map(post => (
                           <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all group">
                             {editingId === post.id ? (
                                <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
