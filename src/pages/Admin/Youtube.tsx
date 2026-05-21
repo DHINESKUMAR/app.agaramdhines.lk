@@ -49,6 +49,43 @@ export default function Youtube() {
     }
   };
 
+  const handleDeleteFolder = async (folderName: string) => {
+    if (!window.confirm(`இந்த கோப்பை ("${folderName}") மற்றும் அதிலுள்ள அனைத்து விபரங்களையும் நிச்சயமாக நீக்க வேண்டுமா?`)) return;
+
+    if (activeTab === 'youtube') {
+      const updatedLinks = links.filter(l => {
+        const isCurrentGrade = selectedGrade === "Public (All Students)" ? l.isPublic : l.grade === selectedGrade;
+        return !(l.folder === folderName && isCurrentGrade);
+      });
+      setLinks(updatedLinks);
+      await saveYoutubeLinks(updatedLinks);
+    } else {
+      const updatedPosts = webPosts.filter(p => {
+        const isCurrentGrade = selectedGrade === "Public (All Students)" ? p.isPublic : p.grade === selectedGrade;
+        return !(p.folder === folderName && isCurrentGrade);
+      });
+      setWebPosts(updatedPosts);
+      await saveWebPosts(updatedPosts);
+    }
+    alert("கோப்பு நீக்கப்பட்டது.");
+  };
+
+  const handleDeleteSubject = async (subjectName: string) => {
+    if (!window.confirm(`இந்த பாடத்தை ("${subjectName}") மற்றும் அதிலுள்ள அனைத்து விபரங்களையும் நிச்சயமாக நீக்க வேண்டுமா?`)) return;
+
+    if (activeTab === 'youtube') {
+      const updatedLinks = links.filter(l => l.subject !== subjectName);
+      setLinks(updatedLinks);
+      await saveYoutubeLinks(updatedLinks);
+    } else {
+      const updatedPosts = webPosts.filter(p => p.subject !== subjectName);
+      setWebPosts(updatedPosts);
+      await saveWebPosts(updatedPosts);
+    }
+    setFormData(prev => ({ ...prev, subject: '' }));
+    alert("பாடம் நீக்கப்பட்டது.");
+  };
+
   const [formData, setFormData] = useState({
     subject: '',
     title: '',
@@ -295,6 +332,15 @@ export default function Youtube() {
                       ))}
                     </select>
                   )}
+                  {formData.subject && !isNewSubject && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSubject(formData.subject)}
+                      className="mt-2 text-[10px] text-red-600 hover:text-red-800 flex items-center gap-1 font-bold bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition-colors"
+                    >
+                      <Trash2 size={12} /> இந்த பாடத்தை (Subject) நீக்கு
+                    </button>
+                  )}
                 </div>
                 <div>
                   <div className="flex justify-between items-center mb-1">
@@ -425,10 +471,34 @@ export default function Youtube() {
                             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-0.5">
                                {folders[folderName].length} Videos included
                             </p>
+                            {(() => {
+                              const latestDate = folders[folderName]
+                                .map(l => l.date)
+                                .filter(Boolean)
+                                .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+                              return latestDate ? (
+                                <p className="text-slate-500 text-[10px] font-bold mt-0.5 flex items-center gap-1">
+                                  <span>கடைசியாக கூட்டப்பட்டது:</span>
+                                  <span>{new Date(latestDate).toLocaleDateString()} {new Date(latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </p>
+                              ) : null;
+                            })()}
                           </div>
                         </div>
-                        <div className={`transition-transform duration-500 ${isExpanded ? 'rotate-180' : ''} ${folderColor.text}`}>
-                          <ChevronDown size={24} />
+                        <div className="flex items-center gap-2">
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteFolder(folderName);
+                            }}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-100/50 rounded-xl transition-colors cursor-pointer"
+                            title="Delete Folder"
+                          >
+                            <Trash2 size={18} />
+                          </span>
+                          <div className={`transition-transform duration-500 ${isExpanded ? 'rotate-180' : ''} ${folderColor.text}`}>
+                            <ChevronDown size={24} />
+                          </div>
                         </div>
                       </button>
 
@@ -502,13 +572,17 @@ export default function Youtube() {
                                         {link.isPublic ? 'Public' : 'Private'}
                                       </button>
                                     </div>
-                                    <h4 className="font-bold text-gray-900 mt-2 line-clamp-2">{link.title}</h4>
+                                    {link.date && (
+                                      <div className="text-[10px] font-bold text-slate-500 mt-2">
+                                        {new Date(link.date).toLocaleDateString()} {new Date(link.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </div>
+                                    )}
+                                    <h4 className="font-bold text-gray-900 mt-1 line-clamp-2">{link.title}</h4>
                                     <div className="mt-4 flex justify-between items-center">
                                        <div className="flex gap-1">
                                           <button onClick={() => startEdit(link)} className="text-gray-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-lg text-xs font-bold">Edit</button>
                                           <button onClick={() => handleDelete(link.id)} className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
                                        </div>
-                                       <span className="text-[10px] text-gray-400">{new Date(link.date).toLocaleDateString()}</span>
                                     </div>
                                   </>
                                 )}
@@ -540,12 +614,34 @@ export default function Youtube() {
                     );
                   }
 
-                  return Object.keys(postFolders).sort().map(folderName => (
-                    <div key={folderName} className="space-y-4">
-                      <div className="flex items-center gap-2 text-indigo-900 border-b pb-2">
-                        <Folder size={20} className="text-indigo-600" />
-                        <h3 className="text-lg font-black uppercase tracking-wider">{folderName}</h3>
-                      </div>
+                  return Object.keys(postFolders).sort().map(folderName => {
+                    const latestDate = postFolders[folderName]
+                      .map(p => p.date)
+                      .filter(Boolean)
+                      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+                    return (
+                      <div key={folderName} className="space-y-4">
+                        <div className="flex items-center justify-between border-b pb-2 text-indigo-900">
+                          <div className="flex items-center gap-2">
+                            <Folder size={20} className="text-indigo-600" />
+                            <div>
+                              <h3 className="text-lg font-black uppercase tracking-wider">{folderName}</h3>
+                              {latestDate && (
+                                <p className="text-[10px] text-slate-500 font-bold uppercase mt-0.5">
+                                  கடைசியாக கூட்டப்பட்டது: {new Date(latestDate).toLocaleDateString()} {new Date(latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFolder(folderName)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete Folder"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {postFolders[folderName].map(post => (
                           <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all group">
@@ -628,6 +724,11 @@ export default function Youtube() {
                                </div>
                             ) : (
                                <>
+                                 {post.date && (
+                                   <div className="text-[11px] font-bold text-slate-500 mb-2">
+                                     {new Date(post.date).toLocaleDateString()} {new Date(post.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                   </div>
+                                 )}
                                 <div className="flex justify-between items-start mb-4">
                                   <div className="flex items-center gap-2">
                                      <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded tracking-widest">{post.subject}</span>
@@ -671,7 +772,7 @@ export default function Youtube() {
                                   </div>
                                 )}
                                 <div className="flex justify-between items-center pt-4 border-t border-gray-50">
-                                  <span className="text-xs text-gray-400">{new Date(post.date).toLocaleDateString()}</span>
+
                                   <div className="flex gap-3">
                                      <button onClick={() => startEdit(post)} className="text-indigo-600 font-bold text-xs hover:underline">Edit Post</button>
                                   </div>
@@ -682,7 +783,8 @@ export default function Youtube() {
                         ))}
                       </div>
                     </div>
-                  ));
+                    );
+                  });
                 })()}
               </div>
             )}

@@ -1928,6 +1928,17 @@ export default function StudentDashboard() {
                                   <p className="text-slate-500 text-sm font-medium mt-1">
                                     {folderLinks.length} அலகுகள் மற்றும் RECORDING
                                   </p>
+                                  {(() => {
+                                    const latestDate = folderLinks
+                                      .map((l: any) => l.date)
+                                      .filter(Boolean)
+                                      .sort((a: any, b: any) => new Date(b).getTime() - new Date(a).getTime())[0];
+                                    return latestDate ? (
+                                      <p className="text-slate-400 text-xs font-semibold mt-1">
+                                        கடைசியாகப் புதுப்பிக்கப்பட்டது: {new Date(latestDate).toLocaleDateString()} {new Date(latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </p>
+                                    ) : null;
+                                  })()}
                                 </div>
                               </div>
                               <div className="flex items-center gap-6">
@@ -2060,17 +2071,29 @@ export default function StudentDashboard() {
                         if (!acc[folder]) acc[folder] = [];
                         acc[folder].push(post);
                         return acc;
-                      }, {})).map(([folder, folderPosts]: [string, any]) => (
-                        <div key={folder} className="space-y-4">
-                          <div className="flex items-center justify-between px-1">
-                            <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                               <div className="w-2 h-6 bg-emerald-500 rounded-full"></div>
-                               {folder}
-                            </h3>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                              {folderPosts.length} Posts
-                            </span>
-                          </div>
+                      }, {})).map(([folder, folderPosts]: [string, any]) => {
+                        const latestDate = folderPosts
+                          .map((p: any) => p.date)
+                          .filter(Boolean)
+                          .sort((a: any, b: any) => new Date(b).getTime() - new Date(a).getTime())[0];
+                        return (
+                          <div key={folder} className="space-y-4">
+                            <div className="flex items-center justify-between px-1">
+                              <div>
+                                <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                                   <div className="w-2 h-6 bg-emerald-500 rounded-full"></div>
+                                   {folder}
+                                </h3>
+                                {latestDate && (
+                                  <p className="text-[10px] font-semibold text-slate-400 mt-1">
+                                    கடைசியாகப் புதுப்பிக்கப்பட்டது: {new Date(latestDate).toLocaleDateString()} {new Date(latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                )}
+                              </div>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                                {folderPosts.length} Posts
+                              </span>
+                            </div>
 
                           <div className="relative group">
                             <div className="flex overflow-x-auto gap-6 pb-6 pt-2 px-1 snap-x no-scrollbar scroll-smooth" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
@@ -2083,10 +2106,15 @@ export default function StudentDashboard() {
                                 >
                                   <div className="flex justify-between items-start gap-3 mb-4">
                                     <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-2">
+                                      <div className="flex items-center justify-between gap-2 mb-2">
                                         <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
                                           {post.subject}
                                         </span>
+                                        {post.date && (
+                                          <span className="text-[10px] font-bold text-slate-400">
+                                            {new Date(post.date).toLocaleDateString()} {new Date(post.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                          </span>
+                                        )}
                                       </div>
                                       <h3 className="text-base font-black text-slate-800 leading-tight group-hover/post:text-indigo-600 transition-colors line-clamp-2 min-h-[2.5rem]">{post.title}</h3>
                                     </div>
@@ -2121,12 +2149,7 @@ export default function StudentDashboard() {
                                   </div>
 
                                   <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-auto">
-                                    <div className="flex flex-col">
-                                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">PUBLISHED ON</span>
-                                      <span className="text-[10px] font-bold text-slate-500">
-                                        {post.date ? new Date(post.date).toLocaleDateString() : 'N/A'}
-                                      </span>
-                                    </div>
+                                    <div></div>
                                     {post.link && (
                                       <a 
                                         href={post.link} 
@@ -2145,7 +2168,8 @@ export default function StudentDashboard() {
                             <div className="absolute right-0 top-0 bottom-6 w-12 bg-gradient-to-l from-white to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"></div>
                           </div>
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   )}
                 </div>
