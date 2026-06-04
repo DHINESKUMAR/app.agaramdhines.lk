@@ -15,7 +15,7 @@ export default function CollectFee() {
   const [studentFeeHistory, setStudentFeeHistory] = useState<any[]>([]);
   
   const [paymentData, setPaymentData] = useState({
-    method: "Cash",
+    method: "Bank Transfer",
     date: new Date().toISOString().split('T')[0],
     month: new Date().toISOString().slice(0, 7), // YYYY-MM format
   });
@@ -308,7 +308,7 @@ export default function CollectFee() {
       // Reset form
       setSelectedItems([]);
       setPaymentData({
-        method: "Cash",
+        method: "Bank Transfer",
         date: new Date().toISOString().split('T')[0],
         month: new Date().toISOString().slice(0, 7),
       });
@@ -751,13 +751,13 @@ export default function CollectFee() {
 
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-5">
                       <div>
-                        <label className="block text-sm font-medium text-gray-750 mb-1.5">
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                           Full Fee / Bill Total (முழு கட்டணம்)
                         </label>
-                        <div className="flex rounded-md shadow-sm">
-                          <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-slate-300 bg-slate-100 text-slate-500 font-bold text-xs uppercase select-none">
+                        <div className="flex rounded-md shadow-sm max-w-lg">
+                          <span className="inline-flex items-center px-4 rounded-l-md border border-r-0 border-slate-300 bg-slate-100 text-slate-500 font-black text-xs uppercase select-none">
                             LKR
                           </span>
                           <input 
@@ -769,7 +769,7 @@ export default function CollectFee() {
                               setAmountPaid(val); // By default, set amountPaid to match
                               setIsManualAmount(true);
                             }}
-                            className="flex-1 min-w-0 px-2.5 py-2.5 border border-slate-300 bg-gray-50 rounded-none rounded-r-md font-black text-slate-800 text-base focus:ring-blue-500 focus:border-blue-500 transition-shadow outline-none"
+                            className="flex-1 min-w-0 px-4 py-3 border border-slate-300 bg-gray-50 rounded-none rounded-r-md font-black text-slate-800 text-lg focus:ring-blue-500 focus:border-blue-500 transition-shadow outline-none"
                           />
                         </div>
                       </div>
@@ -778,8 +778,8 @@ export default function CollectFee() {
                         <label className="block text-sm font-semibold text-blue-800 mb-1.5">
                           Amount Paid Now (செலுத்திய தொகை) <span className="text-red-500">*</span>
                         </label>
-                        <div className="flex rounded-md shadow-sm">
-                          <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-blue-400 bg-blue-100 text-blue-600 font-bold text-xs uppercase select-none">
+                        <div className="flex rounded-md shadow-sm max-w-lg">
+                          <span className="inline-flex items-center px-4 rounded-l-md border border-r-0 border-blue-400 bg-blue-100 text-blue-600 font-black text-xs uppercase select-none">
                             LKR
                           </span>
                           <input 
@@ -790,17 +790,17 @@ export default function CollectFee() {
                               setAmountPaid(parseInt(e.target.value) || 0);
                               setIsManualAmount(true);
                             }}
-                            className="flex-1 min-w-0 px-2.5 py-2.5 border border-blue-400 bg-white rounded-none rounded-r-md font-black text-blue-700 text-base focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-shadow outline-none"
+                            className="flex-1 min-w-0 px-4 py-3 border border-blue-400 bg-white rounded-none rounded-r-md font-black text-blue-700 text-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-shadow outline-none"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-750 mb-1.5">
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                           Remaining Balance (மீதி கட்டணம்)
                         </label>
-                        <div className="flex rounded-md shadow-sm">
-                          <span className={`inline-flex items-center px-3 rounded-l-md border border-r-0 font-bold text-xs uppercase select-none ${
+                        <div className="flex rounded-md shadow-sm max-w-lg">
+                          <span className={`inline-flex items-center px-4 rounded-l-md border border-r-0 font-black text-xs uppercase select-none ${
                             totalAmount - amountPaid > 0 
                               ? 'border-red-300 bg-red-100 text-red-600' 
                               : 'border-green-300 bg-green-100 text-green-600'
@@ -811,7 +811,7 @@ export default function CollectFee() {
                             type="text" 
                             disabled
                             value={`${Math.max(0, totalAmount - amountPaid)}.00`}
-                            className={`flex-1 min-w-0 px-2.5 py-2.5 border rounded-none rounded-r-md font-black text-base ${
+                            className={`flex-1 min-w-0 px-4 py-3 border rounded-none rounded-r-md font-black text-lg ${
                               totalAmount - amountPaid > 0 
                                 ? 'border-red-200 bg-red-50 text-red-600' 
                                 : 'border-green-200 bg-green-50 text-green-600'
@@ -875,7 +875,7 @@ export default function CollectFee() {
                           setEditingFeeId(null);
                           setPaymentData({
                             amount: "",
-                            method: "Cash",
+                            method: "Bank Transfer",
                             date: new Date().toISOString().split('T')[0],
                             month: new Date().toISOString().slice(0, 7)
                           });
