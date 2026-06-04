@@ -3,7 +3,7 @@ import { getStudents, saveStudents, getClasses } from "../../lib/db";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { secondaryAuth } from "../../lib/firebase";
 import * as XLSX from "xlsx";
-import { Printer, X, QrCode, Download, FileText } from "lucide-react";
+import { Printer, X, QrCode, Download, FileText, Copy, Check } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
@@ -20,7 +20,61 @@ export default function Students() {
   const [importing, setImporting] = useState(false);
   const [bulkImportGrade, setBulkImportGrade] = useState("");
   const [docModal, setDocModal] = useState<{ type: "idcard" | "certificate" | "details" | null, student: any }>({ type: null, student: null });
+  const [copiedIdAdmin, setCopiedIdAdmin] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadDoc = async (format: 'png' | 'pdf') => {
+    const element = printRef.current;
+    if (!element) return;
+    
+    try {
+      const isIdCard = docModal.type === 'idcard';
+      const imgData = await toPng(element, { pixelRatio: 3, backgroundColor: 'transparent' });
+      
+      if (format === 'png') {
+        const link = document.createElement('a');
+        link.download = `${docModal.student.name}_${isIdCard ? 'ID_Card' : 'Certificate'}.png`;
+        link.href = imgData;
+        link.click();
+      } else {
+        const pdf = new jsPDF({
+          orientation: 'landscape',
+          unit: 'in',
+          format: isIdCard ? [3.375, 2.125] : [11, 8.5]
+        });
+        const w = isIdCard ? 3.375 : 11;
+        const h = isIdCard ? 2.125 : 8.5;
+        pdf.addImage(imgData, 'PNG', 0, 0, w, h);
+        pdf.save(`${docModal.student.name}_${isIdCard ? 'ID_Card' : 'Certificate'}.pdf`);
+      }
+    } catch (error) {
+      console.error("Error downloading doc:", error);
+      alert("Failed to download doc. (பதிவிறக்கம் தோல்வியடைந்தது.)");
+    }
+  };
+
+  const handleCopyDocImage = async () => {
+    const element = printRef.current;
+    if (!element) return;
+    
+    try {
+      const imgData = await toPng(element, { pixelRatio: 3, backgroundColor: 'transparent' });
+      const response = await fetch(imgData);
+      const blob = await response.blob();
+      
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          [blob.type]: blob
+        })
+      ]);
+      
+      setCopiedIdAdmin(true);
+      setTimeout(() => setCopiedIdAdmin(false), 2000);
+    } catch (error) {
+      console.error("Error copying document image:", error);
+      alert("Failed to copy image. Clipboard copy might be restricted in this browser session. Try downloading as PNG instead. (படம் நகலெடுக்க முடியவில்லை, PNG-ஆக பதிவிறக்கவும்.)");
+    }
+  };
 
   const handlePrint = () => {
     const content = printRef.current;
@@ -1148,12 +1202,37 @@ export default function Students() {
                 <h3 className="font-bold text-gray-800 capitalize">
                   {docModal.type === 'idcard' ? 'Student ID Card' : docModal.type === 'certificate' ? 'Course Certificate' : 'Student Details'}
                 </h3>
-                <div className="flex gap-2">
-                  <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium">
-                    <Printer size={16} /> Print
+                <div className="flex gap-2 items-center flex-wrap">
+                  {(docModal.type === 'idcard' || docModal.type === 'certificate') && (
+                    <>
+                      <button 
+                        onClick={handleCopyDocImage} 
+                        className={`flex items-center gap-1.5 px-3 py-2 text-white rounded-lg transition-all text-xs font-semibold cursor-pointer
+                          ${copiedIdAdmin ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-800 hover:bg-slate-900'}`}
+                      >
+                        {copiedIdAdmin ? (
+                          <>
+                            <Check size={14} /> Copied! (நகலெடுக்கப்பட்டது)
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={14} /> Copy Image (படமாக நகலெடு)
+                          </>
+                        )}
+                      </button>
+                      <button onClick={() => handleDownloadDoc('png')} className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-xs font-semibold cursor-pointer shadow-sm">
+                        <Download size={14} /> PNG (பதிவிறக்கு)
+                      </button>
+                      <button onClick={() => handleDownloadDoc('pdf')} className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-xs font-semibold cursor-pointer shadow-sm">
+                        <FileText size={14} /> PDF
+                      </button>
+                    </>
+                  )}
+                  <button onClick={handlePrint} className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs font-semibold cursor-pointer shadow-sm">
+                    <Printer size={14} /> Print
                   </button>
                   <button onClick={() => setDocModal({ type: null, student: null })} className="p-2 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors">
-                    <X size={20} />
+                    <X size={18} />
                   </button>
                 </div>
               </div>

@@ -152,7 +152,7 @@ export default function CollectFee() {
       });
     }
     
-    setSelectedItems(items);
+    setSelectedItems([]);
   };
 
   useEffect(() => {
@@ -342,16 +342,20 @@ export default function CollectFee() {
       }
       if (!id) id = fee.id;
 
-      const itemFull = parseInt(fee.fullFee || fee.amount) || 0;
-      const itemPaid = parseInt(fee.amount) || 0;
-      const itemRem = parseInt(fee.remainingAmount || "0") || 0;
+      const itemFull = Number(fee.fullFee || fee.amount) || 0;
+      const itemPaid = Number(fee.amount) || 0;
+      const itemRem = Number(fee.remainingAmount || "0") || 0;
+
+      const batchFull = fee.batchFullFee ? Number(fee.batchFullFee) : null;
+      const batchPaid = fee.batchAmountPaid ? Number(fee.batchAmountPaid) : null;
+      const batchRem = fee.batchRemaining ? Number(fee.batchRemaining) : null;
 
       if (!groups[id]) {
         groups[id] = {
           ...fee,
-          totalAmount: parseInt(fee.batchFullFee || fee.fullFee || fee.amount) || 0,
-          amountPaid: parseInt(fee.batchAmountPaid || fee.amount) || 0,
-          remainingAmount: parseInt(fee.batchRemaining || fee.remainingAmount || "0") || 0,
+          totalAmount: batchFull !== null && !isNaN(batchFull) && batchFull > 0 ? batchFull : itemFull,
+          amountPaid: batchPaid !== null && !isNaN(batchPaid) && batchPaid > 0 ? batchPaid : itemPaid,
+          remainingAmount: batchRem !== null && !isNaN(batchRem) && batchRem > 0 ? batchRem : itemRem,
           items: [{ 
             label: (fee.itemName || fee.type), 
             amount: itemFull, 
@@ -365,10 +369,7 @@ export default function CollectFee() {
           displayMonth: fee.month
         };
       } else {
-        groups[id].totalAmount = parseInt(fee.batchFullFee) || (groups[id].totalAmount + itemFull);
-        groups[id].amountPaid = parseInt(fee.batchAmountPaid || fee.amount) || (groups[id].amountPaid + itemPaid);
-        groups[id].remainingAmount = parseInt(fee.batchRemaining || fee.remainingAmount || "0") || (groups[id].remainingAmount + itemRem);
-
+        // Add current item details to the list of grouped items
         groups[id].items.push({ 
           label: (fee.itemName || fee.type), 
           amount: itemFull, 
@@ -378,8 +379,25 @@ export default function CollectFee() {
           itemName: fee.itemName, 
           category: fee.category 
         });
+
         if (fee.type === 'Monthly Tuition') {
           groups[id].displayMonth = fee.month;
+        }
+
+        // If batchFull is valid and non-zero, let's use it directly (this handles manual overrides perfectly)
+        if (batchFull !== null && !isNaN(batchFull) && batchFull > 0) {
+          groups[id].totalAmount = batchFull;
+          groups[id].amountPaid = batchPaid !== null && !isNaN(batchPaid) && batchPaid > 0 ? batchPaid : groups[id].amountPaid;
+          groups[id].remainingAmount = batchRem !== null && !isNaN(batchRem) && batchRem > 0 ? batchRem : groups[id].remainingAmount;
+        } else {
+          // Otherwise, if we don't have batch-level values, accumulate individual items
+          // But only if the group's current total wasn't already set from a batch-level value in a previous record
+          const hasBatchLevel = groups[id].batchFullFee && Number(groups[id].batchFullFee) > 0;
+          if (!hasBatchLevel) {
+            groups[id].totalAmount = (Number(groups[id].totalAmount) || 0) + itemFull;
+            groups[id].amountPaid = (Number(groups[id].amountPaid) || 0) + itemPaid;
+            groups[id].remainingAmount = (Number(groups[id].remainingAmount) || 0) + itemRem;
+          }
         }
       }
     });

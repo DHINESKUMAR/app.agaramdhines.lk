@@ -34,7 +34,8 @@ import {
   ShieldAlert,
   Share2,
   Megaphone,
-  ChevronDown
+  ChevronDown,
+  Copy
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
@@ -80,6 +81,7 @@ export default function StudentDashboard() {
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
 
   // Helper to get a color based on subject name
   const getSubjectColorClasses = (subjectName: string) => {
@@ -644,6 +646,29 @@ export default function StudentDashboard() {
     } catch (error) {
       console.error("Error generating ID card:", error);
       alert("Failed to generate ID card. Please try again.");
+    }
+  };
+
+  const handleCopyIdCardImage = async () => {
+    const element = document.getElementById('student-id-card-template');
+    if (!element) return;
+    
+    try {
+      const imgData = await toPng(element, { pixelRatio: 3, backgroundColor: 'transparent' });
+      const response = await fetch(imgData);
+      const blob = await response.blob();
+      
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          [blob.type]: blob
+        })
+      ]);
+      
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
+    } catch (error) {
+      console.error("Error copying ID card image:", error);
+      alert("Failed to copy image. Copier is restricted in some preview modes. Try downloading as PNG instead. (படமாக நகலெடுக்க முடியவில்லை, PNG வடிவில் பதிவிறக்கம் செய்க.)");
     }
   };
 
@@ -2803,9 +2828,31 @@ export default function StudentDashboard() {
                       <h4 className="font-bold text-slate-800">Student ID Card</h4>
                       <p className="text-xs text-slate-500 mt-1">Download your official ID card</p>
                     </div>
-                    <div className="flex gap-2 w-full mt-2">
-                      <button onClick={() => handleDownloadIdCard('pdf')} className="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors">PDF</button>
-                      <button onClick={() => handleDownloadIdCard('png')} className="flex-1 bg-indigo-100 text-indigo-700 py-2 rounded-lg text-xs font-bold hover:bg-indigo-200 transition-colors">PNG</button>
+                    <div className="flex flex-col gap-2 w-full mt-2">
+                      <div className="flex gap-2 w-full">
+                        <button onClick={() => handleDownloadIdCard('pdf')} className="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-opacity whitespace-nowrap cursor-pointer">PDF</button>
+                        <button onClick={() => handleDownloadIdCard('png')} className="flex-1 bg-indigo-100 text-indigo-700 py-2 rounded-lg text-xs font-bold hover:bg-indigo-200 transition-opacity whitespace-nowrap cursor-pointer">PNG</button>
+                      </div>
+                      <button 
+                        onClick={handleCopyIdCardImage}
+                        className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm
+                          ${copiedId 
+                            ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-100' 
+                            : 'bg-[#1e1e24] hover:bg-[#2e2e34] text-white'
+                          }`}
+                      >
+                        {copiedId ? (
+                          <>
+                            <Check size={13} />
+                            Copied! (நகலெடுக்கப்பட்டது)
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={13} />
+                            Copy Image (படமாக நகலெடு)
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                   
