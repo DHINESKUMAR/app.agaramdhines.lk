@@ -78,6 +78,8 @@ export default function StudentDashboard() {
   const [isLandscape, setIsLandscape] = useState(false);
   const [hoveredDay, setHoveredDay] = useState<{subject: string, day: number} | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+  const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   // Helper to get a color based on subject name
   const getSubjectColorClasses = (subjectName: string) => {
@@ -171,6 +173,83 @@ export default function StudentDashboard() {
       hash = folderName.charCodeAt(i) + ((hash << 5) - hash);
     }
     return colors[Math.abs(hash) % colors.length];
+  };
+
+  const parseSafeDate = (d: any): Date | null => {
+    if (!d) return null;
+    
+    // Check if it's a Firestore Timestamp (has toDate method or seconds property)
+    if (typeof d.toDate === "function") {
+      try {
+        return d.toDate();
+      } catch (e) {
+        // ignore
+      }
+    }
+    
+    if (d.seconds !== undefined) {
+      return new Date(d.seconds * 1000);
+    }
+    
+    if (typeof d === "string" || typeof d === "number") {
+      const parsed = new Date(d);
+      if (!isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+    
+    // In case it's already a Date object
+    if (d instanceof Date && !isNaN(d.getTime())) {
+      return d;
+    }
+    
+    return null;
+  };
+
+  const formatSafeDate = (d: any, options?: Intl.DateTimeFormatOptions, defaultValue = ""): string => {
+    const parsed = parseSafeDate(d);
+    if (!parsed) return defaultValue;
+    try {
+      return parsed.toLocaleDateString(undefined, options);
+    } catch (e) {
+      return defaultValue;
+    }
+  };
+
+  const formatSafeTimeString = (d: any, options?: Intl.DateTimeFormatOptions, defaultValue = ""): string => {
+    const parsed = parseSafeDate(d);
+    if (!parsed) return defaultValue;
+    try {
+      return parsed.toLocaleTimeString([], options);
+    } catch (e) {
+      return defaultValue;
+    }
+  };
+
+  const formatSafeDateTimeString = (d: any, defaultValue = ""): string => {
+    const parsed = parseSafeDate(d);
+    if (!parsed) return defaultValue;
+    try {
+      return parsed.toLocaleString();
+    } catch (e) {
+      return defaultValue;
+    }
+  };
+
+  const getElementTime = (el: any) => {
+    if (!el || !el.date) return 0;
+    const parsed = parseSafeDate(el.date);
+    return parsed ? parsed.getTime() : 0;
+  };
+
+  const getMaxElementTime = (elements: any[]) => {
+    if (!Array.isArray(elements) || elements.length === 0) return 0;
+    let maxT = 0;
+    for (let i = 0; i < elements.length; i++) {
+      const t = getElementTime(elements[i]);
+      if (t > maxT) maxT = t;
+    }
+    return maxT;
   };
 
   const clearBadge = () => {
@@ -306,10 +385,10 @@ export default function StudentDashboard() {
     let data = studentData;
     if (!data) {
       const session = localStorage.getItem('userSession');
-      if (session) {
+      if (session && session !== 'undefined' && session !== 'null') {
         try {
           const parsed = JSON.parse(session);
-          if (parsed.role === 'Student') {
+          if (parsed && parsed.role === 'Student') {
             data = parsed;
             setStudentData(parsed);
           }
@@ -1047,7 +1126,7 @@ export default function StudentDashboard() {
                                   {notif.type?.replace('_', ' ')}
                                 </span>
                                 <span className="text-[10px] text-gray-400 font-medium">
-                                  {notif.createdAt ? new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'}
+                                  {notif.createdAt ? formatSafeTimeString(notif.createdAt, { hour: '2-digit', minute: '2-digit' }) : 'Now'}
                                 </span>
                               </div>
                             </div>
@@ -1907,12 +1986,8 @@ export default function StudentDashboard() {
                         if (!acc[folder]) acc[folder] = [];
                         acc[folder].push(link);
                         return acc;
-                      }, {})).sort(([folderA, linksA]: any[], [folderB, linksB]: any[]) => {
-                        const dateA = linksA.map((l: any) => l.date).filter(Boolean).sort((x: any, y: any) => new Date(y).getTime() - new Date(x).getTime())[0];
-                        const dateB = linksB.map((l: any) => l.date).filter(Boolean).sort((x: any, y: any) => new Date(y).getTime() - new Date(x).getTime())[0];
-                        const tA = dateA ? new Date(dateA).getTime() : 0;
-                        const tB = dateB ? new Date(dateB).getTime() : 0;
-                        return tB - tA;
+                      }, {})).sort(([folderA, linksA]: any, [folderB, linksB]: any) => {
+                        return getMaxElementTime(linksB) - getMaxElementTime(linksA);
                       }).map(([folder, folderLinks]: [string, any]) => {
                         const isExpanded = expandedFolders[folder];
                         const folderColor = getFolderColor(folder);
@@ -1929,13 +2004,10 @@ export default function StudentDashboard() {
                                 </div>
                                 <div>
                                   {(() => {
-                                    const latestDate = folderLinks
-                                      .map((l: any) => l.date)
-                                      .filter(Boolean)
-                                      .sort((a: any, b: any) => new Date(b).getTime() - new Date(a).getTime())[0];
-                                    return latestDate ? (
+                                    const maxTime = getMaxElementTime(folderLinks);
+                                    return maxTime > 0 ? (
                                       <p className="text-slate-400 text-xs font-semibold mb-1">
-                                        கடைசியாகப் புதுப்பிக்கப்பட்டது: {new Date(latestDate).toLocaleDateString()} {new Date(latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        கடைசியாகப் புதுப்பிக்கப்பட்டது: {formatSafeDate(maxTime)} {formatSafeTimeString(maxTime, { hour: '2-digit', minute: '2-digit' })}
                                       </p>
                                     ) : null;
                                   })()}
@@ -1969,9 +2041,7 @@ export default function StudentDashboard() {
                                 >
                                   <div className="p-6 sm:p-8 pt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 bg-slate-50/50">
                                     {[...folderLinks].sort((a: any, b: any) => {
-                                      const tA = a.date ? new Date(a.date).getTime() : 0;
-                                      const tB = b.date ? new Date(b.date).getTime() : 0;
-                                      return tB - tA;
+                                      return getElementTime(b) - getElementTime(a);
                                     }).map((link: any, index: number) => {
                                       const videoId = link.link.includes('youtu.be/') 
                                         ? link.link.split('youtu.be/')[1].split('?')[0] 
@@ -2047,9 +2117,9 @@ export default function StudentDashboard() {
                                                 </div>
                                                 <span className="text-xs font-bold text-slate-500 group-hover/item:text-slate-800 transition-colors">YouTube Link</span>
                                               </div>
-                                              {link.date && (
+                                              {link.date && parseSafeDate(link.date) && (
                                                 <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
-                                                  {new Date(link.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                                  {formatSafeDate(link.date, { day: 'numeric', month: 'short' })}
                                                 </span>
                                               )}
                                             </div>
@@ -2081,24 +2151,17 @@ export default function StudentDashboard() {
                         if (!acc[folder]) acc[folder] = [];
                         acc[folder].push(post);
                         return acc;
-                      }, {})).sort(([folderA, postsA]: any[], [folderB, postsB]: any[]) => {
-                        const dateA = postsA.map((p: any) => p.date).filter(Boolean).sort((x: any, y: any) => new Date(y).getTime() - new Date(x).getTime())[0];
-                        const dateB = postsB.map((p: any) => p.date).filter(Boolean).sort((x: any, y: any) => new Date(y).getTime() - new Date(x).getTime())[0];
-                        const tA = dateA ? new Date(dateA).getTime() : 0;
-                        const tB = dateB ? new Date(dateB).getTime() : 0;
-                        return tB - tA;
+                      }, {})).sort(([folderA, postsA]: any, [folderB, postsB]: any) => {
+                        return getMaxElementTime(postsB) - getMaxElementTime(postsA);
                       }).map(([folder, folderPosts]: [string, any]) => {
-                        const latestDate = folderPosts
-                          .map((p: any) => p.date)
-                          .filter(Boolean)
-                          .sort((a: any, b: any) => new Date(b).getTime() - new Date(a).getTime())[0];
+                        const maxTime = getMaxElementTime(folderPosts);
                         return (
                           <div key={folder} className="space-y-4">
                             <div className="flex items-center justify-between px-1">
                               <div>
-                                {latestDate && (
+                                {maxTime > 0 && (
                                   <p className="text-[10px] font-semibold text-slate-400 mb-1">
-                                    கடைசியாகப் புதுப்பிக்கப்பட்டது: {new Date(latestDate).toLocaleDateString()} {new Date(latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    கடைசியாகப் புதுப்பிக்கப்பட்டது: {formatSafeDate(maxTime)} {formatSafeTimeString(maxTime, { hour: '2-digit', minute: '2-digit' })}
                                   </p>
                                 )}
                                 <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
@@ -2114,9 +2177,7 @@ export default function StudentDashboard() {
                           <div className="relative group">
                             <div className="flex overflow-x-auto gap-6 pb-6 pt-2 px-1 snap-x no-scrollbar scroll-smooth" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                               {[...folderPosts].sort((a: any, b: any) => {
-                                const tA = a.date ? new Date(a.date).getTime() : 0;
-                                const tB = b.date ? new Date(b.date).getTime() : 0;
-                                return tB - tA;
+                                return getElementTime(b) - getElementTime(a);
                               }).map((post: any) => (
                                 <motion.div 
                                   initial={{ opacity: 0, scale: 0.95 }}
@@ -2130,9 +2191,9 @@ export default function StudentDashboard() {
                                         <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
                                           {post.subject}
                                         </span>
-                                        {post.date && (
+                                        {post.date && parseSafeDate(post.date) && (
                                           <span className="text-[10px] font-bold text-slate-400">
-                                            {new Date(post.date).toLocaleDateString()} {new Date(post.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            {formatSafeDate(post.date)} {formatSafeTimeString(post.date, { hour: '2-digit', minute: '2-digit' })}
                                           </span>
                                         )}
                                       </div>
@@ -2262,12 +2323,12 @@ export default function StudentDashboard() {
                       <div key={record.id} className="bg-white border border-slate-200 rounded-xl p-4 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-xl bg-slate-50 flex flex-col items-center justify-center border border-slate-100">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase leading-none">{new Date(record.date).toLocaleString('default', { month: 'short' })}</span>
-                            <span className="text-sm font-bold text-slate-700 leading-none mt-0.5">{new Date(record.date).getDate()}</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase leading-none">{formatSafeDate(record.date, { month: 'short' })}</span>
+                            <span className="text-sm font-bold text-slate-700 leading-none mt-0.5">{parseSafeDate(record.date)?.getDate() || ""}</span>
                           </div>
                           <div>
-                            <h3 className="font-bold text-slate-800 text-sm">{new Date(record.date).toLocaleDateString(undefined, { weekday: 'long' })}</h3>
-                            <p className="text-xs text-slate-500">{new Date(record.date).getFullYear()}</p>
+                            <h3 className="font-bold text-slate-800 text-sm">{formatSafeDate(record.date, { weekday: 'long' })}</h3>
+                            <p className="text-xs text-slate-500">{parseSafeDate(record.date)?.getFullYear() || ""}</p>
                           </div>
                         </div>
                         <div>
@@ -2564,33 +2625,75 @@ export default function StudentDashboard() {
                     <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
                       <span className="font-bold text-xl text-slate-300">₨</span>
                     </div>
-                    <p>No fee records found.</p>
+                    <p>கட்டண விபரங்கள் எதுவும் இல்லை (No fee records found).</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Object.values(fees.reduce((acc: any, fee: any) => {
-                      if (!acc[fee.month]) {
-                        acc[fee.month] = { ...fee };
-                      } else {
-                        acc[fee.month].amount = Number(acc[fee.month].amount) + Number(fee.amount);
-                      }
-                      return acc;
-                    }, {})).map((fee: any) => (
-                      <div key={fee.id} className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-start mb-4">
-                          <h3 className="font-bold text-slate-800 text-lg">{fee.month}</h3>
-                          <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
-                            {new Date(fee.date).getFullYear()}
-                          </span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {fees.map((fee: any) => {
+                      const isPartial = fee.remainingAmount && parseInt(fee.remainingAmount) > 0;
+                      return (
+                        <div key={fee.id} className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all relative overflow-hidden">
+                          {/* Top Highlight Indicator */}
+                          <div className={`absolute top-0 right-0 left-0 h-1.5 ${isPartial ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <h3 className="font-black text-slate-800 text-base leading-tight uppercase">
+                                {fee.itemName || fee.type || "Fees Payment"}
+                              </h3>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
+                                {fee.type === 'Monthly Tuition' ? `வகுப்புக் கட்டணம் - ${fee.month}` : 'பாடநெறிக்கான கட்டணம் (Course Fee)'}
+                              </p>
+                            </div>
+                            <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
+                              isPartial ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                            }`}>
+                              {isPartial ? "Partial (மீதி உள்ளது)" : "Fully Paid (முழுதும்)"}
+                            </span>
+                          </div>
+
+                          <div className="space-y-2 border-y border-slate-100 py-3.5 my-3.5 text-xs">
+                            <div className="flex justify-between text-slate-500 font-medium">
+                              <span>Full Course Fee (முழுக் கட்டணம்):</span>
+                              <span className="font-bold text-slate-800">LKR {fee.fullFee || fee.amount}.00</span>
+                            </div>
+                            <div className="flex justify-between text-slate-500 font-medium">
+                              <span className="text-emerald-600 font-bold">Amount Paid (செலுத்தியது):</span>
+                              <span className="font-bold text-emerald-600">LKR {fee.amount}.00</span>
+                            </div>
+                            {isPartial && (
+                              <div className="flex justify-between text-slate-500 font-medium">
+                                <span className="text-red-500 font-bold">Remaining Balance (மீதிக்கட்டணம்):</span>
+                                <span className="font-black text-red-600">LKR {fee.remainingAmount}.00</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex justify-between items-center pt-2">
+                            <div className="text-left">
+                              <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider">Paid Date</p>
+                              <p className="text-xs text-slate-700 font-bold mt-0.5">{fee.date || "N/A"}</p>
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                setSelectedReceipt({
+                                  ...fee,
+                                  studentName: studentData.name,
+                                  rollNo: studentData.rollNo,
+                                  grade: studentData.grade
+                                });
+                                setShowReceiptModal(true);
+                              }}
+                              className="text-[11px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl border border-slate-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                            >
+                              <FileText size={13} className="text-slate-500" />
+                              View Slip (பெறுசீட்டு)
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex justify-between items-end mt-auto">
-                          <p className="text-xs text-slate-500 font-medium">Paid on: <br/><span className="text-slate-700">{new Date(fee.date).toLocaleDateString()}</span></p>
-                          <span className="text-emerald-700 font-bold bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 text-sm">
-                            Rs. {fee.amount}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -2811,22 +2914,40 @@ export default function StudentDashboard() {
                 {fees.length === 0 ? (
                   <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-xl border border-slate-200 border-dashed">
                     <DollarSign className="mx-auto h-8 w-8 text-slate-300 mb-2" />
-                    <p>No fee history found.</p>
+                    <p>கட்டண விபரங்கள் இல்லை (No fee records found).</p>
                   </div>
                 ) : (
-                  Object.values(fees.reduce((acc: any, fee: any) => {
-                    if (!acc[fee.month]) {
-                      acc[fee.month] = { ...fee };
-                    } else {
-                      acc[fee.month].amount = Number(acc[fee.month].amount) + Number(fee.amount);
-                    }
-                    return acc;
-                  }, {})).map((fee: any) => (
-                    <div key={fee.id} className="flex justify-between items-center border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-                      <span className="text-slate-700 font-bold">{formatMonth(fee.month)}</span>
-                      <span className="text-emerald-700 font-bold bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 text-sm">Paid (Rs. {fee.amount})</span>
-                    </div>
-                  ))
+                  <div className="space-y-3">
+                    {fees.map((fee: any) => {
+                      const isPartial = fee.remainingAmount && parseInt(fee.remainingAmount) > 0;
+                      return (
+                        <div key={fee.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3 last:border-0 last:pb-0 text-sm">
+                          <div>
+                            <span className="text-slate-800 font-bold block leading-tight">
+                              {fee.itemName || fee.type || "Fees Payment"}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block font-semibold mt-0.5">
+                              {fee.date} • {fee.type === 'Monthly Tuition' ? `வகுப்புக் கட்டணம் (${fee.month})` : 'பாடநெறிக்கான கட்டணம்'}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-center">
+                            <span className="text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100 text-xs">
+                              LKR {fee.amount}
+                            </span>
+                            {isPartial ? (
+                              <span className="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-100 text-[10px]">
+                                Bal: {fee.remainingAmount}
+                              </span>
+                            ) : (
+                              <span className="text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded text-[9px] uppercase">
+                                Full
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>
@@ -3136,6 +3257,226 @@ export default function StudentDashboard() {
           onScan={handleQrScan} 
           onClose={() => setShowQrScanner(false)} 
         />
+      )}
+
+      {showReceiptModal && selectedReceipt && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col relative animate-in fade-in zoom-in duration-200">
+            {/* Header / Dismiss */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50">
+              <h3 className="font-extrabold text-slate-800 text-sm">Receipt / பற்றுச்சீட்டு</h3>
+              <button 
+                onClick={() => {
+                  setSelectedReceipt(null);
+                  setShowReceiptModal(false);
+                }}
+                className="text-slate-400 hover:text-slate-600 bg-white p-1.5 rounded-full border border-slate-200 shadow-sm transition-colors cursor-pointer"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Receipt Content */}
+            <div className="p-6 overflow-y-auto max-h-[70vh]">
+              <div className="bg-white border border-slate-150 p-5 rounded-2xl shadow-inner relative overflow-hidden">
+                {/* Visual Official Decal */}
+                <div className="absolute top-4 right-[-30px] rotate-45 bg-emerald-600 text-white font-black text-[8px] uppercase tracking-widest px-8 py-0.5 shadow-sm">
+                  PAID
+                </div>
+
+                <div className="text-center mb-6">
+                  <img 
+                    src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s" 
+                    alt="Logo" 
+                    className="w-12 h-12 mx-auto mb-1.5 object-contain"
+                  />
+                  <h2 className="text-[11px] font-black text-slate-800 uppercase tracking-tight">AGARAM DHINES ONLINE ACADEMY</h2>
+                  <p className="text-[8px] font-bold text-pink-600 uppercase tracking-[2px] mt-0.5 italic leading-none">excellence in digital learning</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mb-4 border-y border-slate-100 py-3 text-[11px]">
+                  <div>
+                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block">Invoiced To:</span>
+                    <span className="font-bold text-slate-800 block">{selectedReceipt.studentName}</span>
+                    <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">Roll No: {selectedReceipt.rollNo || "N/A"}</span>
+                    <span className="text-[10px] text-slate-500 font-semibold block">Class: {selectedReceipt.grade || "N/A"}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block">Details:</span>
+                    <span className="text-[10px] text-slate-850 font-bold block">No: {selectedReceipt.transactionId || "N/A"}</span>
+                    <span className="text-[10px] text-slate-850 font-semibold block mt-0.5">Date: {selectedReceipt.date}</span>
+                    <span className="text-[10px] text-slate-850 font-semibold block">Via: {selectedReceipt.method || "N/A"}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 mb-4 text-[11px]">
+                  <div className="border-b border-slate-100 pb-2 text-[8px] font-black text-slate-400 uppercase tracking-wider flex justify-between">
+                    <span>Description</span>
+                    <span>Amount</span>
+                  </div>
+                  <div className="flex justify-between items-start py-1">
+                    <div>
+                      <p className="font-bold text-slate-800 uppercase">{selectedReceipt.itemName || selectedReceipt.type}</p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight italic mt-0.5">
+                        {selectedReceipt.type === 'Monthly Tuition' ? `வகுப்புக் கட்டணம் - ${selectedReceipt.month}` : 'பாடநெறிக்கான கட்டணம் (Course Fee)'}
+                      </p>
+                    </div>
+                    <span className="font-bold text-slate-800">LKR {selectedReceipt.fullFee || selectedReceipt.amount}.00</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 border-t border-slate-100 pt-3 text-[11px]">
+                  <div className="flex justify-between items-center text-slate-550 font-medium">
+                    <span>Sub Total (முழு கட்டணம்)</span>
+                    <span className="font-bold">LKR {selectedReceipt.fullFee || selectedReceipt.amount}.00</span>
+                  </div>
+                  <div className="flex justify-between items-center text-emerald-600 font-bold">
+                    <span>Paid Amount (செலுத்தியது)</span>
+                    <span>LKR {selectedReceipt.amount}.00</span>
+                  </div>
+                  {selectedReceipt.remainingAmount && parseInt(selectedReceipt.remainingAmount) > 0 && (
+                    <div className="flex justify-between items-center text-red-500 font-bold">
+                      <span>Remaining Balance (மீதி கட்டணம்)</span>
+                      <span>LKR {selectedReceipt.remainingAmount}.00</span>
+                    </div>
+                  )}
+
+                  <div className="mt-3 flex justify-between items-center p-3 rounded-xl bg-emerald-500 text-white font-bold shadow-md shadow-emerald-100">
+                    <span className="text-[9px] uppercase tracking-wider font-extrabold">TOTAL PAID (இன்று செலுத்தியது)</span>
+                    <span className="text-sm font-black text-white">
+                      LKR {selectedReceipt.amount}.00
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-center pt-5 border-t border-dashed border-slate-100 mt-5">
+                  <CheckCircle size={18} className="mx-auto text-emerald-500 mb-1" />
+                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-[2px]">THANK YOU FOR YOUR PAYMENT</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Print Action Bottom Bar */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex gap-2">
+              <button 
+                onClick={() => {
+                  const printWindow = window.open("", "_blank");
+                  if (!printWindow) return;
+                  
+                  printWindow.document.write(`
+                    <html>
+                      <head>
+                        <title>Receipt - ${selectedReceipt.studentName}</title>
+                        <style>
+                          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+                          body { font-family: 'Inter', sans-serif; background: white; margin: 0; padding: 40px; display: flex; justify-content: center; }
+                          .receipt { width: 450px; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); font-size: 14px; color: #334155; position: relative; }
+                          .header { text-align: center; margin-bottom: 24px; }
+                          .logo { width: 64px; height: 64px; margin-bottom: 8px; object-fit: contain; }
+                          .title { font-size: 16px; font-weight: 950; color: #1e293b; margin: 0; text-transform: uppercase; letter-spacing: -0.5px; }
+                          .subtitle { font-size: 9px; font-weight: bold; color: #db2777; letter-spacing: 2px; margin: 4px 0 0; text-transform: uppercase; italic; }
+                          .divider { border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; padding: 12px 0; margin: 16px 0; display: flex; justify-content: space-between; }
+                          .bold { font-weight: bold; color: #1e293b; }
+                          .small-title { font-size: 8px; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+                          table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+                          th { border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; font-size: 10px; font-weight: 900; color: #94a3b8; text-transform: uppercase; text-align: left; }
+                          td { padding: 12px 0; border-bottom: 1px solid #f8fafc; }
+                          .summary { margin-top: 16px; border-top: 2px solid #f1f5f9; padding-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+                          .summary-row { display: flex; justify-content: space-between; font-size: 12px; }
+                          .total-banner { background: #10b981; color: white; display: flex; justify-content: space-between; padding: 12px; border-radius: 8px; font-weight: 900; margin-top: 12px; font-size: 13px; }
+                          .footer { text-align: center; margin-top: 24px; border-top: 1px dashed #f1f5f9; padding-top: 16px; font-size: 10px; color: #94a3b8; }
+                        </style>
+                      </head>
+                      <body>
+                        <div class="receipt">
+                          <div style="absolute; top: 12px; right: 12px; transform: rotate(45deg); background: #10b981; color: white; font-weight: 900; font-size: 9px; padding: 3px 12px; border-radius: 4px;">PAID</div>
+                          <div class="header">
+                            <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s" class="logo" />
+                            <div class="title">AGARAM DHINES ONLINE ACADEMY</div>
+                            <div class="subtitle">excellence in digital learning</div>
+                          </div>
+                          
+                          <div class="divider">
+                            <div>
+                              <div class="small-title">Invoiced To:</div>
+                              <div class="bold" style="font-size: 13px;">${selectedReceipt.studentName}</div>
+                              <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Roll No: ${selectedReceipt.rollNo || "N/A"}</div>
+                              <div style="font-size: 11px; color: #64748b;">Class: ${selectedReceipt.grade || "N/A"}</div>
+                            </div>
+                            <div style="text-align: right;">
+                              <div class="small-title">Details:</div>
+                              <div style="font-size: 11px; font-weight: bold;">No: ${selectedReceipt.transactionId || "N/A"}</div>
+                              <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Date: ${selectedReceipt.date || "N/A"}</div>
+                              <div style="font-size: 11px; color: #64748b;">Via: ${selectedReceipt.method || "N/A"}</div>
+                            </div>
+                          </div>
+                          
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Description</th>
+                                <th style="text-align: right;">Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td>
+                                  <div class="bold" style="text-transform: uppercase;">${selectedReceipt.itemName || selectedReceipt.type || "Fees Payment"}</div>
+                                  <div style="font-size: 10px; color: #94a3b8; margin-top: 3px; font-style: italic;">
+                                    ${selectedReceipt.type === 'Monthly Tuition' ? `வகுப்புக் கட்டணம் - \${selectedReceipt.month}` : 'பாடநெறிக்கான கட்டணம் (Course Fee)'}
+                                  </div>
+                                </td>
+                                <td style="text-align: right;" class="bold">LKR ${selectedReceipt.fullFee || selectedReceipt.amount}.00</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          
+                          <div class="summary">
+                            <div class="summary-row">
+                              <span style="color: #64748b; font-weight: bold;">Sub Total (முழு கட்டணம்)</span>
+                              <span class="bold">LKR ${selectedReceipt.fullFee || selectedReceipt.amount}.00</span>
+                            </div>
+                            <div class="summary-row" style="color: #10b981; font-weight: bold;">
+                              <span>Paid Amount (செலுத்திய தொகை)</span>
+                              <span>LKR ${selectedReceipt.amount}.00</span>
+                            </div>
+                            \${selectedReceipt.remainingAmount && parseInt(selectedReceipt.remainingAmount) > 0 ? \`
+                            <div class="summary-row" style="color: #ef4444; font-weight: bold;">
+                              <span>Remaining Balance (மீதி கட்டணம்)</span>
+                              <span>LKR \${selectedReceipt.remainingAmount}.00</span>
+                            </div>
+                            \` : ''}
+                            
+                            <div class="total-banner">
+                              <span>TOTAL PAID TODAY (இன்று செலுத்தியது)</span>
+                              <span>LKR ${selectedReceipt.amount}.00</span>
+                            </div>
+                          </div>
+                          
+                          <div class="footer">
+                            <div style="font-weight: bold; margin-bottom: 4px; color: #1e293b;">THANK YOU FOR YOUR PAYMENT</div>
+                            <div>www.agaramdhines.lk | excellence in digital learning</div>
+                          </div>
+                        </div>
+                        <script>
+                          window.onload = function() {
+                            window.print();
+                            setTimeout(function() { window.close(); }, 500);
+                          }
+                        </script>
+                      </body>
+                    </html>
+                  `);
+                  printWindow.document.close();
+                }}
+                className="flex-1 bg-indigo-600 hover:bg-slate-800 text-white font-black text-xs py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Download size={14} />
+                Print Receipt (பற்றுச்சீட்டு அச்சிடுக)
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

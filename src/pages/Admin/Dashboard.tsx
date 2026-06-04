@@ -66,13 +66,13 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const session = localStorage.getItem('userSession');
-    if (!session) {
+    if (!session || session === 'undefined' || session === 'null') {
       navigate('/');
       return;
     }
     try {
       const userData = JSON.parse(session);
-      if (userData.role !== 'Admin') {
+      if (!userData || userData.role !== 'Admin') {
         navigate('/');
         return;
       }

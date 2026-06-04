@@ -242,6 +242,73 @@ export default function Youtube() {
     return colors[Math.abs(hash) % colors.length];
   };
 
+  const parseSafeDate = (d: any): Date | null => {
+    if (!d) return null;
+    
+    // Check if it's a Firestore Timestamp (has toDate method or seconds property)
+    if (typeof d.toDate === "function") {
+      try {
+        return d.toDate();
+      } catch (e) {
+        // ignore
+      }
+    }
+    
+    if (d.seconds !== undefined) {
+      return new Date(d.seconds * 1000);
+    }
+    
+    if (typeof d === "string" || typeof d === "number") {
+      const parsed = new Date(d);
+      if (!isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+    
+    // In case it's already a Date object
+    if (d instanceof Date && !isNaN(d.getTime())) {
+      return d;
+    }
+    
+    return null;
+  };
+
+  const formatSafeDate = (d: any, options?: Intl.DateTimeFormatOptions, defaultValue = ""): string => {
+    const parsed = parseSafeDate(d);
+    if (!parsed) return defaultValue;
+    try {
+      return parsed.toLocaleDateString(undefined, options);
+    } catch (e) {
+      return defaultValue;
+    }
+  };
+
+  const formatSafeTimeString = (d: any, options?: Intl.DateTimeFormatOptions, defaultValue = ""): string => {
+    const parsed = parseSafeDate(d);
+    if (!parsed) return defaultValue;
+    try {
+      return parsed.toLocaleTimeString([], options);
+    } catch (e) {
+      return defaultValue;
+    }
+  };
+
+  const getElementTime = (el: any) => {
+    if (!el || !el.date) return 0;
+    const parsed = parseSafeDate(el.date);
+    return parsed ? parsed.getTime() : 0;
+  };
+
+  const getMaxElementTime = (elements: any[]) => {
+    if (!Array.isArray(elements) || elements.length === 0) return 0;
+    let maxT = 0;
+    for (let i = 0; i < elements.length; i++) {
+      const t = getElementTime(elements[i]);
+      if (t > maxT) maxT = t;
+    }
+    return maxT;
+  };
+
   if (selectedGrade) {
     const isGradePublic = selectedGrade === "Public (All Students)";
     const gradeLinks = links.filter(l => l && (isGradePublic ? l.isPublic : l.grade === selectedGrade));
@@ -454,11 +521,7 @@ export default function Youtube() {
                 </div>
               ) : (
                 Object.keys(folders).sort((a, b) => {
-                  const dateA = folders[a].map(l => l.date).filter(Boolean).sort((x, y) => new Date(y).getTime() - new Date(x).getTime())[0];
-                  const dateB = folders[b].map(l => l.date).filter(Boolean).sort((x, y) => new Date(y).getTime() - new Date(x).getTime())[0];
-                  const tA = dateA ? new Date(dateA).getTime() : 0;
-                  const tB = dateB ? new Date(dateB).getTime() : 0;
-                  return tB - tA;
+                  return getMaxElementTime(folders[b]) - getMaxElementTime(folders[a]);
                 }).map(folderName => {
                   const isExpanded = expandedFolders[folderName];
                   const folderColor = getFolderColor(folderName);
@@ -474,14 +537,11 @@ export default function Youtube() {
                           </div>
                           <div>
                             {(() => {
-                              const latestDate = folders[folderName]
-                                .map(l => l.date)
-                                .filter(Boolean)
-                                .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
-                              return latestDate ? (
+                              const maxTime = getMaxElementTime(folders[folderName]);
+                              return maxTime > 0 ? (
                                 <p className="text-slate-500 text-[10px] font-bold mb-1 flex items-center gap-1">
                                   <span>கடைசியாக கூட்டப்பட்டது:</span>
-                                  <span>{new Date(latestDate).toLocaleDateString()} {new Date(latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                  <span>{formatSafeDate(maxTime)} {formatSafeTimeString(maxTime, { hour: '2-digit', minute: '2-digit' })}</span>
                                 </p>
                               ) : null;
                             })()}
@@ -511,9 +571,7 @@ export default function Youtube() {
                       {isExpanded && (
                         <div className="p-6 pt-2 grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/30">
                           {[...folders[folderName]].sort((a, b) => {
-                            const tA = a.date ? new Date(a.date).getTime() : 0;
-                            const tB = b.date ? new Date(b.date).getTime() : 0;
-                            return tB - tA;
+                            return getElementTime(b) - getElementTime(a);
                           }).map(link => {
                             const videoId = extractVideoId(link.link);
                             const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&q=80';
@@ -582,9 +640,9 @@ export default function Youtube() {
                                         {link.isPublic ? 'Public' : 'Private'}
                                       </button>
                                     </div>
-                                    {link.date && (
+                                    {link.date && parseSafeDate(link.date) && (
                                       <div className="text-[10px] font-bold text-slate-500 mt-2">
-                                        {new Date(link.date).toLocaleDateString()} {new Date(link.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        {formatSafeDate(link.date)} {formatSafeTimeString(link.date, { hour: '2-digit', minute: '2-digit' })}
                                       </div>
                                     )}
                                     <h4 className="font-bold text-gray-900 mt-1 line-clamp-2">{link.title}</h4>
@@ -625,25 +683,18 @@ export default function Youtube() {
                   }
 
                   return Object.keys(postFolders).sort((a, b) => {
-                    const dateA = postFolders[a].map(p => p.date).filter(Boolean).sort((x, y) => new Date(y).getTime() - new Date(x).getTime())[0];
-                    const dateB = postFolders[b].map(p => p.date).filter(Boolean).sort((x, y) => new Date(y).getTime() - new Date(x).getTime())[0];
-                    const tA = dateA ? new Date(dateA).getTime() : 0;
-                    const tB = dateB ? new Date(dateB).getTime() : 0;
-                    return tB - tA;
+                    return getMaxElementTime(postFolders[b]) - getMaxElementTime(postFolders[a]);
                   }).map(folderName => {
-                    const latestDate = postFolders[folderName]
-                      .map(p => p.date)
-                      .filter(Boolean)
-                      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+                    const maxTime = getMaxElementTime(postFolders[folderName]);
                     return (
                       <div key={folderName} className="space-y-4">
                         <div className="flex items-center justify-between border-b pb-2 text-indigo-900">
                           <div className="flex items-center gap-2">
                             <Folder size={20} className="text-indigo-600" />
                             <div>
-                              {latestDate && (
+                              {maxTime > 0 && (
                                 <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">
-                                  கடைசியாக கூட்டப்பட்டது: {new Date(latestDate).toLocaleDateString()} {new Date(latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  கடைசியாக கூட்டப்பட்டது: {formatSafeDate(maxTime)} {formatSafeTimeString(maxTime, { hour: '2-digit', minute: '2-digit' })}
                                 </p>
                               )}
                               <h3 className="text-lg font-black uppercase tracking-wider">{folderName}</h3>
@@ -660,9 +711,7 @@ export default function Youtube() {
                         </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {[...postFolders[folderName]].sort((a, b) => {
-                          const tA = a.date ? new Date(a.date).getTime() : 0;
-                          const tB = b.date ? new Date(b.date).getTime() : 0;
-                          return tB - tA;
+                          return getElementTime(b) - getElementTime(a);
                         }).map(post => (
                           <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all group">
                             {editingId === post.id ? (
@@ -744,9 +793,9 @@ export default function Youtube() {
                                </div>
                             ) : (
                                <>
-                                 {post.date && (
+                                 {post.date && parseSafeDate(post.date) && (
                                    <div className="text-[11px] font-bold text-slate-500 mb-2">
-                                     {new Date(post.date).toLocaleDateString()} {new Date(post.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                     {formatSafeDate(post.date)} {formatSafeTimeString(post.date, { hour: '2-digit', minute: '2-digit' })}
                                    </div>
                                  )}
                                 <div className="flex justify-between items-start mb-4">

@@ -9,6 +9,47 @@
     <link rel="apple-touch-icon" href="/logo.png" />
     <meta name="description" content="Agaram Dhines Online Academy App">
     
+    <!-- Environment / Node Globals Polyfills -->
+    <script>
+      if (typeof globalThis.global === 'undefined') {
+        globalThis.global = globalThis;
+      }
+      if (typeof globalThis.process === 'undefined') {
+        globalThis.process = { env: {} };
+      }
+      
+      // Safe localStorage polyfill for enclosed iframes/sandboxes
+      (function() {
+        var isLocalStorageAvailable = false;
+        try {
+          var testKey = '__storage_test__';
+          window.localStorage.setItem(testKey, testKey);
+          window.localStorage.removeItem(testKey);
+          isLocalStorageAvailable = true;
+        } catch (e) {
+          isLocalStorageAvailable = false;
+        }
+        
+        if (!isLocalStorageAvailable) {
+          console.warn("localStorage is not accessible in this environment. Falling back to safe memory-based storage.");
+          var mockStorage = {
+            _data: {},
+            setItem: function(key, val) { this._data[key] = String(val); },
+            getItem: function(key) { return this._data.hasOwnProperty(key) ? this._data[key] : null; },
+            removeItem: function(key) { delete this._data[key]; },
+            clear: function() { this._data = {}; },
+            key: function(i) { var keys = Object.keys(this._data); return keys[i] || null; },
+            get length() { return Object.keys(this._data).length; }
+          };
+          Object.defineProperty(window, 'localStorage', {
+            value: mockStorage,
+            writable: true,
+            configurable: true
+          });
+        }
+      })();
+    </script>
+    
     <!-- Code Protection Script -->
     <script>
       // Disable Right Click

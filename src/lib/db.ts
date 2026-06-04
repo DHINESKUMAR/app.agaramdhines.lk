@@ -33,7 +33,16 @@ const getData = async (key: string, defaultValue: any) => {
       console.warn(`Firebase error fetching ${key}. Using local storage.`, error);
     }
   }
-  return JSON.parse(localStorage.getItem(key) || JSON.stringify(defaultValue));
+  try {
+    const rawValue = localStorage.getItem(key);
+    if (!rawValue || rawValue === 'undefined') {
+      return defaultValue;
+    }
+    return JSON.parse(rawValue);
+  } catch (e) {
+    console.warn(`Error parsing localStorage key ${key}:`, e);
+    return defaultValue;
+  }
 };
 
 // Helper to save data to Firebase and localStorage

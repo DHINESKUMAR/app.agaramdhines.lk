@@ -22,6 +22,7 @@ export default function CollectFee() {
 
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
   const [totalAmount, setTotalAmount] = useState(0);
+  const [amountPaid, setAmountPaid] = useState(0);
   const [isManualAmount, setIsManualAmount] = useState(false);
 
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -158,6 +159,7 @@ export default function CollectFee() {
     if (!isManualAmount) {
       const total = selectedItems.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0);
       setTotalAmount(total);
+      setAmountPaid(total);
     }
   }, [selectedItems, isManualAmount]);
 
@@ -221,7 +223,7 @@ export default function CollectFee() {
       
       // Calculate proportions if amount was manually changed
       const calculatedTotal = selectedItems.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0);
-      const adjustmentRatio = calculatedTotal > 0 ? totalAmount / calculatedTotal : 1;
+      const adjustmentRatio = calculatedTotal > 0 ? amountPaid / calculatedTotal : 1;
 
       const newFeeRecords = selectedItems.map((item, idx) => {
         let finalAmount = parseInt(item.amount) || 0;
@@ -229,11 +231,14 @@ export default function CollectFee() {
           if (idx === selectedItems.length - 1) {
             // Last item gets the remainder to ensure exact total match
             const otherItemsTotal = selectedItems.slice(0, -1).reduce((sum, it) => sum + Math.round((parseInt(it.amount) || 0) * adjustmentRatio), 0);
-            finalAmount = totalAmount - otherItemsTotal;
+            finalAmount = amountPaid - otherItemsTotal;
           } else {
             finalAmount = Math.round(finalAmount * adjustmentRatio);
           }
         }
+
+        const originalFullFeeItem = parseInt(item.amount) || 0;
+        const itemRemaining = Math.max(0, originalFullFeeItem - finalAmount);
 
         return {
           id: `${Date.now()}-${idx}`,
@@ -243,14 +248,19 @@ export default function CollectFee() {
           rollNo: selectedStudent.rollNo || "",
           month: (item.type === 'Monthly Tuition' || item.type === 'Subject Fee' || item.category === 'Main') ? paymentData.month : "",
           amount: finalAmount.toString(),
+          fullFee: originalFullFeeItem.toString(),
+          remainingAmount: itemRemaining.toString(),
           method: paymentData.method,
           date: paymentData.date,
           type: item.type,
           category: item.category || "",
-          itemName: item.itemName || "",
+          itemName: item.itemName || item.label || "",
           transactionId: selectedItems.length > 1 ? `${txnIdBase}-${idx + 1}` : txnIdBase,
           batchId: batchId,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          batchFullFee: totalAmount.toString(),
+          batchAmountPaid: amountPaid.toString(),
+          batchRemaining: (totalAmount - amountPaid).toString()
         };
       });
 
@@ -269,9 +279,29 @@ export default function CollectFee() {
 
       setReceiptData({
         ...newFeeRecords[0],
-        items: selectedItems,
+        items: selectedItems.map((item, idx) => {
+          let finalAmount = parseInt(item.amount) || 0;
+          if (isManualAmount) {
+            if (idx === selectedItems.length - 1) {
+              const otherItemsTotal = selectedItems.slice(0, -1).reduce((sum, it) => sum + Math.round((parseInt(it.amount) || 0) * adjustmentRatio), 0);
+              finalAmount = amountPaid - otherItemsTotal;
+            } else {
+              finalAmount = Math.round(finalAmount * adjustmentRatio);
+            }
+          }
+          return {
+            ...item,
+            paidAmount: finalAmount,
+            remainingAmount: Math.max(0, (parseInt(item.amount) || 0) - finalAmount)
+          };
+        }),
         totalAmount: totalAmount,
-        transactionId: txnIdBase
+        amountPaid: amountPaid,
+        remainingAmount: totalAmount - amountPaid,
+        transactionId: txnIdBase,
+        batchFullFee: totalAmount.toString(),
+        batchAmountPaid: amountPaid.toString(),
+        batchRemaining: (totalAmount - amountPaid).toString()
       });
       setShowReceipt(true);
       
@@ -312,17 +342,42 @@ export default function CollectFee() {
       }
       if (!id) id = fee.id;
 
+      const itemFull = parseInt(fee.fullFee || fee.amount) || 0;
+      const itemPaid = parseInt(fee.amount) || 0;
+      const itemRem = parseInt(fee.remainingAmount || "0") || 0;
+
       if (!groups[id]) {
         groups[id] = {
           ...fee,
-          totalAmount: parseInt(fee.amount) || 0,
-          items: [{ label: (fee.itemName || fee.type), amount: parseInt(fee.amount) || 0, type: fee.type, itemName: fee.itemName, category: fee.category }],
+          totalAmount: parseInt(fee.batchFullFee || fee.fullFee || fee.amount) || 0,
+          amountPaid: parseInt(fee.batchAmountPaid || fee.amount) || 0,
+          remainingAmount: parseInt(fee.batchRemaining || fee.remainingAmount || "0") || 0,
+          items: [{ 
+            label: (fee.itemName || fee.type), 
+            amount: itemFull, 
+            paidAmount: itemPaid,
+            remainingAmount: itemRem,
+            type: fee.type, 
+            itemName: fee.itemName, 
+            category: fee.category 
+          }],
           displayType: fee.type,
           displayMonth: fee.month
         };
       } else {
-        groups[id].totalAmount += (parseInt(fee.amount) || 0);
-        groups[id].items.push({ label: (fee.itemName || fee.type), amount: parseInt(fee.amount) || 0, type: fee.type, itemName: fee.itemName, category: fee.category });
+        groups[id].totalAmount = parseInt(fee.batchFullFee) || (groups[id].totalAmount + itemFull);
+        groups[id].amountPaid = parseInt(fee.batchAmountPaid || fee.amount) || (groups[id].amountPaid + itemPaid);
+        groups[id].remainingAmount = parseInt(fee.batchRemaining || fee.remainingAmount || "0") || (groups[id].remainingAmount + itemRem);
+
+        groups[id].items.push({ 
+          label: (fee.itemName || fee.type), 
+          amount: itemFull, 
+          paidAmount: itemPaid,
+          remainingAmount: itemRem,
+          type: fee.type, 
+          itemName: fee.itemName, 
+          category: fee.category 
+        });
         if (fee.type === 'Monthly Tuition') {
           groups[id].displayMonth = fee.month;
         }
@@ -364,15 +419,25 @@ export default function CollectFee() {
     if (fee.items) {
       setReceiptData({
         ...fee,
-        amount: fee.totalAmount,
         totalAmount: fee.totalAmount,
+        amountPaid: fee.amountPaid ?? fee.totalAmount,
+        remainingAmount: fee.remainingAmount ?? 0,
         transactionId: fee.transactionId?.split('-')[0] + '-' + fee.transactionId?.split('-')[1] || fee.transactionId
       });
     } else {
       setReceiptData({
         ...fee,
-        items: [{ label: fee.itemName || fee.type, amount: parseInt(fee.amount) || 0, type: fee.type, itemName: fee.itemName }],
-        totalAmount: parseInt(fee.amount) || 0
+        items: [{ 
+          label: fee.itemName || fee.type, 
+          amount: parseInt(fee.fullFee || fee.amount) || 0, 
+          paidAmount: parseInt(fee.amount) || 0, 
+          remainingAmount: parseInt(fee.remainingAmount || "0") || 0,
+          type: fee.type, 
+          itemName: fee.itemName 
+        }],
+        totalAmount: parseInt(fee.fullFee || fee.amount) || 0,
+        amountPaid: parseInt(fee.amount) || 0,
+        remainingAmount: parseInt(fee.remainingAmount || "0") || 0
       });
     }
     setShowReceipt(true);
@@ -392,9 +457,18 @@ export default function CollectFee() {
       rollNo: selectedStudent.rollNo || "",
       month: paymentData.month,
       date: paymentData.date,
-      items: selectedItems,
+      items: selectedItems.map(item => ({
+        ...item,
+        paidAmount: 0,
+        remainingAmount: parseInt(item.amount) || 0
+      })),
       totalAmount: totalAmount,
-      transactionId: "PREVIEW-INVOICE"
+      amountPaid: 0,
+      remainingAmount: totalAmount,
+      transactionId: "PREVIEW-INVOICE",
+      batchFullFee: totalAmount.toString(),
+      batchAmountPaid: "0",
+      batchRemaining: totalAmount.toString()
     });
     setShowReceipt(true);
   };
@@ -659,23 +733,70 @@ export default function CollectFee() {
 
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount Selected</label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                          <span className="text-gray-500 font-medium font-bold">LKR</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Full Fee / Bill Total (முழு கட்டணம்)
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <span className="text-gray-500 font-medium font-bold text-xs">LKR</span>
+                          </div>
+                          <input 
+                            type="number" 
+                            value={totalAmount}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              setTotalAmount(val);
+                              setAmountPaid(val); // By default, set amountPaid to match
+                              setIsManualAmount(true);
+                            }}
+                            className="w-full pl-12 pr-4 py-2.5 border border-slate-300 bg-gray-50 rounded-md font-black text-slate-700 text-lg focus:ring-blue-500 focus:border-blue-500 transition-shadow outline-none"
+                          />
                         </div>
-                        <input 
-                          type="number" 
-                          value={totalAmount}
-                          onChange={(e) => {
-                            setTotalAmount(parseInt(e.target.value) || 0);
-                            setIsManualAmount(true);
-                          }}
-                          className="w-full pl-12 pr-4 py-2.5 border border-blue-300 bg-white rounded-md font-black text-blue-700 text-xl focus:ring-blue-500 focus:border-blue-500 transition-shadow outline-none"
-                        />
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-1 font-medium italic">* You can manually adjust the total if needed</p>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-blue-700 mb-1">
+                          Amount Paid Now (செலுத்திய தொகை) <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <span className="text-blue-500 font-medium font-bold text-xs">LKR</span>
+                          </div>
+                          <input 
+                            type="number" 
+                            required
+                            value={amountPaid}
+                            onChange={(e) => {
+                              setAmountPaid(parseInt(e.target.value) || 0);
+                              setIsManualAmount(true);
+                            }}
+                            className="w-full pl-12 pr-4 py-2.5 border border-blue-400 bg-white rounded-md font-black text-blue-700 text-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-shadow outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Remaining Balance (மீதி கட்டணம்)
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <span className="text-gray-500 font-medium font-bold text-xs">LKR</span>
+                          </div>
+                          <input 
+                            type="text" 
+                            disabled
+                            value={`${Math.max(0, totalAmount - amountPaid)}.00`}
+                            className={`w-full pl-12 pr-4 py-2.5 border rounded-md font-black text-lg ${
+                              totalAmount - amountPaid > 0 
+                                ? 'bg-red-50 border-red-200 text-red-600' 
+                                : 'bg-green-50 border-green-200 text-green-600'
+                            }`}
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     <div>
@@ -938,12 +1059,24 @@ export default function CollectFee() {
 
                   <div className="space-y-2 border-t-2 border-gray-100 pt-4 mb-10">
                     <div className="flex justify-between items-center px-2">
-                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest font-bold">Sub Total</span>
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest font-bold">Sub Total (முழு கட்டணம்)</span>
                       <span className="text-xs font-black text-gray-600">LKR {receiptData.totalAmount || receiptData.amount}.00</span>
                     </div>
+                    {!isUnpaidReceipt && receiptData.remainingAmount && parseInt(receiptData.remainingAmount) > 0 ? (
+                      <>
+                        <div className="flex justify-between items-center px-2 text-emerald-600">
+                          <span className="text-[10px] font-black uppercase tracking-widest font-bold">Amount Paid (செலுத்தியது)</span>
+                          <span className="text-xs font-black">LKR {receiptData.amountPaid || receiptData.amount}.00</span>
+                        </div>
+                        <div className="flex justify-between items-center px-2 text-red-500">
+                          <span className="text-[10px] font-black uppercase tracking-widest font-bold">Remaining Balance (மீதி கட்டணம்)</span>
+                          <span className="text-xs font-black">LKR {receiptData.remainingAmount}.00</span>
+                        </div>
+                      </>
+                    ) : null}
                     <div className={`flex justify-between items-center p-3 rounded-xl shadow-lg border ${isUnpaidReceipt ? 'bg-red-600 border-red-500 shadow-red-100' : 'bg-green-600 border-green-500 shadow-green-100'}`}>
-                      <span className="text-[10px] font-black text-white uppercase tracking-widest font-bold">{isUnpaidReceipt ? 'Amount Due' : 'Total Paid'}</span>
-                      <span className="text-xl font-black text-white">LKR {receiptData.totalAmount || receiptData.amount}</span>
+                      <span className="text-[10px] font-black text-white uppercase tracking-widest font-bold">{isUnpaidReceipt ? 'Amount Due' : 'Paid Today'}</span>
+                      <span className="text-xl font-black text-white">LKR {isUnpaidReceipt ? (receiptData.totalAmount || receiptData.amount) : (receiptData.amountPaid || receiptData.amount)}</span>
                     </div>
                   </div>
 

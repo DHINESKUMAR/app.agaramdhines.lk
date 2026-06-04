@@ -91,12 +91,14 @@ export default function Home() {
   useEffect(() => {
     // Check for existing session
     const session = localStorage.getItem('userSession');
-    if (session) {
+    if (session && session !== 'undefined' && session !== 'null') {
       try {
         const userData = JSON.parse(session);
-        if (userData.role === 'Admin') navigate('/admin');
-        else if (userData.role === 'Student') navigate('/student-dashboard', { state: userData });
-        else if (userData.role === 'Staff') navigate('/staff-dashboard', { state: userData });
+        if (userData && userData.role) {
+          if (userData.role === 'Admin') navigate('/admin');
+          else if (userData.role === 'Student') navigate('/student-dashboard', { state: userData });
+          else if (userData.role === 'Staff') navigate('/staff-dashboard', { state: userData });
+        }
       } catch (e) {
         console.error("Invalid session data");
       }
@@ -107,7 +109,7 @@ export default function Home() {
     });
 
     getAnnouncements().then(data => {
-      if (data) {
+      if (data && Array.isArray(data)) {
         const imageAnnouncements = data
           .filter((a: any) => a.isActive && a.imageUrl)
           .map((a: any) => ({

@@ -59,10 +59,10 @@ export default function StaffDashboard() {
     let data = staff;
     if (!data) {
       const session = localStorage.getItem('userSession');
-      if (session) {
+      if (session && session !== 'undefined' && session !== 'null') {
         try {
           const parsed = JSON.parse(session);
-          if (parsed.role === 'Staff') {
+          if (parsed && parsed.role === 'Staff') {
             data = parsed;
             setStaff(parsed);
           }
