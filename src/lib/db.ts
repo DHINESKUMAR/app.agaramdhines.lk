@@ -303,7 +303,26 @@ export const saveStaffs = (staffs: any) => saveData('staffs', staffs);
 export const getStaffAttendance = () => getData('staffAttendance', []);
 export const saveStaffAttendance = (attendance: any) => saveData('staffAttendance', attendance);
 
-export const getSubjects = () => getData('subjects', []);
+export const getSubjects = async () => {
+  const list = await getData('subjects', []);
+  const defaults = [
+    { id: "seed_tamil_quiz", name: "தமிழ் வினா விடை", category: "Sub", fee: "500" },
+    { id: "seed_30day_tamil", name: "30 நாள் தமிழ் பாடநெறி (தரம் 11)", category: "Sub", fee: "6000" },
+    { id: "seed_tamil_main", name: "tamil", category: "Main", fee: "0" }
+  ];
+  let changed = false;
+  const listArray = Array.isArray(list) ? list : [];
+  defaults.forEach(def => {
+    if (!listArray.some((s: any) => s && s.name && s.name.toLowerCase().trim() === def.name.toLowerCase().trim())) {
+      listArray.push(def);
+      changed = true;
+    }
+  });
+  if (changed) {
+    saveData('subjects', listArray);
+  }
+  return listArray;
+};
 export const saveSubjects = (subjects: any) => saveData('subjects', subjects);
 
 export const getIncomeExpense = () => getData('incomeExpense', []);

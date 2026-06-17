@@ -454,20 +454,44 @@ export default function StudentDashboard() {
         return itemGrade === studentGrade || (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade));
       }));
       
-      // Filter YouTube links and Web Posts by grade or isPublic
-      setYoutubeLinks(allYoutubeLinks.filter((l: any) => 
-        l.isPublic || 
-        l.grade?.toString().trim().toLowerCase() === studentGrade || 
-        (normalizedStudentGrade && l.grade?.toString().trim().toLowerCase().includes(normalizedStudentGrade)) ||
-        l.grade?.toString().trim().toLowerCase() === "public"
-      ));
+      // Filter YouTube links and Web Posts by grade or isPublic, and subject enrollment
+      const studentSubjectsArray = (freshStudentData.subjects || freshStudentData.enrolledClasses || []).map((s: any) => s?.toString().trim().toLowerCase());
       
-      setWebPosts(allWebPosts.filter((p: any) => 
-        p.isPublic || 
-        p.grade?.toString().trim().toLowerCase() === studentGrade || 
-        (normalizedStudentGrade && p.grade?.toString().trim().toLowerCase().includes(normalizedStudentGrade)) ||
-        p.grade?.toString().trim().toLowerCase() === "public"
-      ));
+      const filterBySubjectAndGrade = (item: any) => {
+        // 1. Grade check
+        const itemGrade = item.grade?.toString().trim().toLowerCase() || "";
+        const matchesGrade = item.isPublic || 
+          itemGrade === studentGrade || 
+          (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade)) ||
+          itemGrade === "public";
+        
+        if (!matchesGrade) return false;
+        
+        // 2. Public bypass
+        if (item.isPublic) return true;
+        
+        // 3. Subject check
+        const itemSubjects: string[] = [];
+        if (item.subjects && Array.isArray(item.subjects)) {
+          item.subjects.forEach((s: any) => {
+            if (s) itemSubjects.push(s.toString().trim().toLowerCase());
+          });
+        }
+        if (item.subject && !itemSubjects.includes(item.subject.toString().trim().toLowerCase())) {
+          itemSubjects.push(item.subject.toString().trim().toLowerCase());
+        }
+        
+        // If content has no assigned subject, show to all in this grade
+        if (itemSubjects.length === 0 || itemSubjects.every(s => s === "" || s === "e-learning" || s === "general" || s === "uncategorized")) {
+          return true;
+        }
+        
+        // Only show if student is enrolled in at least one of the assigned subjects
+        return itemSubjects.some(sub => studentSubjectsArray.includes(sub));
+      };
+
+      setYoutubeLinks(allYoutubeLinks.filter(filterBySubjectAndGrade));
+      setWebPosts(allWebPosts.filter(filterBySubjectAndGrade));
 
       const studentFees = allFees.filter((f: any) => 
         (f.studentId && (

@@ -88,6 +88,7 @@ export default function Youtube() {
 
   const [formData, setFormData] = useState({
     subject: '',
+    subjects: [] as string[],
     title: '',
     link: '',
     folder: '',
@@ -126,7 +127,7 @@ export default function Youtube() {
     e.preventDefault();
     
     if (activeTab === 'youtube') {
-      if (!formData.subject || !formData.title || !formData.link || !formData.folder) {
+      if ((!formData.subject && (!formData.subjects || formData.subjects.length === 0)) || !formData.title || !formData.link || !formData.folder) {
         alert("Subject, Folder, Title, and Link are required!");
         return;
       }
@@ -136,11 +137,13 @@ export default function Youtube() {
         return;
       }
 
+      const activeSubjects = formData.subjects && formData.subjects.length > 0 ? formData.subjects : [formData.subject];
       const newLink = { 
         id: Date.now().toString(), 
         grade: selectedGrade === "Public (All Students)" ? "Public" : selectedGrade,
         isPublic: selectedGrade === "Public (All Students)",
-        subject: formData.subject,
+        subject: activeSubjects[0] || "",
+        subjects: activeSubjects,
         folder: formData.folder,
         title: formData.title,
         link: formData.link,
@@ -156,22 +159,24 @@ export default function Youtube() {
         await addNotification({
           grade: newLink.grade,
           title: "புதிய வீடியோ பாடம்!",
-          message: `${formData.subject}: ${formData.title} வீடியோ சேர்க்கப்பட்டுள்ளது.`,
+          message: `${activeSubjects.join(', ')}: ${formData.title} வீடியோ சேர்க்கப்பட்டுள்ளது.`,
           type: 'youtube',
           createdAt: new Date().toISOString()
         });
       }
     } else {
-      if (!formData.subject || !formData.title || !formData.content) {
+      if ((!formData.subject && (!formData.subjects || formData.subjects.length === 0)) || !formData.title || !formData.content) {
         alert("Subject, Title, and Content are required!");
         return;
       }
 
+      const activeSubjects = formData.subjects && formData.subjects.length > 0 ? formData.subjects : [formData.subject];
       const newPost = {
         id: Date.now().toString(),
         grade: selectedGrade === "Public (All Students)" ? "Public" : selectedGrade,
         isPublic: selectedGrade === "Public (All Students)",
-        subject: formData.subject,
+        subject: activeSubjects[0] || "",
+        subjects: activeSubjects,
         folder: formData.folder,
         title: formData.title,
         content: formData.content,
@@ -189,14 +194,14 @@ export default function Youtube() {
         await addNotification({
           grade: newPost.grade,
           title: "புதிய பாடம் (Post)!",
-          message: `${formData.subject}: ${formData.title} பாடம் சேர்க்கப்பட்டுள்ளது.`,
+          message: `${activeSubjects.join(', ')}: ${formData.title} பாடம் சேர்க்கப்பட்டுள்ளது.`,
           type: 'webpost',
           createdAt: new Date().toISOString()
         });
       }
     }
     
-    setFormData({ subject: '', title: '', link: '', folder: '', isPublic: false, content: '', imageUrl: '' });
+    setFormData({ subject: '', subjects: [], title: '', link: '', folder: '', isPublic: false, content: '', imageUrl: '' });
     setIsNewFolder(false);
     setIsNewSubject(false);
   };
@@ -378,7 +383,40 @@ export default function Youtube() {
                       {isNewSubject ? "Select Existing" : "+ Add New Subject"}
                     </button>
                   </div>
-                  {isNewSubject ? (
+                  {selectedGrade === "தரம் 11" && !isNewSubject ? (
+                    <div className="space-y-2 border border-slate-200 rounded-xl p-3 bg-slate-50">
+                      {[
+                        "தமிழ் வினா விடை",
+                        "30 நாள் தமிழ் பாடநெறி (தரம் 11)",
+                        "tamil"
+                      ].map(sub => {
+                        const isChecked = formData.subjects ? formData.subjects.includes(sub) : (formData.subject === sub);
+                        return (
+                          <label key={sub} className="flex items-center space-x-2.5 text-xs font-bold text-slate-700 cursor-pointer select-none py-1 hover:text-blue-600 transition-colors">
+                            <input 
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                let updatedSubjects = formData.subjects ? [...formData.subjects] : (formData.subject ? [formData.subject] : []);
+                                if (e.target.checked) {
+                                  if (!updatedSubjects.includes(sub)) updatedSubjects.push(sub);
+                                } else {
+                                  updatedSubjects = updatedSubjects.filter(item => item !== sub);
+                                }
+                                setFormData(prev => ({
+                                  ...prev,
+                                  subjects: updatedSubjects,
+                                  subject: updatedSubjects[0] || ''
+                                }));
+                              }}
+                              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                            />
+                            <span>{sub}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : isNewSubject ? (
                     <input 
                       type="text" 
                       placeholder="Type new subject name..." 
@@ -588,16 +626,51 @@ export default function Youtube() {
                                       <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
                                     <div>
                                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Subject</label>
-                                      <select 
-                                        value={editFormData.subject}
-                                        onChange={(e) => setEditFormData({...editFormData, subject: e.target.value})}
-                                        className="w-full text-xs border rounded-lg px-2 py-1.5 bg-white font-medium"
-                                      >
-                                        <option value="">Select Subject...</option>
-                                        {tabSubjects.map(s => (
-                                          <option key={s} value={s}>{s}</option>
-                                        ))}
-                                      </select>
+                                      {editFormData.grade === "தரம் 11" ? (
+                                        <div className="space-y-1.5 p-2 bg-white border rounded-lg max-h-32 overflow-y-auto">
+                                          {[
+                                            "தமிழ் வினா விடை",
+                                            "30 நாள் தமிழ் பாடநெறி (தரம் 11)",
+                                            "tamil"
+                                          ].map(sub => {
+                                            const isChecked = editFormData.subjects ? editFormData.subjects.includes(sub) : (editFormData.subject === sub);
+                                            return (
+                                              <label key={sub} className="flex items-center space-x-2 text-[11px] font-bold text-slate-700 cursor-pointer">
+                                                <input 
+                                                  type="checkbox"
+                                                  checked={isChecked}
+                                                  onChange={(e) => {
+                                                    let updatedSubjects = editFormData.subjects ? [...editFormData.subjects] : (editFormData.subject ? [editFormData.subject] : []);
+                                                    if (e.target.checked) {
+                                                      if (!updatedSubjects.includes(sub)) updatedSubjects.push(sub);
+                                                    } else {
+                                                      updatedSubjects = updatedSubjects.filter(item => item !== sub);
+                                                    }
+                                                    setEditFormData({
+                                                      ...editFormData,
+                                                      subjects: updatedSubjects,
+                                                      subject: updatedSubjects[0] || ''
+                                                    });
+                                                  }}
+                                                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                                                />
+                                                <span>{sub}</span>
+                                              </label>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <select 
+                                          value={editFormData.subject}
+                                          onChange={(e) => setEditFormData({...editFormData, subject: e.target.value})}
+                                          className="w-full text-xs border rounded-lg px-2 py-1.5 bg-white font-medium"
+                                        >
+                                          <option value="">Select Subject...</option>
+                                          {tabSubjects.map(s => (
+                                            <option key={s} value={s}>{s}</option>
+                                          ))}
+                                        </select>
+                                      )}
                                     </div>
                                     <div>
                                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Folder</label>
@@ -632,7 +705,9 @@ export default function Youtube() {
                                 ) : (
                                   <>
                                     <div className="flex justify-between items-start">
-                                      <span className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded tracking-widest">{link.subject}</span>
+                                      <span className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded tracking-widest">
+                                        {link.subjects && link.subjects.length > 0 ? link.subjects.join(', ') : link.subject}
+                                      </span>
                                       <button 
                                         onClick={() => togglePublicStatus(link)}
                                         className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-colors ${link.isPublic ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}
@@ -719,16 +794,51 @@ export default function Youtube() {
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                      <div>
                                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Subject</label>
-                                        <select 
-                                          value={editFormData.subject}
-                                          onChange={(e) => setEditFormData({...editFormData, subject: e.target.value})}
-                                          className="w-full text-xs border rounded-xl px-3 py-2 bg-white"
-                                        >
-                                          <option value="">Select Subject...</option>
-                                          {tabSubjects.map(s => (
-                                            <option key={s} value={s}>{s}</option>
-                                          ))}
-                                        </select>
+                                        {editFormData.grade === "தரம் 11" ? (
+                                          <div className="space-y-1.5 p-2 bg-white border rounded-lg max-h-32 overflow-y-auto">
+                                            {[
+                                              "தமிழ் வினா விடை",
+                                              "30 நாள் தமிழ் பாடநெறி (தரம் 11)",
+                                              "tamil"
+                                            ].map(sub => {
+                                              const isChecked = editFormData.subjects ? editFormData.subjects.includes(sub) : (editFormData.subject === sub);
+                                              return (
+                                                <label key={sub} className="flex items-center space-x-2 text-[11px] font-bold text-slate-700 cursor-pointer">
+                                                  <input 
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={(e) => {
+                                                      let updatedSubjects = editFormData.subjects ? [...editFormData.subjects] : (editFormData.subject ? [editFormData.subject] : []);
+                                                      if (e.target.checked) {
+                                                        if (!updatedSubjects.includes(sub)) updatedSubjects.push(sub);
+                                                      } else {
+                                                        updatedSubjects = updatedSubjects.filter(item => item !== sub);
+                                                      }
+                                                      setEditFormData({
+                                                        ...editFormData,
+                                                        subjects: updatedSubjects,
+                                                        subject: updatedSubjects[0] || ''
+                                                      });
+                                                    }}
+                                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                                                  />
+                                                  <span>{sub}</span>
+                                                </label>
+                                              );
+                                            })}
+                                          </div>
+                                        ) : (
+                                          <select 
+                                            value={editFormData.subject}
+                                            onChange={(e) => setEditFormData({...editFormData, subject: e.target.value})}
+                                            className="w-full text-xs border rounded-xl px-3 py-2 bg-white font-medium"
+                                          >
+                                            <option value="">Select Subject...</option>
+                                            {tabSubjects.map(s => (
+                                              <option key={s} value={s}>{s}</option>
+                                            ))}
+                                          </select>
+                                        )}
                                      </div>
                                      <div>
                                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Folder</label>
@@ -800,7 +910,9 @@ export default function Youtube() {
                                  )}
                                 <div className="flex justify-between items-start mb-4">
                                   <div className="flex items-center gap-2">
-                                     <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded tracking-widest">{post.subject}</span>
+                                     <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded tracking-widest">
+                                        {post.subjects && post.subjects.length > 0 ? post.subjects.join(', ') : post.subject}
+                                     </span>
                                      <button 
                                        onClick={() => togglePublicStatus(post)}
                                        className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-colors ${post.isPublic ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}
