@@ -16,7 +16,7 @@ export default defineConfig(({mode}) => {
         devOptions: {
           enabled: true
         },
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'logo.png', 'screenshots/home.png', 'screenshots/desktop.png'],
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'logo.png', 'logo-192.png', 'logo-512.png', 'screenshots/home.png', 'screenshots/desktop.png'],
         manifest: {
           id: '/?source=pwa',
           name: 'Agaram Dhines Online Academy',
@@ -33,11 +33,12 @@ export default defineConfig(({mode}) => {
           dir: 'ltr',
           categories: ['education', 'productivity'],
           iarc_rating_id: 'e84b072d-71b3-4d3e-86ae-31a8ce4e53b7',
-          prefer_related_applications: false,
+          prefer_related_applications: true,
           related_applications: [
             {
-              platform: 'webapp',
-              url: 'https://app-agaramdhines-lk.vercel.app/manifest.webmanifest'
+              platform: 'play',
+              url: 'https://play.google.com/store/apps/details?id=com.agaram.dhines.online.academy',
+              id: 'com.agaram.dhines.online.academy'
             }
           ],
           scope_extensions: [
@@ -67,25 +68,25 @@ export default defineConfig(({mode}) => {
           ],
           icons: [
             {
-              src: '/logo.png',
+              src: '/logo-192.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any'
             },
             {
-              src: '/logo.png',
+              src: '/logo-192.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'maskable'
             },
             {
-              src: '/logo.png',
+              src: '/logo-512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any'
             },
             {
-              src: '/logo.png',
+              src: '/logo-512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable'
