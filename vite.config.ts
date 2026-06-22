@@ -16,7 +16,7 @@ export default defineConfig(({mode}) => {
         devOptions: {
           enabled: true
         },
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'logo.png', 'logo-192.png', 'logo-512.png', 'screenshots/home.png', 'screenshots/desktop.png'],
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'logo.png', 'logo-192.png', 'logo-512.png', 'screenshots/home.jpg', 'screenshots/desktop.jpg'],
         manifest: {
           id: '/?source=pwa',
           name: 'Agaram Dhines Online Academy',
@@ -94,16 +94,16 @@ export default defineConfig(({mode}) => {
           ],
           screenshots: [
             {
-              src: '/screenshots/home.png',
-              sizes: '1080x1920',
-              type: 'image/png',
+              src: '/screenshots/home.jpg',
+              sizes: '768x1376',
+              type: 'image/jpeg',
               form_factor: 'narrow',
               label: 'Agaram Dhines Academy App View'
             },
             {
-              src: '/screenshots/desktop.png',
-              sizes: '1920x1080',
-              type: 'image/png',
+              src: '/screenshots/desktop.jpg',
+              sizes: '1376x768',
+              type: 'image/jpeg',
               form_factor: 'wide',
               label: 'Agaram Dhines Academy Home'
             }
