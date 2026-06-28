@@ -288,7 +288,23 @@ export const saveSchedule = (schedule: any) => saveData('schedule', schedule);
 export const getClassLinks = () => getData('classLinks', {});
 export const saveClassLinks = (links: any) => saveData('classLinks', links);
 
-export const getCourseWebsiteLinks = () => getData('courseWebsiteLinks', {});
+export const getCourseWebsiteLinks = async () => {
+  const links = await getData('courseWebsiteLinks', {});
+  const defaultLinks = {
+    "30 DAY'S TAMIL COURSE": "https://www.agaramdhines.lk/courses/30-%e0%ae%a8%e0%ae%be%e0%ae%9f%e0%af%8d%e0%ae%95%e0%ae%b3%e0%ae%bf%e0%ae%b2%e0%af%8d-o-l-%e0%ae%a4%e0%ae%ae%e0%ae%bf%e0%ae%b4%e0%af%8d-2026-dec/",
+    "தரம் 06": "https://www.agaramdhines.lk/courses/",
+    "தரம் 07": "https://www.agaramdhines.lk/courses/",
+    "தரம் 08": "https://www.agaramdhines.lk/courses/",
+    "தரம் 09": "https://www.agaramdhines.lk/courses/",
+    "தரம் 10": "https://www.agaramdhines.lk/courses/",
+    "தரம் 11": "https://www.agaramdhines.lk/courses/"
+  };
+  const merged = { ...defaultLinks, ...(links || {}) };
+  if (!links || !links["30 DAY'S TAMIL COURSE"]) {
+    saveData('courseWebsiteLinks', merged);
+  }
+  return merged;
+};
 export const saveCourseWebsiteLinks = (links: any) => saveData('courseWebsiteLinks', links);
 
 export const getClasses = () => getData('classes', []);

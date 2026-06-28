@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db, isFirebaseConfigured } from '../lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 export function useRealtimeNotifications(grade: string | undefined, onNewNotification?: (notif: any) => void) {
   useEffect(() => {
@@ -30,9 +30,7 @@ export function useRealtimeNotifications(grade: string | undefined, onNewNotific
 
     const q = query(
       collection(db, 'notifications'),
-      where('grade', 'in', [grade, 'Public', 'public', 'All', 'all']),
-      orderBy('createdAt', 'desc'),
-      limit(20)
+      where('grade', 'in', [grade, 'Public', 'public', 'All', 'all'])
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {

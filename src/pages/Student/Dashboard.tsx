@@ -1859,7 +1859,7 @@ export default function StudentDashboard() {
                       );
                     })
                   ) : (
-                    ["தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", "தரம் 11"].map((grade, index) => {
+                    ["30 DAY'S TAMIL COURSE", "தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", "தரம் 11"].map((grade, index) => {
                       const colors = [
                         'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-600',
                         'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-600',
@@ -1872,7 +1872,7 @@ export default function StudentDashboard() {
                       return (
                         <button
                           key={grade}
-                          onClick={() => window.open("https://www.agaramdhines.lk/courses/", "_blank")}
+                          onClick={() => window.open(grade === "30 DAY'S TAMIL COURSE" ? "https://www.agaramdhines.lk/courses/30-%e0%ae%a8%e0%ae%be%e0%ae%9f%e0%af%8d%e0%ae%95%e0%ae%b3%e0%ae%bf%e0%ae%b2%e0%af%8d-o-l-%e0%ae%a4%e0%ae%ae%e0%ae%bf%e0%ae%b4%e0%af%8d-2026-dec/" : "https://www.agaramdhines.lk/courses/", "_blank")}
                           className={`${colorClass} hover:text-white border-2 px-4 py-4 rounded-3xl font-black text-sm transition-all shadow-sm hover:shadow-xl hover:-translate-y-1 flex flex-col items-center justify-center gap-2 aspect-square sm:aspect-auto`}
                         >
                           <BookOpen size={20} />
