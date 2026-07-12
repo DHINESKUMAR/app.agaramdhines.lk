@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Youtube as YoutubeIcon, PlayCircle, Trash2, ArrowLeft, Plus, ExternalLink, BookOpen, Folder, Globe, FileText, LayoutGrid, List, Share2, ChevronDown } from 'lucide-react';
-import { getYoutubeLinks, saveYoutubeLinks, getWebPosts, saveWebPosts, addNotification } from '../../lib/db';
+import { getYoutubeLinks, saveYoutubeLinks, getWebPosts, saveWebPosts, addNotification, getSubjects, saveSubjects } from '../../lib/db';
 
 export default function Youtube() {
   const [activeTab, setActiveTab] = useState<'youtube' | 'webposts'>('youtube');
   const [links, setLinks] = useState<any[]>([]);
   const [webPosts, setWebPosts] = useState<any[]>([]);
+  const [dbSubjects, setDbSubjects] = useState<any[]>([]);
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<any>(null);
@@ -98,9 +99,10 @@ export default function Youtube() {
   });
 
   useEffect(() => {
-    Promise.all([getYoutubeLinks(), getWebPosts()]).then(([linksData, postsData]) => {
+    Promise.all([getYoutubeLinks(), getWebPosts(), getSubjects()]).then(([linksData, postsData, subjectsData]) => {
       setLinks(Array.isArray(linksData) ? linksData : []);
       setWebPosts(Array.isArray(postsData) ? postsData : []);
+      setDbSubjects(Array.isArray(subjectsData) ? subjectsData : []);
     });
   }, []);
 
@@ -116,6 +118,11 @@ export default function Youtube() {
     (activeTab === 'youtube' ? links : webPosts).map(item => item.subject)
   )).filter((s): s is string => !!s).sort();
 
+  // Get unique subjects registered in the database (Manage Subjects)
+  const subjectOptions = Array.from(new Set(
+    dbSubjects.map(s => s && s.name).filter((s): s is string => !!s)
+  )).sort();
+
   // Get unique folders relative to active tab and selected grade
   const tabFolders = Array.from(new Set(
     (activeTab === 'youtube' ? links : webPosts)
@@ -125,9 +132,29 @@ export default function Youtube() {
 
   const handleAddEntry = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    let finalSubject = formData.subject;
+    let finalSubjects = formData.subjects && formData.subjects.length > 0 ? formData.subjects : [formData.subject];
+
+    if (isNewSubject && formData.subject.trim()) {
+      const newSubName = formData.subject.trim();
+      finalSubject = newSubName;
+      finalSubjects = [newSubName];
+      if (!dbSubjects.some((s: any) => s && s.name && s.name.toLowerCase().trim() === newSubName.toLowerCase().trim())) {
+        const newSubObj = {
+          id: Date.now().toString(),
+          name: newSubName,
+          category: "Sub" as "Main" | "Sub",
+          fee: "0"
+        };
+        const updatedSubjects = [...dbSubjects, newSubObj];
+        await saveSubjects(updatedSubjects);
+        setDbSubjects(updatedSubjects);
+      }
+    }
     
     if (activeTab === 'youtube') {
-      if ((!formData.subject && (!formData.subjects || formData.subjects.length === 0)) || !formData.title || !formData.link || !formData.folder) {
+      if ((!finalSubject && (!finalSubjects || finalSubjects.length === 0)) || !formData.title || !formData.link || !formData.folder) {
         alert("Subject, Folder, Title, and Link are required!");
         return;
       }
@@ -137,7 +164,7 @@ export default function Youtube() {
         return;
       }
 
-      const activeSubjects = formData.subjects && formData.subjects.length > 0 ? formData.subjects : [formData.subject];
+      const activeSubjects = finalSubjects;
       const newLink = { 
         id: Date.now().toString(), 
         grade: selectedGrade === "Public (All Students)" ? "Public" : selectedGrade,
@@ -165,12 +192,12 @@ export default function Youtube() {
         });
       }
     } else {
-      if ((!formData.subject && (!formData.subjects || formData.subjects.length === 0)) || !formData.title || !formData.content) {
+      if ((!finalSubject && (!finalSubjects || finalSubjects.length === 0)) || !formData.title || !formData.content) {
         alert("Subject, Title, and Content are required!");
         return;
       }
 
-      const activeSubjects = formData.subjects && formData.subjects.length > 0 ? formData.subjects : [formData.subject];
+      const activeSubjects = finalSubjects;
       const newPost = {
         id: Date.now().toString(),
         grade: selectedGrade === "Public (All Students)" ? "Public" : selectedGrade,
@@ -383,13 +410,9 @@ export default function Youtube() {
                       {isNewSubject ? "Select Existing" : "+ Add New Subject"}
                     </button>
                   </div>
-                  {selectedGrade === "தரம் 11" && !isNewSubject ? (
-                    <div className="space-y-2 border border-slate-200 rounded-xl p-3 bg-slate-50">
-                      {[
-                        "தமிழ் வினா விடை",
-                        "30 நாள் தமிழ் பாடநெறி (தரம் 11)",
-                        "tamil"
-                      ].map(sub => {
+                  {(selectedGrade === "தரம் 11" || selectedGrade === "தரம் 10") && !isNewSubject ? (
+                    <div className="space-y-2 border border-slate-200 rounded-xl p-3 bg-slate-50 max-h-60 overflow-y-auto">
+                      {subjectOptions.map(sub => {
                         const isChecked = formData.subjects ? formData.subjects.includes(sub) : (formData.subject === sub);
                         return (
                           <label key={sub} className="flex items-center space-x-2.5 text-xs font-bold text-slate-700 cursor-pointer select-none py-1 hover:text-blue-600 transition-colors">
@@ -432,7 +455,7 @@ export default function Youtube() {
                       className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white font-medium"
                     >
                       <option value="">Select a subject...</option>
-                      {tabSubjects.map(s => (
+                      {subjectOptions.map(s => (
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
@@ -626,13 +649,9 @@ export default function Youtube() {
                                       <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
                                     <div>
                                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Subject</label>
-                                      {editFormData.grade === "தரம் 11" ? (
+                                      {(editFormData.grade === "தரம் 11" || editFormData.grade === "தரம் 10") ? (
                                         <div className="space-y-1.5 p-2 bg-white border rounded-lg max-h-32 overflow-y-auto">
-                                          {[
-                                            "தமிழ் வினா விடை",
-                                            "30 நாள் தமிழ் பாடநெறி (தரம் 11)",
-                                            "tamil"
-                                          ].map(sub => {
+                                          {subjectOptions.map(sub => {
                                             const isChecked = editFormData.subjects ? editFormData.subjects.includes(sub) : (editFormData.subject === sub);
                                             return (
                                               <label key={sub} className="flex items-center space-x-2 text-[11px] font-bold text-slate-700 cursor-pointer">
@@ -666,7 +685,7 @@ export default function Youtube() {
                                           className="w-full text-xs border rounded-lg px-2 py-1.5 bg-white font-medium"
                                         >
                                           <option value="">Select Subject...</option>
-                                          {tabSubjects.map(s => (
+                                          {subjectOptions.map(s => (
                                             <option key={s} value={s}>{s}</option>
                                           ))}
                                         </select>
@@ -794,13 +813,9 @@ export default function Youtube() {
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                      <div>
                                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Subject</label>
-                                        {editFormData.grade === "தரம் 11" ? (
+                                        {(editFormData.grade === "தரம் 11" || editFormData.grade === "தரம் 10") ? (
                                           <div className="space-y-1.5 p-2 bg-white border rounded-lg max-h-32 overflow-y-auto">
-                                            {[
-                                              "தமிழ் வினா விடை",
-                                              "30 நாள் தமிழ் பாடநெறி (தரம் 11)",
-                                              "tamil"
-                                            ].map(sub => {
+                                            {subjectOptions.map(sub => {
                                               const isChecked = editFormData.subjects ? editFormData.subjects.includes(sub) : (editFormData.subject === sub);
                                               return (
                                                 <label key={sub} className="flex items-center space-x-2 text-[11px] font-bold text-slate-700 cursor-pointer">
@@ -834,7 +849,7 @@ export default function Youtube() {
                                             className="w-full text-xs border rounded-xl px-3 py-2 bg-white font-medium"
                                           >
                                             <option value="">Select Subject...</option>
-                                            {tabSubjects.map(s => (
+                                            {subjectOptions.map(s => (
                                               <option key={s} value={s}>{s}</option>
                                             ))}
                                           </select>

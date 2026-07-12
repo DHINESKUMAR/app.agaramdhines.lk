@@ -2151,7 +2151,7 @@ export default function StudentDashboard() {
                                                 <BookOpen size={12} className="text-indigo-600" />
                                               </div>
                                               <span className="text-indigo-600 text-xs font-black uppercase tracking-widest">
-                                                {link.subject || "E-Learning"}
+                                                {(link.subjects && link.subjects.length > 0 ? link.subjects.join(', ') : link.subject) || "E-Learning"}
                                               </span>
                                             </div>
                                             
@@ -2238,7 +2238,7 @@ export default function StudentDashboard() {
                                     <div className="flex-1">
                                       <div className="flex items-center justify-between gap-2 mb-2">
                                         <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                                          {post.subject}
+                                          {post.subjects && post.subjects.length > 0 ? post.subjects.join(', ') : post.subject}
                                         </span>
                                         {post.date && parseSafeDate(post.date) && (
                                           <span className="text-[10px] font-bold text-slate-400">
