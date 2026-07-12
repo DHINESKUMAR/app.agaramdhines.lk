@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getTimeTable, saveTimeTable, getClasses, getStaffs, getZoomLinks } from "../../lib/db";
+import { getTimeTable, saveTimeTable, getClasses, getStaffs, getZoomLinks, getSubjects } from "../../lib/db";
 import { Plus, Trash2, Calendar as CalendarIcon, Clock, User, BookOpen, Sparkles, XCircle, Video } from "lucide-react";
 
 export default function Timetable() {
@@ -7,6 +7,7 @@ export default function Timetable() {
   const [classes, setClasses] = useState<any[]>([]);
   const [staffs, setStaffs] = useState<any[]>([]);
   const [zoomLinks, setZoomLinks] = useState<any[]>([]);
+  const [dbSubjects, setDbSubjects] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filterSubject, setFilterSubject] = useState("");
@@ -30,15 +31,17 @@ export default function Timetable() {
 
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-  const availableSubjects = formData.grade 
-    ? classes.find(c => c.name === formData.grade)?.subjects || []
-    : [];
+  const availableSubjects = Array.from(new Set([
+    ...(formData.grade ? (classes.find(c => c.name === formData.grade)?.subjects || []) : []),
+    ...dbSubjects.map(s => s && s.name).filter((s): s is string => !!s)
+  ])).sort();
 
   useEffect(() => {
     getTimeTable().then(setTimetable);
     getClasses().then(setClasses);
     getStaffs().then(setStaffs);
     getZoomLinks().then(setZoomLinks);
+    getSubjects().then(setDbSubjects);
   }, []);
 
   const handleAdd = async (e: React.FormEvent) => {
