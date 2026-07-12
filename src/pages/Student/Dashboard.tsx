@@ -35,6 +35,7 @@ import {
   Share2,
   Megaphone,
   ChevronDown,
+  ChevronRight,
   Copy
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -82,6 +83,7 @@ export default function StudentDashboard() {
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
+  const [selectedMaterialSubject, setSelectedMaterialSubject] = useState<string | null>(null);
 
   // Helper to get a color based on subject name
   const getSubjectColorClasses = (subjectName: string) => {
@@ -907,6 +909,10 @@ export default function StudentDashboard() {
     };
   }, [activeMeetingUrl]);
 
+  useEffect(() => {
+    setSelectedMaterialSubject(null);
+  }, [activeTab]);
+
   if (!studentData) {
     return null;
   }
@@ -1323,6 +1329,16 @@ export default function StudentDashboard() {
               </div>
 
               <div
+                onClick={() => setActiveTab("course_materials")}
+                className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"
+              >
+                <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-red-100 transition-colors">
+                  <FileText size={28} />
+                </div>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center">Course Material</span>
+              </div>
+
+              <div
                 onClick={() => setActiveTab("rules")}
                 className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"
               >
@@ -1438,73 +1454,6 @@ export default function StudentDashboard() {
                     <Video size={20} />
                     Join & Mark Attendance
                   </button>
-                </div>
-              )}
-            </div>
-
-            {/* Course Material Section */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 mt-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                <div>
-                  <h3 className="text-xl font-black text-slate-800 flex items-center">
-                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mr-3 shrink-0 shadow-sm">
-                      <FileText size={20} />
-                    </div>
-                    Course Material
-                  </h3>
-                  <p className="text-slate-500 text-sm font-medium ml-13">பாடக் குறிப்புகள் மற்றும் PDF நூலகம்</p>
-                </div>
-                {courses.length > 0 && (
-                  <span className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-3 py-1 rounded-full w-fit sm:ml-auto">
-                    {courses.length} Material{courses.length > 1 ? 's' : ''} Available
-                  </span>
-                )}
-              </div>
-              
-              {courses.length === 0 ? (
-                <div className="text-center py-12 bg-slate-50 rounded-2xl border border-slate-100 border-dashed ml-0 sm:ml-13">
-                  <FileText className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-                  <h4 className="font-bold text-slate-700 mb-1">பாடக்குறிப்புகள் எதுவும் இல்லை</h4>
-                  <p className="text-slate-500 text-xs">No course materials have been assigned to your subjects yet.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 ml-0 sm:ml-13">
-                  {courses.map((course: any) => (
-                    <div 
-                      key={course.id}
-                      className="bg-slate-50/40 hover:bg-white p-5 rounded-3xl border border-slate-100 hover:border-red-200 hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative"
-                    >
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2 mb-3">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-red-600 bg-red-50 px-2.5 py-1 rounded-lg border border-red-100">
-                            {course.subject}
-                          </span>
-                          {course.folder && (
-                            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg">
-                              {course.folder}
-                            </span>
-                          )}
-                        </div>
-                        <h4 className="font-black text-slate-800 text-base leading-snug group-hover:text-red-600 transition-colors">{course.title}</h4>
-                      </div>
-                      
-                      <div className="mt-5 pt-4 border-t border-slate-100/60 flex items-center justify-between gap-4">
-                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                          PDF Document
-                        </span>
-                        <a 
-                          href={course.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-red-100 hover:shadow-xl transition-all"
-                        >
-                          <Download size={14} />
-                          Download PDF
-                        </a>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               )}
             </div>
@@ -2071,6 +2020,136 @@ export default function StudentDashboard() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "course_materials" && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-800 flex items-center">
+                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mr-3 shrink-0 shadow-sm">
+                      <FileText size={20} />
+                    </div>
+                    Course Material
+                  </h2>
+                  <p className="text-slate-500 text-sm font-medium ml-13">பாடக் குறிப்புகள் மற்றும் PDF நூலகம்</p>
+                </div>
+                {selectedMaterialSubject && (
+                  <button
+                    onClick={() => setSelectedMaterialSubject(null)}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-all w-fit shrink-0 border border-slate-200"
+                  >
+                    ← Back to Subjects
+                  </button>
+                )}
+              </div>
+
+              {!selectedMaterialSubject ? (
+                // Subject List View
+                <div>
+                  {courses.length === 0 ? (
+                    <div className="text-center py-16 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
+                      <FileText className="mx-auto h-16 w-16 text-slate-300 mb-4" />
+                      <h4 className="text-xl font-bold text-slate-700 mb-1">பாடக்குறிப்புகள் எதுவும் இல்லை</h4>
+                      <p className="text-slate-500 text-sm">No course materials have been assigned to your subjects yet.</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {Array.from(new Set(courses.map((c: any) => c.subject?.toString().trim()).filter(Boolean))).map((subjName: any) => {
+                          const subjectCourses = courses.filter((c: any) => c.subject?.toString().trim().toLowerCase() === subjName.toLowerCase());
+                          const colorClasses = getSubjectColorClasses(subjName);
+                          return (
+                            <div
+                              key={subjName}
+                              onClick={() => setSelectedMaterialSubject(subjName)}
+                              className={`p-6 rounded-3xl border-2 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between h-48 group relative overflow-hidden ${colorClasses.bg} ${colorClasses.border}`}
+                            >
+                              <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-40 rounded-full blur-2xl"></div>
+                              <div>
+                                <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${colorClasses.text} bg-white/60`}>
+                                  Subject Unit
+                                </span>
+                                <h3 className={`text-2xl font-black mt-4 leading-tight group-hover:scale-105 transition-transform duration-300 origin-left`}>
+                                  {subjName}
+                                </h3>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 opacity-80`}>
+                                  <span className={`w-2 h-2 rounded-full ${colorClasses.dot} animate-pulse`}></span>
+                                  {subjectCourses.length} PDF{subjectCourses.length > 1 ? 's' : ''} available
+                                </span>
+                                <div className={`w-10 h-10 rounded-2xl bg-white flex items-center justify-center text-slate-700 shadow-sm border border-slate-100 group-hover:bg-red-600 group-hover:text-white group-hover:border-red-600 transition-all duration-300`}>
+                                  <ChevronRight size={18} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Subject PDF Files View
+                <div>
+                  <div className="mb-6 pb-4 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-red-600 bg-red-50 border border-red-100 px-3 py-1 rounded-full">
+                        {selectedMaterialSubject}
+                      </span>
+                      <h3 className="text-xl font-black text-slate-800 mt-2">Available PDF Documents</h3>
+                    </div>
+                    <span className="text-sm font-bold text-slate-400">
+                      {courses.filter((c: any) => c.subject?.toString().trim().toLowerCase() === selectedMaterialSubject.toLowerCase()).length} File(s)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {courses
+                      .filter((c: any) => c.subject?.toString().trim().toLowerCase() === selectedMaterialSubject.toLowerCase())
+                      .map((course: any) => (
+                        <div 
+                          key={course.id}
+                          className="bg-slate-50/40 hover:bg-white p-5 rounded-3xl border border-slate-100 hover:border-red-200 hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative"
+                        >
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-red-600 bg-red-50 px-2.5 py-1 rounded-lg border border-red-100">
+                                {course.subject}
+                              </span>
+                              {course.folder && (
+                                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg">
+                                  {course.folder}
+                                </span>
+                              )}
+                            </div>
+                            <h4 className="font-black text-slate-800 text-base leading-snug group-hover:text-red-600 transition-colors">{course.title}</h4>
+                          </div>
+                          
+                          <div className="mt-5 pt-4 border-t border-slate-100/60 flex items-center justify-between gap-4">
+                            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                              PDF Document
+                            </span>
+                            <a 
+                              href={course.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-red-100 hover:shadow-xl transition-all"
+                            >
+                              <Download size={14} />
+                              Download PDF
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
