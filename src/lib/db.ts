@@ -273,6 +273,9 @@ export const saveZoomLinks = (links: any) => saveData('zoomLinks', links);
 export const getCourses = () => getData('courses', []);
 export const saveCourses = (courses: any) => saveData('courses', courses);
 
+export const getCourseMaterials = () => getData('courseMaterials', []);
+export const saveCourseMaterials = (materials: any) => saveData('courseMaterials', materials);
+
 export const getYoutubeLinks = () => getData('youtubeLinks', []);
 export const saveYoutubeLinks = (links: any) => saveData('youtubeLinks', links);
 

@@ -45,7 +45,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
 
-import { getCourses, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts } from "../../lib/db";
+import { getCourseMaterials, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts } from "../../lib/db";
 import CountdownTimer from "../../components/CountdownTimer";
 import PopupAnnouncement from "../../components/PopupAnnouncement";
 import LiveChat from "../../components/LiveChat";
@@ -424,7 +424,7 @@ export default function StudentDashboard() {
         setEnrolledClasses(freshStudentData.subjects || freshStudentData.enrolledClasses || []);
       }
 
-      const allCourses = await getCourses();
+      const allCourses = await getCourseMaterials();
       const allZoomLinks = await getZoomLinks();
       const allFees = await getFees();
       const allAttendance = await getAttendance();

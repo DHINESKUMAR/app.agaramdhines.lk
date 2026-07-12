@@ -157,6 +157,7 @@ export default function AdminDashboard() {
       subItems: [
         { name: "Live Class", path: "/admin/live-classes" },
         { name: "Courses", path: "/admin/courses" },
+        { name: "Course Materials", path: "/admin/course-materials" },
         { name: "YouTube", path: "/admin/youtube" },
       ]
     },

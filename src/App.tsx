@@ -14,6 +14,7 @@ import FeeDefaulters from "./pages/Admin/FeeDefaulters";
 import CollectFee from "./pages/Admin/CollectFee";
 import Settings from "./pages/Admin/Settings";
 import Courses from "./pages/Admin/Courses";
+import CourseMaterials from "./pages/Admin/CourseMaterials";
 import TermExam from "./pages/Admin/TermExam";
 import LiveClasses from "./pages/Admin/LiveClasses";
 import Youtube from "./pages/Admin/Youtube";
@@ -74,6 +75,7 @@ export default function App() {
           <Route path="collect-fee" element={<CollectFee />} />
           <Route path="settings" element={<Settings />} />
           <Route path="courses" element={<Courses />} />
+          <Route path="course-materials" element={<CourseMaterials />} />
           <Route path="term-exam" element={<TermExam />} />
           <Route path="exam-marks" element={<ExamMarks />} />
           <Route path="exam-settings" element={<ExamSettings />} />
