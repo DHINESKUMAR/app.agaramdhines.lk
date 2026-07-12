@@ -100,11 +100,16 @@ export default function Courses() {
     return colors[Math.abs(hash) % colors.length];
   };
 
+  const classSubjects = formData.grade 
+    ? classes.find(c => c.name === formData.grade)?.subjects || []
+    : [];
+
   const assignedSubjects = Array.from(new Set(
     staffs.flatMap(s => s.assignedClasses?.filter((c: any) => c.grade === formData.grade).map((c: any) => c.subject) || [])
   ));
 
   const availableSubjectsList = Array.from(new Set([
+    ...classSubjects,
     ...assignedSubjects,
     ...allSubjects.map(s => s.name)
   ])).filter(Boolean);

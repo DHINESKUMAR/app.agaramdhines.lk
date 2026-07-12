@@ -437,16 +437,33 @@ export default function StudentDashboard() {
       const studentGrade = freshStudentData.grade?.toString().trim().toLowerCase() || "";
       const normalizedStudentGrade = studentGrade.replace(/[^0-9]/g, '');
 
+      const studentSubjectsArray = (freshStudentData.subjects || freshStudentData.enrolledClasses || []).map((s: any) => s?.toString().trim().toLowerCase());
+
       setCourses(allCourses.filter((c: any) => {
         const itemGrade = c.grade?.toString().trim().toLowerCase() || "";
         const itemGradeNum = itemGrade.replace(/[^0-9]/g, '');
         
-        if (itemGrade === studentGrade) return true;
-        if (normalizedStudentGrade && itemGradeNum === normalizedStudentGrade) return true;
-        if (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade)) return true;
-        if (itemGrade.includes("all") || itemGrade.includes("public")) return true;
-        
-        return false;
+        let matchesGrade = false;
+        if (itemGrade === studentGrade) {
+          matchesGrade = true;
+        } else if (normalizedStudentGrade && itemGradeNum === normalizedStudentGrade) {
+          matchesGrade = true;
+        } else if (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade)) {
+          matchesGrade = true;
+        } else if (itemGrade.includes("all") || itemGrade.includes("public")) {
+          matchesGrade = true;
+        }
+
+        if (!matchesGrade) return false;
+
+        const materialSubject = c.subject?.toString().trim().toLowerCase() || "";
+        if (materialSubject && materialSubject !== "general" && materialSubject !== "e-learning" && materialSubject !== "uncategorized") {
+          if (!studentSubjectsArray.includes(materialSubject)) {
+            return false;
+          }
+        }
+
+        return true;
       }));
       
       setZoomLinks(allZoomLinks.filter((z: any) => {
@@ -455,7 +472,6 @@ export default function StudentDashboard() {
       }));
       
       // Filter YouTube links and Web Posts by grade or isPublic, and subject enrollment
-      const studentSubjectsArray = (freshStudentData.subjects || freshStudentData.enrolledClasses || []).map((s: any) => s?.toString().trim().toLowerCase());
       
       const filterBySubjectAndGrade = (item: any) => {
         // 1. Grade check
@@ -1422,6 +1438,73 @@ export default function StudentDashboard() {
                     <Video size={20} />
                     Join & Mark Attendance
                   </button>
+                </div>
+              )}
+            </div>
+
+            {/* Course Material Section */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 mt-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 flex items-center">
+                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mr-3 shrink-0 shadow-sm">
+                      <FileText size={20} />
+                    </div>
+                    Course Material
+                  </h3>
+                  <p className="text-slate-500 text-sm font-medium ml-13">பாடக் குறிப்புகள் மற்றும் PDF நூலகம்</p>
+                </div>
+                {courses.length > 0 && (
+                  <span className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-3 py-1 rounded-full w-fit sm:ml-auto">
+                    {courses.length} Material{courses.length > 1 ? 's' : ''} Available
+                  </span>
+                )}
+              </div>
+              
+              {courses.length === 0 ? (
+                <div className="text-center py-12 bg-slate-50 rounded-2xl border border-slate-100 border-dashed ml-0 sm:ml-13">
+                  <FileText className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+                  <h4 className="font-bold text-slate-700 mb-1">பாடக்குறிப்புகள் எதுவும் இல்லை</h4>
+                  <p className="text-slate-500 text-xs">No course materials have been assigned to your subjects yet.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 ml-0 sm:ml-13">
+                  {courses.map((course: any) => (
+                    <div 
+                      key={course.id}
+                      className="bg-slate-50/40 hover:bg-white p-5 rounded-3xl border border-slate-100 hover:border-red-200 hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative"
+                    >
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-red-600 bg-red-50 px-2.5 py-1 rounded-lg border border-red-100">
+                            {course.subject}
+                          </span>
+                          {course.folder && (
+                            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg">
+                              {course.folder}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="font-black text-slate-800 text-base leading-snug group-hover:text-red-600 transition-colors">{course.title}</h4>
+                      </div>
+                      
+                      <div className="mt-5 pt-4 border-t border-slate-100/60 flex items-center justify-between gap-4">
+                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                          PDF Document
+                        </span>
+                        <a 
+                          href={course.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-red-100 hover:shadow-xl transition-all"
+                        >
+                          <Download size={14} />
+                          Download PDF
+                        </a>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
