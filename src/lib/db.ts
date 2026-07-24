@@ -1,14 +1,25 @@
 import { db, isFirebaseConfigured } from './firebase';
 import { collection, doc, getDocs, getDoc, setDoc, writeBatch, query, where, deleteDoc } from 'firebase/firestore';
 
-// Helper to get data from Firebase with localStorage fallback
+let isQuotaExceeded = false;
+const memoryCache: Record<string, { data: any; timestamp: number }> = {};
+const CACHE_TTL_MS = 10000; // 10 seconds cache to prevent repeated getDocs quota exhaustion
+
+// Helper to get data from Firebase with localStorage fallback and memory caching
 const getData = async (key: string, defaultValue: any) => {
-  if (isFirebaseConfigured) {
+  // Check memory cache first
+  const cached = memoryCache[key];
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+    return cached.data;
+  }
+
+  if (isFirebaseConfigured && !isQuotaExceeded) {
     try {
       if (Array.isArray(defaultValue)) {
         const querySnapshot = await getDocs(collection(db, key));
         if (!querySnapshot.empty) {
           const data = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+          memoryCache[key] = { data, timestamp: Date.now() };
           try {
             localStorage.setItem(key, JSON.stringify(data));
           } catch (e) {
@@ -21,6 +32,7 @@ const getData = async (key: string, defaultValue: any) => {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data().data;
+          memoryCache[key] = { data, timestamp: Date.now() };
           try {
             localStorage.setItem(key, JSON.stringify(data));
           } catch (e) {
@@ -29,29 +41,42 @@ const getData = async (key: string, defaultValue: any) => {
           return data;
         }
       }
-    } catch (error) {
-      console.warn(`Firebase error fetching ${key}. Using local storage.`, error);
+    } catch (error: any) {
+      if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota exceeded') || error?.toString().includes('resource-exhausted')) {
+        isQuotaExceeded = true;
+        console.warn(`Firestore quota exceeded. Switching to local storage mode.`);
+      } else {
+        console.warn(`Firebase error fetching ${key}. Using local storage.`, error);
+      }
     }
   }
+
+  // Fallback to localStorage
   try {
     const rawValue = localStorage.getItem(key);
     if (!rawValue || rawValue === 'undefined') {
+      memoryCache[key] = { data: defaultValue, timestamp: Date.now() };
       return defaultValue;
     }
-    return JSON.parse(rawValue);
+    const parsed = JSON.parse(rawValue);
+    memoryCache[key] = { data: parsed, timestamp: Date.now() };
+    return parsed;
   } catch (e) {
     console.warn(`Error parsing localStorage key ${key}:`, e);
+    memoryCache[key] = { data: defaultValue, timestamp: Date.now() };
     return defaultValue;
   }
 };
 
 // Helper to save data to Firebase and localStorage
 const saveData = async (key: string, data: any) => {
+  // Update memory cache and localStorage immediately
+  memoryCache[key] = { data, timestamp: Date.now() };
+
   try {
     localStorage.setItem(key, JSON.stringify(data));
   } catch (e) {
     console.warn(`Failed to save ${key} to localStorage. It might be full.`, e);
-    // If it's chat messages and it's full, we might want to keep only the last 100 messages
     if (key === 'chatMessages' && Array.isArray(data) && data.length > 100) {
       try {
         const reducedData = data.slice(-100);
@@ -62,34 +87,52 @@ const saveData = async (key: string, data: any) => {
     }
   }
   
-  if (isFirebaseConfigured) {
-    try {
-      if (Array.isArray(data)) {
-        // Query existing documents beforehand to calculate deletions
-        const snapshot = await getDocs(collection(db, key));
-        const existingIds = new Set(snapshot.docs.map((d: any) => d.id));
+  if (isFirebaseConfigured && !isQuotaExceeded) {
+    (async () => {
+      try {
+        if (Array.isArray(data)) {
+          const snapshot = await getDocs(collection(db, key));
+          const existingIds = new Set(snapshot.docs.map((d: any) => d.id));
 
-        // Use individual setDoc calls instead of batch to avoid size limits
-        const promises = data.map(item => {
-          const id = item.id || Math.random().toString();
-          existingIds.delete(id); // remove from deletion list
-          const docRef = doc(collection(db, key), id);
-          return setDoc(docRef, item);
-        });
+          if (data.length <= 400 && snapshot.docs.length <= 100) {
+            const batch = writeBatch(db);
+            data.forEach(item => {
+              const id = item.id || Math.random().toString();
+              existingIds.delete(id);
+              const docRef = doc(db, key, id);
+              batch.set(docRef, item);
+            });
+            existingIds.forEach(idToRemove => {
+              batch.delete(doc(db, key, idToRemove));
+            });
+            await batch.commit();
+          } else {
+            const promises = data.map(item => {
+              const id = item.id || Math.random().toString();
+              existingIds.delete(id);
+              const docRef = doc(collection(db, key), id);
+              return setDoc(docRef, item);
+            });
 
-        // Delete any documents that are no longer in the provided array
-        existingIds.forEach(idToRemove => {
-          promises.push(deleteDoc(doc(db, key, idToRemove)));
-        });
+            existingIds.forEach(idToRemove => {
+              promises.push(deleteDoc(doc(db, key, idToRemove)));
+            });
 
-        await Promise.all(promises);
-      } else {
-        const docRef = doc(db, 'singletons', key);
-        await setDoc(docRef, { data });
+            await Promise.all(promises);
+          }
+        } else {
+          const docRef = doc(db, 'singletons', key);
+          await setDoc(docRef, { data });
+        }
+      } catch (error: any) {
+        if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota exceeded') || error?.toString().includes('resource-exhausted')) {
+          isQuotaExceeded = true;
+          console.warn(`Firestore quota exceeded on save. Switched to local storage.`);
+        } else {
+          console.warn(`Firebase error saving ${key}. Saved to local storage only.`, error);
+        }
       }
-    } catch (error) {
-      console.warn(`Firebase error saving ${key}. Saved to local storage only.`, error);
-    }
+    })();
   }
 };
 

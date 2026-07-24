@@ -36,7 +36,7 @@ export default function LiveChat({ currentUser, onClose }: { currentUser: { id: 
         }, 100);
       }
     });
-    const interval = setInterval(loadData, 3000);
+    const interval = setInterval(loadData, 8000);
     return () => clearInterval(interval);
   }, []);
 

@@ -45,7 +45,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
 
-import { getCourseMaterials, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts } from "../../lib/db";
+import { getCourses, getCourseMaterials, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts } from "../../lib/db";
 import CountdownTimer from "../../components/CountdownTimer";
 import PopupAnnouncement from "../../components/PopupAnnouncement";
 import LiveChat from "../../components/LiveChat";
@@ -59,6 +59,7 @@ export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState("home");
   
   const [courses, setCourses] = useState<any[]>([]);
+  const [courseMaterials, setCourseMaterials] = useState<any[]>([]);
   const [zoomLinks, setZoomLinks] = useState<any[]>([]);
   const [youtubeLinks, setYoutubeLinks] = useState<any[]>([]);
   const [webPosts, setWebPosts] = useState<any[]>([]);
@@ -424,7 +425,8 @@ export default function StudentDashboard() {
         setEnrolledClasses(freshStudentData.subjects || freshStudentData.enrolledClasses || []);
       }
 
-      const allCourses = await getCourseMaterials();
+      const allCourses = await getCourses();
+      const allCourseMaterials = await getCourseMaterials();
       const allZoomLinks = await getZoomLinks();
       const allFees = await getFees();
       const allAttendance = await getAttendance();
@@ -441,7 +443,7 @@ export default function StudentDashboard() {
 
       const studentSubjectsArray = (freshStudentData.subjects || freshStudentData.enrolledClasses || []).map((s: any) => s?.toString().trim().toLowerCase());
 
-      setCourses(allCourses.filter((c: any) => {
+      const filterItemByGradeAndSubject = (c: any) => {
         const itemGrade = c.grade?.toString().trim().toLowerCase() || "";
         const itemGradeNum = itemGrade.replace(/[^0-9]/g, '');
         
@@ -466,7 +468,10 @@ export default function StudentDashboard() {
         }
 
         return true;
-      }));
+      };
+
+      setCourses(allCourses.filter(filterItemByGradeAndSubject));
+      setCourseMaterials(allCourseMaterials.filter(filterItemByGradeAndSubject));
       
       setZoomLinks(allZoomLinks.filter((z: any) => {
         const itemGrade = z.grade?.toString().trim().toLowerCase() || "";
@@ -2050,7 +2055,7 @@ export default function StudentDashboard() {
               {!selectedMaterialSubject ? (
                 // Subject List View
                 <div>
-                  {courses.length === 0 ? (
+                  {courseMaterials.length === 0 ? (
                     <div className="text-center py-16 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
                       <FileText className="mx-auto h-16 w-16 text-slate-300 mb-4" />
                       <h4 className="text-xl font-bold text-slate-700 mb-1">பாடக்குறிப்புகள் எதுவும் இல்லை</h4>
@@ -2059,8 +2064,8 @@ export default function StudentDashboard() {
                   ) : (
                     <div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {Array.from(new Set(courses.map((c: any) => c.subject?.toString().trim()).filter(Boolean))).map((subjName: any) => {
-                          const subjectCourses = courses.filter((c: any) => c.subject?.toString().trim().toLowerCase() === subjName.toLowerCase());
+                        {Array.from(new Set(courseMaterials.map((c: any) => c.subject?.toString().trim()).filter(Boolean))).map((subjName: any) => {
+                          const subjectCourses = courseMaterials.filter((c: any) => c.subject?.toString().trim().toLowerCase() === subjName.toLowerCase());
                           const colorClasses = getSubjectColorClasses(subjName);
                           return (
                             <div
@@ -2104,12 +2109,12 @@ export default function StudentDashboard() {
                       <h3 className="text-xl font-black text-slate-800 mt-2">Available PDF Documents</h3>
                     </div>
                     <span className="text-sm font-bold text-slate-400">
-                      {courses.filter((c: any) => c.subject?.toString().trim().toLowerCase() === selectedMaterialSubject.toLowerCase()).length} File(s)
+                      {courseMaterials.filter((c: any) => c.subject?.toString().trim().toLowerCase() === selectedMaterialSubject.toLowerCase()).length} File(s)
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {courses
+                    {courseMaterials
                       .filter((c: any) => c.subject?.toString().trim().toLowerCase() === selectedMaterialSubject.toLowerCase())
                       .map((course: any) => (
                         <div 

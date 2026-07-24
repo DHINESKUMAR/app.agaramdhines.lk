@@ -99,7 +99,7 @@ export function useChatNotifications(currentUser: { id: string, name: string, ro
     };
 
     checkMessages();
-    const interval = setInterval(checkMessages, 3000); // Check every 3 seconds
+    const interval = setInterval(checkMessages, 10000); // Check every 10 seconds
     return () => clearInterval(interval);
   }, [currentUser?.id, isChatOpen]);
 
