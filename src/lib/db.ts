@@ -1,5 +1,5 @@
 import { db, isFirebaseConfigured } from './firebase';
-import { collection, doc, getDocs, getDoc, setDoc, writeBatch, query, where, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, setDoc, writeBatch, query, where, deleteDoc, disableNetwork } from 'firebase/firestore';
 
 let isQuotaExceeded = false;
 const memoryCache: Record<string, { data: any; timestamp: number }> = {};
@@ -18,6 +18,7 @@ const checkAndSetQuotaExceeded = (error: any) => {
   ) {
     if (!isQuotaExceeded) {
       isQuotaExceeded = true;
+      disableNetwork(db).catch(() => {});
       console.warn(`Firestore quota exceeded or backend unavailable. Switched to offline local storage mode.`);
     }
     return true;
