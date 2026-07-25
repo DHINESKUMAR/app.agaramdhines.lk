@@ -169,10 +169,10 @@ export default function Fees() {
           <h2 className="text-xl font-bold text-gray-800">Fee History</h2>
         </div>
         <div className="space-y-4">
-          {feesHistory.length === 0 ? (
+          {feesHistory.filter((f: any) => (Number(f.amount) || 0) > 0 || (Number(f.fullFee) || 0) > 0).length === 0 ? (
             <div className="text-center text-gray-500 py-8">வரலாறு எதுவும் இல்லை.</div>
           ) : (
-            feesHistory.map((fee: any) => (
+            feesHistory.filter((f: any) => (Number(f.amount) || 0) > 0 || (Number(f.fullFee) || 0) > 0).map((fee: any) => (
               <div key={fee.id} className="border border-gray-200 rounded-lg p-4 flex justify-between items-center group relative">
                 <div>
                   <h3 className="font-bold text-[#1e3a8a]">{fee.studentName}{fee.rollNo ? ` (Roll: ${fee.rollNo})` : ''}</h3>

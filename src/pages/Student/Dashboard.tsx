@@ -112,6 +112,85 @@ export default function StudentDashboard() {
   const [hasPendingFees, setHasPendingFees] = useState(false);
   const [pendingMonthName, setPendingMonthName] = useState("");
 
+  const groupStudentFees = (rawFees: any[]) => {
+    // Filter out zero amount records (LKR 0.00)
+    const validFees = (rawFees || []).filter((f: any) => {
+      const amt = parseFloat(f.amount) || 0;
+      const full = parseFloat(f.fullFee) || 0;
+      return amt > 0 || full > 0;
+    });
+
+    const groups: { [key: string]: any } = {};
+
+    validFees.forEach((fee: any) => {
+      let key = fee.batchId;
+      if (!key && fee.transactionId) {
+        key = fee.transactionId.split('-')[0] + '-' + fee.transactionId.split('-')[1];
+        if (fee.transactionId.split('-').length < 2) key = fee.transactionId;
+      }
+      if (!key) {
+        key = `${fee.studentId || fee.studentName}_${fee.date}_${fee.month || 'no_month'}`;
+      }
+
+      const itemFull = Number(fee.fullFee || fee.amount) || 0;
+      const itemPaid = Number(fee.amount) || 0;
+      const itemRem = Number(fee.remainingAmount || "0") || 0;
+
+      const batchFull = fee.batchFullFee ? Number(fee.batchFullFee) : null;
+      const batchPaid = fee.batchAmountPaid ? Number(fee.batchAmountPaid) : null;
+      const batchRem = fee.batchRemaining ? Number(fee.batchRemaining) : null;
+
+      if (!groups[key]) {
+        groups[key] = {
+          ...fee,
+          id: key,
+          batchId: key,
+          totalAmount: batchFull !== null && !isNaN(batchFull) && batchFull > 0 ? batchFull : itemFull,
+          amountPaid: batchPaid !== null && !isNaN(batchPaid) && batchPaid > 0 ? batchPaid : itemPaid,
+          remainingAmount: batchRem !== null && !isNaN(batchRem) && batchRem > 0 ? batchRem : itemRem,
+          items: [{ 
+            label: (fee.itemName || fee.type), 
+            amount: itemFull, 
+            paidAmount: itemPaid,
+            remainingAmount: itemRem,
+            type: fee.type, 
+            itemName: fee.itemName || fee.type, 
+            category: fee.category,
+            month: fee.month
+          }],
+          displayType: fee.type,
+          displayMonth: fee.month
+        };
+      } else {
+        groups[key].items.push({ 
+          label: (fee.itemName || fee.type), 
+          amount: itemFull, 
+          paidAmount: itemPaid,
+          remainingAmount: itemRem,
+          type: fee.type, 
+          itemName: fee.itemName || fee.type, 
+          category: fee.category,
+          month: fee.month
+        });
+
+        if (fee.type === 'Monthly Tuition') {
+          groups[key].displayMonth = fee.month;
+        }
+
+        const hasBatchLevel = groups[key].batchFullFee && Number(groups[key].batchFullFee) > 0;
+        if (!hasBatchLevel) {
+          groups[key].totalAmount = (Number(groups[key].totalAmount) || 0) + itemFull;
+          groups[key].amountPaid = (Number(groups[key].amountPaid) || 0) + itemPaid;
+          groups[key].remainingAmount = (Number(groups[key].remainingAmount) || 0) + itemRem;
+        }
+      }
+    });
+
+    return Object.values(groups).sort((a: any, b: any) => 
+      new Date(b.timestamp || b.date).getTime() - new Date(a.timestamp || a.date).getTime()
+    );
+  };
+
   // Get student data from login or localStorage
   const [studentData, setStudentData] = useState<any>(location.state);
   const [enrolledClasses, setEnrolledClasses] = useState<string[]>([]);
@@ -523,7 +602,7 @@ export default function StudentDashboard() {
         )) ||
         (f.studentName && f.studentName.toString().trim().toLowerCase() === freshStudentData.name?.toString().trim().toLowerCase())
       );
-      setFees(studentFees);
+      setFees(groupStudentFees(studentFees));
       
       // Check for pending fees for current and previous months (Starting from April 2026)
       const now = new Date();
@@ -2845,20 +2924,22 @@ export default function StudentDashboard() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {fees.map((fee: any) => {
-                      const isPartial = fee.remainingAmount && parseInt(fee.remainingAmount) > 0;
+                    {fees.map((feeGroup: any) => {
+                      const isPartial = feeGroup.remainingAmount && parseInt(feeGroup.remainingAmount) > 0;
                       return (
-                        <div key={fee.id} className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all relative overflow-hidden">
+                        <div key={feeGroup.id} className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all relative overflow-hidden">
                           {/* Top Highlight Indicator */}
                           <div className={`absolute top-0 right-0 left-0 h-1.5 ${isPartial ? 'bg-amber-500' : 'bg-emerald-500'}`} />
 
                           <div className="flex justify-between items-start mb-4">
                             <div>
                               <h3 className="font-black text-slate-800 text-base leading-tight uppercase">
-                                {fee.itemName || fee.type || "Fees Payment"}
+                                {feeGroup.items?.length === 1 
+                                  ? (feeGroup.items[0].itemName || feeGroup.items[0].type)
+                                  : `${feeGroup.items?.length || 1} Fees Paid (ஒருமித்த கட்டணம்)`}
                               </h3>
                               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
-                                {fee.type === 'Monthly Tuition' ? `வகுப்புக் கட்டணம் - ${fee.month}` : 'பாடநெறிக்கான கட்டணம் (Course Fee)'}
+                                {feeGroup.month || feeGroup.displayMonth ? `வகுப்புக் கட்டணம் - ${feeGroup.month || feeGroup.displayMonth}` : 'பாடநெறிக்கான கட்டணம் (Course Fee)'}
                               </p>
                             </div>
                             <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
@@ -2869,18 +2950,29 @@ export default function StudentDashboard() {
                           </div>
 
                           <div className="space-y-2 border-y border-slate-100 py-3.5 my-3.5 text-xs">
+                            {feeGroup.items && feeGroup.items.length > 0 && (
+                              <div className="space-y-1.5 mb-2 pb-2 border-b border-slate-100">
+                                {feeGroup.items.map((item: any, idx: number) => (
+                                  <div key={idx} className="flex justify-between text-slate-600 font-semibold text-[11px]">
+                                    <span>• {item.itemName || item.label}</span>
+                                    <span className="text-slate-800">LKR {item.paidAmount || item.amount}.00</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
                             <div className="flex justify-between text-slate-500 font-medium">
                               <span>Full Course Fee (முழுக் கட்டணம்):</span>
-                              <span className="font-bold text-slate-800">LKR {fee.fullFee || fee.amount}.00</span>
+                              <span className="font-bold text-slate-800">LKR {feeGroup.totalAmount || feeGroup.fullFee || feeGroup.amount}.00</span>
                             </div>
                             <div className="flex justify-between text-slate-500 font-medium">
                               <span className="text-emerald-600 font-bold">Amount Paid (செலுத்தியது):</span>
-                              <span className="font-bold text-emerald-600">LKR {fee.amount}.00</span>
+                              <span className="font-bold text-emerald-600">LKR {feeGroup.amountPaid || feeGroup.amount}.00</span>
                             </div>
                             {isPartial && (
                               <div className="flex justify-between text-slate-500 font-medium">
                                 <span className="text-red-500 font-bold">Remaining Balance (மீதிக்கட்டணம்):</span>
-                                <span className="font-black text-red-600">LKR {fee.remainingAmount}.00</span>
+                                <span className="font-black text-red-600">LKR {feeGroup.remainingAmount}.00</span>
                               </div>
                             )}
                           </div>
@@ -2888,13 +2980,13 @@ export default function StudentDashboard() {
                           <div className="flex justify-between items-center pt-2">
                             <div className="text-left">
                               <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider">Paid Date</p>
-                              <p className="text-xs text-slate-700 font-bold mt-0.5">{fee.date || "N/A"}</p>
+                              <p className="text-xs text-slate-700 font-bold mt-0.5">{feeGroup.date || "N/A"}</p>
                             </div>
 
                             <button
                               onClick={() => {
                                 setSelectedReceipt({
-                                  ...fee,
+                                  ...feeGroup,
                                   studentName: studentData.name,
                                   rollNo: studentData.rollNo,
                                   grade: studentData.grade
@@ -3552,25 +3644,39 @@ export default function StudentDashboard() {
                     <span>Description</span>
                     <span>Amount</span>
                   </div>
-                  <div className="flex justify-between items-start py-1">
-                    <div>
-                      <p className="font-bold text-slate-800 uppercase">{selectedReceipt.itemName || selectedReceipt.type}</p>
-                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight italic mt-0.5">
-                        {selectedReceipt.type === 'Monthly Tuition' ? `வகுப்புக் கட்டணம் - ${selectedReceipt.month}` : 'பாடநெறிக்கான கட்டணம் (Course Fee)'}
-                      </p>
+                  {selectedReceipt.items && selectedReceipt.items.length > 0 ? (
+                    selectedReceipt.items.map((item: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-start py-1 border-b border-slate-50 last:border-0">
+                        <div>
+                          <p className="font-bold text-slate-800 uppercase">{item.itemName || item.label || item.type}</p>
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight italic mt-0.5">
+                            {item.type === 'Monthly Tuition' ? `வகுப்புக் கட்டணம் - ${selectedReceipt.month || item.month}` : 'பாடநெறிக்கான கட்டணம் (Course Fee)'}
+                          </p>
+                        </div>
+                        <span className="font-bold text-slate-800">LKR {item.paidAmount || item.amount}.00</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="flex justify-between items-start py-1">
+                      <div>
+                        <p className="font-bold text-slate-800 uppercase">{selectedReceipt.itemName || selectedReceipt.type}</p>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight italic mt-0.5">
+                          {selectedReceipt.type === 'Monthly Tuition' ? `வகுப்புக் கட்டணம் - ${selectedReceipt.month}` : 'பாடநெறிக்கான கட்டணம் (Course Fee)'}
+                        </p>
+                      </div>
+                      <span className="font-bold text-slate-800">LKR {selectedReceipt.amountPaid || selectedReceipt.fullFee || selectedReceipt.amount}.00</span>
                     </div>
-                    <span className="font-bold text-slate-800">LKR {selectedReceipt.fullFee || selectedReceipt.amount}.00</span>
-                  </div>
+                  )}
                 </div>
 
                 <div className="space-y-1.5 border-t border-slate-100 pt-3 text-[11px]">
                   <div className="flex justify-between items-center text-slate-550 font-medium">
                     <span>Sub Total (முழு கட்டணம்)</span>
-                    <span className="font-bold">LKR {selectedReceipt.fullFee || selectedReceipt.amount}.00</span>
+                    <span className="font-bold">LKR {selectedReceipt.totalAmount || selectedReceipt.fullFee || selectedReceipt.amount}.00</span>
                   </div>
                   <div className="flex justify-between items-center text-emerald-600 font-bold">
                     <span>Paid Amount (செலுத்தியது)</span>
-                    <span>LKR {selectedReceipt.amount}.00</span>
+                    <span>LKR {selectedReceipt.amountPaid || selectedReceipt.amount}.00</span>
                   </div>
                   {selectedReceipt.remainingAmount && parseInt(selectedReceipt.remainingAmount) > 0 && (
                     <div className="flex justify-between items-center text-red-500 font-bold">
@@ -3582,7 +3688,7 @@ export default function StudentDashboard() {
                   <div className="mt-3 flex justify-between items-center p-3 rounded-xl bg-emerald-500 text-white font-bold shadow-md shadow-emerald-100">
                     <span className="text-[9px] uppercase tracking-wider font-extrabold">TOTAL PAID (இன்று செலுத்தியது)</span>
                     <span className="text-sm font-black text-white">
-                      LKR {selectedReceipt.amount}.00
+                      LKR {selectedReceipt.amountPaid || selectedReceipt.amount}.00
                     </span>
                   </div>
                 </div>

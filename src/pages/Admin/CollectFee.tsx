@@ -221,16 +221,23 @@ export default function CollectFee() {
       const batchId = `BATCH-${Date.now()}`;
       const txnIdBase = transactionId || `TXN-${Math.floor(Math.random() * 1000000)}`;
       
+      // Filter out items with 0 amount
+      const validItems = selectedItems.filter(item => (parseInt(item.amount) || 0) > 0);
+      if (validItems.length === 0) {
+        alert("கட்டணத் தொகை 0 ஆக உள்ள விபரங்களைச் சேமிக்க முடியாது. தயவுசெய்து சரியான கட்டணத் தொகையைத் தேர்ந்தெடுக்கவும்.");
+        return;
+      }
+
       // Calculate proportions if amount was manually changed
-      const calculatedTotal = selectedItems.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0);
+      const calculatedTotal = validItems.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0);
       const adjustmentRatio = calculatedTotal > 0 ? amountPaid / calculatedTotal : 1;
 
-      const newFeeRecords = selectedItems.map((item, idx) => {
+      const newFeeRecords = validItems.map((item, idx) => {
         let finalAmount = parseInt(item.amount) || 0;
         if (isManualAmount) {
-          if (idx === selectedItems.length - 1) {
+          if (idx === validItems.length - 1) {
             // Last item gets the remainder to ensure exact total match
-            const otherItemsTotal = selectedItems.slice(0, -1).reduce((sum, it) => sum + Math.round((parseInt(it.amount) || 0) * adjustmentRatio), 0);
+            const otherItemsTotal = validItems.slice(0, -1).reduce((sum, it) => sum + Math.round((parseInt(it.amount) || 0) * adjustmentRatio), 0);
             finalAmount = amountPaid - otherItemsTotal;
           } else {
             finalAmount = Math.round(finalAmount * adjustmentRatio);
@@ -255,7 +262,7 @@ export default function CollectFee() {
           type: item.type,
           category: item.category || "",
           itemName: item.itemName || item.label || "",
-          transactionId: selectedItems.length > 1 ? `${txnIdBase}-${idx + 1}` : txnIdBase,
+          transactionId: validItems.length > 1 ? `${txnIdBase}-${idx + 1}` : txnIdBase,
           batchId: batchId,
           timestamp: new Date().toISOString(),
           batchFullFee: totalAmount.toString(),
@@ -331,8 +338,9 @@ export default function CollectFee() {
 
   const groupFeesByBatch = (fees: any[]) => {
     const groups: { [key: string]: any } = {};
+    const validFees = (fees || []).filter((f: any) => (Number(f.amount) || 0) > 0 || (Number(f.fullFee) || 0) > 0);
     
-    fees.forEach(fee => {
+    validFees.forEach(fee => {
       // Prioritize batchId, then transactionId base (for manual/older records), then standard txn id
       let id = fee.batchId;
       if (!id && fee.transactionId) {
