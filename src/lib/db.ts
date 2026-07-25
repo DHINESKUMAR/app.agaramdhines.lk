@@ -27,27 +27,36 @@ const getData = async (key: string, defaultValue: any) => {
   if (isFirebaseConfigured) {
     try {
       const fetchFirebase = async () => {
-        // 1. Try singletons first (1 read operation)
-        const singletonRef = doc(db, 'singletons', key);
-        const singletonSnap = await getDoc(singletonRef);
-        if (singletonSnap.exists() && singletonSnap.data()?.data !== undefined) {
-          return singletonSnap.data().data;
-        }
-
-        // 2. Fall back to collection if singleton doc not found
+        // 1. For array collections (like students, fees, classes), check full collection first
         if (Array.isArray(defaultValue)) {
-          const querySnapshot = await getDocs(collection(db, key));
-          if (!querySnapshot.empty) {
-            const fbData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            return fbData;
+          try {
+            const querySnapshot = await getDocs(collection(db, key));
+            if (!querySnapshot.empty) {
+              const fbData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+              return fbData;
+            }
+          } catch (colErr) {
+            console.warn(`Error fetching collection ${key}:`, colErr);
           }
         }
+
+        // 2. Try singletons document
+        try {
+          const singletonRef = doc(db, 'singletons', key);
+          const singletonSnap = await getDoc(singletonRef);
+          if (singletonSnap.exists() && singletonSnap.data()?.data !== undefined) {
+            return singletonSnap.data().data;
+          }
+        } catch (singErr) {
+          console.warn(`Error fetching singleton ${key}:`, singErr);
+        }
+
         return null;
       };
 
       const fbData = await Promise.race([
         fetchFirebase(),
-        new Promise<null>(resolve => setTimeout(() => resolve(null), 2500))
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 8000))
       ]);
 
       if (fbData !== null && fbData !== undefined) {
@@ -95,12 +104,16 @@ const saveData = async (key: string, data: any) => {
   // 2. Save to Firebase Firestore simultaneously
   if (isFirebaseConfigured) {
     const firebaseSaveTask = async () => {
-      // 1. Always write as a single document under 'singletons' first (1 write operation)
-      const singletonRef = doc(db, 'singletons', key);
-      await setDoc(singletonRef, { data: cleanData, updatedAt: Date.now() });
+      // 1. Always write as a single document under 'singletons' first
+      try {
+        const singletonRef = doc(db, 'singletons', key);
+        await setDoc(singletonRef, { data: cleanData, updatedAt: Date.now() });
+      } catch (singErr) {
+        console.warn(`Singleton write for ${key} failed:`, singErr);
+      }
 
-      // 2. If array is small, also sync to individual collection docs
-      if (Array.isArray(cleanData) && cleanData.length <= 50) {
+      // 2. If data is an array, sync items to individual collection docs in Firestore
+      if (Array.isArray(cleanData)) {
         try {
           const CHUNK_SIZE = 400;
           for (let i = 0; i < cleanData.length; i += CHUNK_SIZE) {
@@ -114,7 +127,7 @@ const saveData = async (key: string, data: any) => {
             await batch.commit();
           }
         } catch (colErr) {
-          console.warn(`Collection write for ${key} skipped, singleton is already updated.`, colErr);
+          console.warn(`Collection write for ${key} failed:`, colErr);
         }
       }
 
@@ -122,10 +135,9 @@ const saveData = async (key: string, data: any) => {
     };
 
     try {
-      // Race Firebase save task with a 3-second timeout guard so UI is never stuck
       await Promise.race([
         firebaseSaveTask(),
-        new Promise(resolve => setTimeout(resolve, 3000))
+        new Promise(resolve => setTimeout(resolve, 6000))
       ]);
     } catch (error: any) {
       console.error(`Firebase error saving ${key}:`, error);
