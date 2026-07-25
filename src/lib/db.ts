@@ -3,7 +3,27 @@ import { collection, doc, getDocs, getDoc, setDoc, writeBatch, query, where, del
 
 let isQuotaExceeded = false;
 const memoryCache: Record<string, { data: any; timestamp: number }> = {};
-const CACHE_TTL_MS = 10000; // 10 seconds cache to prevent repeated getDocs quota exhaustion
+const CACHE_TTL_MS = 15000; // 15 seconds cache to avoid repeated getDocs calls
+
+const checkAndSetQuotaExceeded = (error: any) => {
+  const errStr = String(error || '').toLowerCase();
+  const code = error?.code || '';
+  if (
+    code === 'resource-exhausted' ||
+    code === 'unavailable' ||
+    errStr.includes('quota') ||
+    errStr.includes('exhausted') ||
+    errStr.includes('overloading') ||
+    errStr.includes('unavailable')
+  ) {
+    if (!isQuotaExceeded) {
+      isQuotaExceeded = true;
+      console.warn(`Firestore quota exceeded or backend unavailable. Switched to offline local storage mode.`);
+    }
+    return true;
+  }
+  return false;
+};
 
 // Helper to get data from Firebase with localStorage fallback and memory caching
 const getData = async (key: string, defaultValue: any) => {
@@ -42,10 +62,7 @@ const getData = async (key: string, defaultValue: any) => {
         }
       }
     } catch (error: any) {
-      if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota exceeded') || error?.toString().includes('resource-exhausted')) {
-        isQuotaExceeded = true;
-        console.warn(`Firestore quota exceeded. Switching to local storage mode.`);
-      } else {
+      if (!checkAndSetQuotaExceeded(error)) {
         console.warn(`Firebase error fetching ${key}. Using local storage.`, error);
       }
     }
@@ -101,9 +118,7 @@ const saveData = async (key: string, data: any) => {
             const snapshot = await getDocs(collection(db, key));
             existingDocIds = snapshot.docs.map(d => d.id);
           } catch (fetchErr: any) {
-            if (fetchErr?.code === 'resource-exhausted' || fetchErr?.message?.includes('Quota exceeded')) {
-              isQuotaExceeded = true;
-            }
+            checkAndSetQuotaExceeded(fetchErr);
             console.warn(`Could not read existing docs for ${key} before saving:`, fetchErr);
           }
 
@@ -142,10 +157,7 @@ const saveData = async (key: string, data: any) => {
           await setDoc(docRef, { data: cleanData });
         }
       } catch (error: any) {
-        if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota exceeded') || error?.toString().includes('resource-exhausted')) {
-          isQuotaExceeded = true;
-          console.warn(`Firestore quota exceeded on save. Switched to local storage.`);
-        } else {
+        if (!checkAndSetQuotaExceeded(error)) {
           console.warn(`Firebase error saving ${key}:`, error);
         }
       }
