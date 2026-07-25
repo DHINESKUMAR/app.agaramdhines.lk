@@ -94,10 +94,11 @@ const saveData = async (key: string, data: any) => {
           const snapshot = await getDocs(collection(db, key));
           const existingIds = new Set(snapshot.docs.map((d: any) => d.id));
 
+          // Batch size max in Firestore is 500
           if (data.length <= 400 && snapshot.docs.length <= 100) {
             const batch = writeBatch(db);
             data.forEach(item => {
-              const id = item.id || Math.random().toString();
+              const id = String(item.id || Math.random().toString());
               existingIds.delete(id);
               const docRef = doc(db, key, id);
               batch.set(docRef, item);
@@ -107,18 +108,28 @@ const saveData = async (key: string, data: any) => {
             });
             await batch.commit();
           } else {
-            const promises = data.map(item => {
-              const id = item.id || Math.random().toString();
-              existingIds.delete(id);
-              const docRef = doc(collection(db, key), id);
-              return setDoc(docRef, item);
-            });
+            // Process in chunks to avoid overloading network requests
+            const CHUNK_SIZE = 50;
+            for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+              const chunk = data.slice(i, i + CHUNK_SIZE);
+              const batch = writeBatch(db);
+              chunk.forEach(item => {
+                const id = String(item.id || Math.random().toString());
+                existingIds.delete(id);
+                const docRef = doc(db, key, id);
+                batch.set(docRef, item);
+              });
+              await batch.commit();
+            }
 
-            existingIds.forEach(idToRemove => {
-              promises.push(deleteDoc(doc(db, key, idToRemove)));
-            });
-
-            await Promise.all(promises);
+            // Remove deleted items
+            if (existingIds.size > 0) {
+              const deleteBatch = writeBatch(db);
+              existingIds.forEach(idToRemove => {
+                deleteBatch.delete(doc(db, key, idToRemove));
+              });
+              await deleteBatch.commit();
+            }
           }
         } else {
           const docRef = doc(db, 'singletons', key);
@@ -279,19 +290,11 @@ export const savePasswordRequests = (requests: any) => saveData('passwordRequest
 
 export const getStudents = () => getData('students', []);
 export const saveStudents = async (students: any) => {
-  await saveData('students', students);
-  if (isFirebaseConfigured) {
-    try {
-      // Save each student individually to avoid batch size limits
-      const promises = students.map((student: any) => {
-        const docRef = doc(collection(db, 'students'), student.id);
-        return setDoc(docRef, student);
-      });
-      await Promise.all(promises);
-    } catch (error) {
-      console.error("Firebase error saving students individually:", error);
-    }
-  }
+  const sanitized = (Array.isArray(students) ? students : []).map((student: any) => ({
+    ...student,
+    id: String(student.id || "STU" + Math.floor(100000 + Math.random() * 900000))
+  }));
+  return saveData('students', sanitized);
 };
 
 export const getZoomLinks = async () => {

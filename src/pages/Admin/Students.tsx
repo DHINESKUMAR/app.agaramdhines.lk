@@ -224,20 +224,9 @@ export default function Students() {
       }
     }
     
-    setUpdateProgress(0);
-    // Simulate loading to 100
-    for(let i = 1; i <= 100; i += 2) {
-      await new Promise(resolve => setTimeout(resolve, 30));
-      setUpdateProgress(i);
-    }
+    setUpdateProgress(50);
     
     try {
-      // You can bypass auth creation here entirely as stated by the user
-      // or at least handle the error better if it already exists/etc. 
-      // User says: "Authentication கண்டிப்பா வேண்டுமா அப்டிஇல்லாம login ஆகலாமா database மட்டும் கொடுத்து நாங்க இந்த website செய்ற எதும் database save ஆகல அதுதான ஆனா Authentication இருக்கு"
-      // They are asking if Authentication can be skipped and ONLY save to Database. Yes!
-      // Here we just save directly to firestore without creating user in secondaryAuth if not wanted.
-      
       const newStudent = {
         id: formData.id || "STU" + Math.floor(10000 + Math.random() * 90000), // preserve ID if one was generated/manual
         ...formData
@@ -281,12 +270,7 @@ export default function Students() {
       }
     }
     
-    setUpdateProgress(0);
-    // Simulate loading to 100
-    for(let i = 1; i <= 100; i += 2) {
-      await new Promise(resolve => setTimeout(resolve, 30));
-      setUpdateProgress(i);
-    }
+    setUpdateProgress(50);
     
     try {
       const updatedStudents = students.map(s => 
