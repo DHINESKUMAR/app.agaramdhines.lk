@@ -16,6 +16,7 @@ export default function Fees() {
   const [allStudents, setAllStudents] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [statusMonth, setStatusMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+  const [statusGrade, setStatusGrade] = useState<string>("All");
   const [zoomControlClass, setZoomControlClass] = useState<string>("");
   const [selectedUnpaidStudents, setSelectedUnpaidStudents] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -201,6 +202,29 @@ export default function Fees() {
   }
 
   if (view === "status") {
+    // Grade matching logic
+    const matchGrade = (studentGrade: string | undefined, selectedGrade: string) => {
+      if (selectedGrade === "All") return true;
+      if (!studentGrade) return false;
+
+      const sNorm = studentGrade.toString().toLowerCase().trim();
+      const selNorm = selectedGrade.toString().toLowerCase().trim();
+
+      if (sNorm === selNorm) return true;
+
+      // Extract numbers: e.g., "grade 06" -> 6, "06" -> 6, "தரம் 06" -> 6
+      const sDigits = sNorm.match(/\d+/)?.[0];
+      const selDigits = selNorm.match(/\d+/)?.[0];
+
+      if (sDigits && selDigits && parseInt(sDigits, 10) === parseInt(selDigits, 10)) {
+        return true;
+      }
+
+      return sNorm.includes(selNorm) || selNorm.includes(sNorm);
+    };
+
+    const filteredStudentsByGrade = allStudents.filter(s => matchGrade(s.grade, statusGrade));
+
     // Filter students who haven't paid for the selected month
     const paidStudentIds = feesHistory
       .filter(fee => {
@@ -209,13 +233,33 @@ export default function Fees() {
       })
       .map(fee => fee.studentId);
       
-    const outstandingStudents = allStudents.filter(
+    const outstandingStudents = filteredStudentsByGrade.filter(
       student => !paidStudentIds.includes(student.student_id || student.id) && !paidStudentIds.includes(student.id)
     );
     
-    const paidStudents = allStudents.filter(
+    const paidStudents = filteredStudentsByGrade.filter(
       student => paidStudentIds.includes(student.student_id || student.id) || paidStudentIds.includes(student.id)
     );
+
+    // Dynamic list of grades for dropdown
+    const gradeListOptions = [
+      { value: "All", label: "All Grades (அனைத்து வகுப்புகளும்)" },
+      ...Array.from({ length: 13 }, (_, i) => {
+        const num = (i + 1).toString().padStart(2, '0');
+        return { value: `Grade ${num}`, label: `Grade ${num} (தரம் ${num})` };
+      })
+    ];
+
+    const stdValues = new Set(gradeListOptions.map(g => g.value.toLowerCase()));
+    const extraGradesFromDB = Array.from(new Set([
+      ...classes.map(c => c.name).filter(Boolean),
+      ...allStudents.map(s => s.grade).filter(Boolean)
+    ])).filter(g => {
+      const gNorm = g.toString().toLowerCase().trim();
+      const num = gNorm.match(/\d+/)?.[0];
+      if (num && parseInt(num, 10) >= 1 && parseInt(num, 10) <= 13) return false;
+      return !stdValues.has(gNorm);
+    });
 
     const exportToExcel = () => {
       const data = [
@@ -237,12 +281,12 @@ export default function Fees() {
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Fee Status");
-      XLSX.writeFile(wb, `Fee_Status_${statusMonth}.xlsx`);
+      XLSX.writeFile(wb, `Fee_Status_${statusGrade}_${statusMonth}.xlsx`);
     };
 
     const exportToPDF = () => {
       const doc = new jsPDF();
-      doc.text(`Student Fee Status - ${statusMonth}`, 14, 15);
+      doc.text(`Student Fee Status (${statusGrade}) - ${statusMonth}`, 14, 15);
       
       const tableData = [
         ...paidStudents.map(s => [s.name, s.rollNo || "N/A", s.grade, "Paid"]),
@@ -267,7 +311,7 @@ export default function Fees() {
         }
       });
       
-      doc.save(`Fee_Status_${statusMonth}.pdf`);
+      doc.save(`Fee_Status_${statusGrade}_${statusMonth}.pdf`);
     };
 
     return (
@@ -276,7 +320,7 @@ export default function Fees() {
           <div className="flex items-center">
             <button
               onClick={() => setView("menu")}
-              className="mr-4 text-gray-600 hover:text-gray-900"
+              className="mr-4 text-gray-600 hover:text-gray-900 font-medium"
             >
               ← Back
             </button>
@@ -285,21 +329,33 @@ export default function Fees() {
             </h2>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={statusGrade}
+              onChange={(e) => setStatusGrade(e.target.value)}
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {gradeListOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+              {extraGradesFromDB.map(g => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
             <input 
               type="month" 
               value={statusMonth}
               onChange={(e) => setStatusMonth(e.target.value)}
-              className="border border-gray-300 rounded-md px-3 py-2" 
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm font-medium shadow-sm" 
             />
             <button 
               onClick={exportToExcel}
-              className="flex items-center gap-1 bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 text-sm font-medium transition-colors"
+              className="flex items-center gap-1 bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 text-sm font-medium transition-colors shadow-sm"
             >
               <FileSpreadsheet size={16} /> Excel
             </button>
             <button 
               onClick={exportToPDF}
-              className="flex items-center gap-1 bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700 text-sm font-medium transition-colors"
+              className="flex items-center gap-1 bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700 text-sm font-medium transition-colors shadow-sm"
             >
               <FileText size={16} /> PDF
             </button>
