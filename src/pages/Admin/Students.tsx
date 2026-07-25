@@ -235,17 +235,20 @@ export default function Students() {
       const updatedStudents = [...students, newStudent];
       setStudents(updatedStudents);
       
-      // Save to local storage and Firebase Database ONLY
+      // Save to local storage and Firebase Database simultaneously
       await saveStudents(updatedStudents);
       
       setUpdateProgress(100);
-      alert("Student added successfully to the Database!");
-      resetForm();
-      setView("menu");
-      setUpdateProgress(-1);
+      
+      setTimeout(() => {
+        alert("Student added successfully to the Database!");
+        resetForm();
+        setView("menu");
+        setUpdateProgress(-1);
+      }, 150);
     } catch (error: any) {
       console.error("Error creating student:", error);
-      alert("Error creating student: " + error.message);
+      alert("Error creating student: " + (error.message || error));
       setUpdateProgress(-1);
     }
   };
@@ -280,14 +283,17 @@ export default function Students() {
       await saveStudents(updatedStudents);
       
       setUpdateProgress(100);
-      alert("Student updated successfully!");
-      resetForm();
-      setEditingStudentId(null);
-      setView("view");
-      setUpdateProgress(-1);
+
+      setTimeout(() => {
+        alert("Student updated successfully!");
+        resetForm();
+        setEditingStudentId(null);
+        setView("view");
+        setUpdateProgress(-1);
+      }, 150);
     } catch (error: any) {
       console.error("Error updating student:", error);
-      alert("Error updating student: " + error.message);
+      alert("Error updating student: " + (error.message || error));
       setUpdateProgress(-1);
     }
   };
@@ -367,8 +373,42 @@ export default function Students() {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({ ...formData, image: reader.result as string });
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 300;
+          const MAX_HEIGHT = 300;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = Math.round((width * MAX_HEIGHT) / height);
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+            setFormData(prev => ({ ...prev, image: compressedBase64 }));
+          } else {
+            setFormData(prev => ({ ...prev, image: event.target?.result as string }));
+          }
+        };
+        img.onerror = () => {
+          setFormData(prev => ({ ...prev, image: event.target?.result as string }));
+        };
       };
       reader.readAsDataURL(file);
     }
