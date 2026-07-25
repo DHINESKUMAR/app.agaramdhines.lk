@@ -27,17 +27,19 @@ const getData = async (key: string, defaultValue: any) => {
   if (isFirebaseConfigured) {
     try {
       const fetchFirebase = async () => {
+        // 1. Try singletons first (1 read operation)
+        const singletonRef = doc(db, 'singletons', key);
+        const singletonSnap = await getDoc(singletonRef);
+        if (singletonSnap.exists() && singletonSnap.data()?.data !== undefined) {
+          return singletonSnap.data().data;
+        }
+
+        // 2. Fall back to collection if singleton doc not found
         if (Array.isArray(defaultValue)) {
           const querySnapshot = await getDocs(collection(db, key));
           if (!querySnapshot.empty) {
             const fbData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
             return fbData;
-          }
-        } else {
-          const docRef = doc(db, 'singletons', key);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            return docSnap.data().data;
           }
         }
         return null;
@@ -93,22 +95,29 @@ const saveData = async (key: string, data: any) => {
   // 2. Save to Firebase Firestore simultaneously
   if (isFirebaseConfigured) {
     const firebaseSaveTask = async () => {
-      if (Array.isArray(cleanData)) {
-        const CHUNK_SIZE = 400; // max 500 ops per writeBatch
-        for (let i = 0; i < cleanData.length; i += CHUNK_SIZE) {
-          const chunk = cleanData.slice(i, i + CHUNK_SIZE);
-          const batch = writeBatch(db);
-          chunk.forEach((item: any, idx: number) => {
-            const docId = String(item.id || item.code || item.rollNo || `item_${idx}`);
-            const docRef = doc(db, key, docId);
-            batch.set(docRef, item);
-          });
-          await batch.commit();
+      // 1. Always write as a single document under 'singletons' first (1 write operation)
+      const singletonRef = doc(db, 'singletons', key);
+      await setDoc(singletonRef, { data: cleanData, updatedAt: Date.now() });
+
+      // 2. If array is small, also sync to individual collection docs
+      if (Array.isArray(cleanData) && cleanData.length <= 50) {
+        try {
+          const CHUNK_SIZE = 400;
+          for (let i = 0; i < cleanData.length; i += CHUNK_SIZE) {
+            const chunk = cleanData.slice(i, i + CHUNK_SIZE);
+            const batch = writeBatch(db);
+            chunk.forEach((item: any, idx: number) => {
+              const docId = String(item.id || item.code || item.rollNo || `item_${idx}`);
+              const itemRef = doc(db, key, docId);
+              batch.set(itemRef, item);
+            });
+            await batch.commit();
+          }
+        } catch (colErr) {
+          console.warn(`Collection write for ${key} skipped, singleton is already updated.`, colErr);
         }
-      } else {
-        const docRef = doc(db, 'singletons', key);
-        await setDoc(docRef, { data: cleanData });
       }
+
       memoryCache[key] = { data: cleanData, timestamp: Date.now() };
     };
 
