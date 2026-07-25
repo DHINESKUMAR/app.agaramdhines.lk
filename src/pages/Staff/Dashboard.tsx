@@ -26,6 +26,7 @@ import PopupAnnouncement from "../../components/PopupAnnouncement";
 import LiveChat from "../../components/LiveChat";
 import { useChatNotifications } from "../../hooks/useChatNotifications";
 import { useHomeworkNotifications } from "../../hooks/useHomeworkNotifications";
+import { useTimetableNotifications } from "../../hooks/useTimetableNotifications";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function StaffDashboard() {
@@ -41,8 +42,21 @@ export default function StaffDashboard() {
   const { unreadCount, markAsRead } = useChatNotifications(staff ? { id: staff.id, name: staff.name, role: "Staff" } : null, isChatOpen);
 
   const { notifications } = useHomeworkNotifications('staff');
+  const { reminders: staffTimetableReminders } = useTimetableNotifications('staff', undefined, staff?.name);
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
+
+  const allStaffNotifications = [
+    ...staffTimetableReminders.map(tr => ({
+      id: tr.id,
+      title: `Upcoming Class (${tr.grade})`,
+      message: tr.message,
+      date: tr.startTime,
+      type: 'zoom_class' as const,
+      isRead: false
+    })),
+    ...notifications
+  ];
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -188,7 +202,7 @@ export default function StaffDashboard() {
                 onClick={() => setShowNotifications(!showNotifications)}
               >
                 <Bell size={20} />
-                {notifications.length > 0 && (
+                {allStaffNotifications.length > 0 && (
                   <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
                 )}
               </button>
@@ -203,21 +217,32 @@ export default function StaffDashboard() {
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                       <h3 className="font-bold text-gray-800">Notifications</h3>
                       <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
-                        {notifications.length} New
+                        {allStaffNotifications.length} New
                       </span>
                     </div>
                     <div className="max-h-96 overflow-y-auto">
-                      {notifications.length === 0 ? (
+                      {allStaffNotifications.length === 0 ? (
                         <div className="p-6 text-center text-gray-500">
                           <Bell className="mx-auto mb-2 text-gray-300" size={24} />
                           <p>No new notifications</p>
                         </div>
                       ) : (
-                        notifications.map((notif) => (
-                          <div key={notif.id} className="p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => { setActiveTab('homework'); setShowNotifications(false); }}>
+                        allStaffNotifications.map((notif) => (
+                          <div 
+                            key={notif.id} 
+                            className="p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer" 
+                            onClick={() => { 
+                              if (notif.type === 'zoom_class') {
+                                setActiveTab('timetable');
+                              } else {
+                                setActiveTab('homework'); 
+                              }
+                              setShowNotifications(false); 
+                            }}
+                          >
                             <div className="flex items-start gap-3">
-                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                                <BookOpen size={16} className="text-blue-600" />
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${notif.type === 'zoom_class' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
+                                {notif.type === 'zoom_class' ? <Calendar size={16} /> : <BookOpen size={16} />}
                               </div>
                               <div>
                                 <h4 className="text-sm font-bold text-gray-800">{notif.title}</h4>

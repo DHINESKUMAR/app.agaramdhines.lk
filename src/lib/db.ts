@@ -4,11 +4,118 @@ import { collection, doc, getDocs, getDoc, setDoc, writeBatch, query, where } fr
 const memoryCache: Record<string, { data: any; timestamp: number }> = {};
 const CACHE_TTL_MS = 5000; // 5 seconds cache to balance performance and freshness
 
+// --- Database Health & Usage Tracking ---
+export interface DbMetrics {
+  date: string;
+  readsToday: number;
+  writesToday: number;
+  cachedReadsToday: number;
+  totalReadsAllTime: number;
+  totalWritesAllTime: number;
+  lastWriteTime: string | null;
+  lastReadTime: string | null;
+  isFirebaseConnected?: boolean;
+  healthStatus?: string;
+  healthScore?: number;
+}
+
+const getStoredMetrics = (): DbMetrics => {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  try {
+    const raw = localStorage.getItem('dbMetricsStats');
+    if (raw) {
+      const parsed: DbMetrics = JSON.parse(raw);
+      if (parsed.date !== todayStr) {
+        return {
+          date: todayStr,
+          readsToday: 0,
+          writesToday: 0,
+          cachedReadsToday: 0,
+          totalReadsAllTime: parsed.totalReadsAllTime || 0,
+          totalWritesAllTime: parsed.totalWritesAllTime || 0,
+          lastWriteTime: parsed.lastWriteTime || null,
+          lastReadTime: parsed.lastReadTime || null,
+        };
+      }
+      return parsed;
+    }
+  } catch (e) {}
+
+  return {
+    date: todayStr,
+    readsToday: 0,
+    writesToday: 0,
+    cachedReadsToday: 0,
+    totalReadsAllTime: 0,
+    totalWritesAllTime: 0,
+    lastWriteTime: null,
+    lastReadTime: null,
+  };
+};
+
+const recordReadOperation = (count: number = 1, isCacheHit: boolean = false) => {
+  if (count <= 0) return;
+  const metrics = getStoredMetrics();
+  const now = new Date().toLocaleTimeString();
+  
+  if (isCacheHit) {
+    metrics.cachedReadsToday += count;
+  } else {
+    metrics.readsToday += count;
+    metrics.totalReadsAllTime += count;
+  }
+  metrics.lastReadTime = now;
+  try {
+    localStorage.setItem('dbMetricsStats', JSON.stringify(metrics));
+  } catch (e) {}
+};
+
+const recordWriteOperation = (count: number = 1) => {
+  if (count <= 0) return;
+  const metrics = getStoredMetrics();
+  const now = new Date().toLocaleTimeString();
+  
+  metrics.writesToday += count;
+  metrics.totalWritesAllTime += count;
+  metrics.lastWriteTime = now;
+  try {
+    localStorage.setItem('dbMetricsStats', JSON.stringify(metrics));
+  } catch (e) {}
+};
+
+export const getDbHealthMetrics = (): DbMetrics => {
+  const metrics = getStoredMetrics();
+  return {
+    ...metrics,
+    isFirebaseConnected: isFirebaseConfigured,
+    healthStatus: isFirebaseConfigured ? "Healthy (Synced with Cloud)" : "Good (Local Storage Sync)",
+    healthScore: isFirebaseConfigured ? 100 : 95
+  };
+};
+
+export const resetDbHealthMetrics = () => {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const reset: DbMetrics = {
+    date: todayStr,
+    readsToday: 0,
+    writesToday: 0,
+    cachedReadsToday: 0,
+    totalReadsAllTime: 0,
+    totalWritesAllTime: 0,
+    lastWriteTime: null,
+    lastReadTime: null,
+  };
+  localStorage.setItem('dbMetricsStats', JSON.stringify(reset));
+  return reset;
+};
+
 // Helper to get data from Firebase with localStorage fallback and memory caching
 const getData = async (key: string, defaultValue: any) => {
   // Check memory cache first
   const cached = memoryCache[key];
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+    const itemCount = Array.isArray(cached.data) ? Math.max(1, cached.data.length) : 1;
+    recordReadOperation(itemCount, true);
     return cached.data;
   }
 
@@ -64,6 +171,8 @@ const getData = async (key: string, defaultValue: any) => {
         try {
           localStorage.setItem(key, JSON.stringify(fbData));
         } catch (e) {}
+        const itemCount = Array.isArray(fbData) ? Math.max(1, fbData.length) : 1;
+        recordReadOperation(itemCount, false);
         return fbData;
       }
     } catch (error: any) {
@@ -72,10 +181,13 @@ const getData = async (key: string, defaultValue: any) => {
   }
 
   if (localData !== null && localData !== undefined) {
+    const itemCount = Array.isArray(localData) ? Math.max(1, localData.length) : 1;
+    recordReadOperation(itemCount, false);
     return localData;
   }
 
   memoryCache[key] = { data: defaultValue, timestamp: Date.now() };
+  recordReadOperation(1, false);
   return defaultValue;
 };
 
@@ -83,6 +195,10 @@ const getData = async (key: string, defaultValue: any) => {
 const saveData = async (key: string, data: any) => {
   // Deep clean to remove any undefined fields or functions that break Firestore SDK
   const cleanData = JSON.parse(JSON.stringify(data ?? null));
+
+  // Record write metric
+  const writeCount = Array.isArray(cleanData) ? Math.max(1, cleanData.length) : 1;
+  recordWriteOperation(writeCount);
 
   // 1. Save to local system storage & memory cache immediately
   memoryCache[key] = { data: cleanData, timestamp: Date.now() };

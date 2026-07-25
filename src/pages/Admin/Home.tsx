@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Users, Briefcase, DollarSign, TrendingUp, Gift, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Users, Briefcase, DollarSign, TrendingUp, Gift, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Database, RefreshCw, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
-import { getStudents, getStaffs, getFees, getIncomeExpense, getTimeTable, getAdminSettings } from "../../lib/db";
+import { getStudents, getStaffs, getFees, getIncomeExpense, getTimeTable, getAdminSettings, getDbHealthMetrics, DbMetrics } from "../../lib/db";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 export default function AdminHome() {
@@ -15,8 +15,10 @@ export default function AdminHome() {
   const [pieData, setPieData] = useState<any[]>([]);
   const [timetable, setTimetable] = useState<any[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [dbMetrics, setDbMetrics] = useState<DbMetrics | null>(null);
 
   useEffect(() => {
+    setDbMetrics(getDbHealthMetrics());
     const loadData = async () => {
       const students = await getStudents();
       const staffs = await getStaffs();
@@ -26,6 +28,7 @@ export default function AdminHome() {
       const adminSettingData = await getAdminSettings();
       
       setTimetable(tt);
+      setDbMetrics(getDbHealthMetrics());
       
       const currentMonthStr = new Date().toISOString().slice(0, 7);
       
@@ -262,20 +265,75 @@ export default function AdminHome() {
             </div>
           </div>
 
-          {/* Site Health Status Widget */}
+          {/* Database & Site Health Status Widget */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-            <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">Site Health Status</h3>
-            <div className="flex items-center gap-4 mb-3">
-              <div className="w-16 h-16 rounded-full border-4 border-blue-500 flex items-center justify-center relative">
-                <div className="text-blue-500 font-bold">Good</div>
+            <div className="flex justify-between items-center mb-4 border-b pb-2">
+              <div className="flex items-center gap-2">
+                <Database size={18} className="text-blue-600" />
+                <h3 className="font-bold text-gray-800 text-sm">Database Health & Usage</h3>
+              </div>
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                {dbMetrics?.healthStatus || "Healthy"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {/* Daily Writes */}
+              <div className="bg-amber-50/80 border border-amber-200/60 rounded-xl p-3">
+                <div className="flex justify-between items-start mb-1">
+                  <span className="text-[11px] font-bold text-amber-900">Writes Today (எழுதுதல்)</span>
+                  <ArrowUpRight size={14} className="text-amber-600" />
+                </div>
+                <p className="text-2xl font-black text-amber-950">{dbMetrics?.writesToday || 0}</p>
+                <p className="text-[10px] text-amber-800/80 font-medium mt-1">
+                  Last write: {dbMetrics?.lastWriteTime || 'None today'}
+                </p>
+              </div>
+
+              {/* Daily Reads */}
+              <div className="bg-blue-50/80 border border-blue-200/60 rounded-xl p-3">
+                <div className="flex justify-between items-start mb-1">
+                  <span className="text-[11px] font-bold text-blue-900">Reads Today (வாசிப்பு)</span>
+                  <ArrowDownRight size={14} className="text-blue-600" />
+                </div>
+                <p className="text-2xl font-black text-blue-950">{dbMetrics?.readsToday || 0}</p>
+                <p className="text-[10px] text-blue-800/80 font-medium mt-1">
+                  Last read: {dbMetrics?.lastReadTime || 'None today'}
+                </p>
               </div>
             </div>
-            <p className="text-sm text-gray-600 mb-2">
-              Your site’s health is looking good, but there are still some things you can do to improve its performance and security.
-            </p>
-            <p className="text-xs text-gray-500">
-              Take a look at the <strong className="text-gray-700">8 items</strong> on the Site Health screen.
-            </p>
+
+            <div className="space-y-2 border-t border-gray-100 pt-3 text-xs">
+              <div className="flex justify-between text-gray-600">
+                <span>Fast Memory Cache Hits:</span>
+                <span className="font-bold text-slate-800">{dbMetrics?.cachedReadsToday || 0} hits</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>Total Lifetime Reads:</span>
+                <span className="font-bold text-slate-800">{(dbMetrics?.totalReadsAllTime || 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>Total Lifetime Writes:</span>
+                <span className="font-bold text-slate-800">{(dbMetrics?.totalWritesAllTime || 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>Firestore Cloud Backend:</span>
+                <span className={`font-bold ${dbMetrics?.isFirebaseConnected ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {dbMetrics?.isFirebaseConnected ? 'Active (Cloud Storage)' : 'Offline / Local Sync'}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center text-xs">
+              <span className="text-gray-500">Health Score: <strong className="text-emerald-600 font-bold">{dbMetrics?.healthScore || 100}%</strong></span>
+              <button 
+                onClick={() => setDbMetrics(getDbHealthMetrics())}
+                className="text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 text-[11px]"
+              >
+                <RefreshCw size={12} /> Refresh Metrics
+              </button>
+            </div>
           </div>
         </div>
 

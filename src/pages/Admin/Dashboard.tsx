@@ -6,6 +6,7 @@ import { getAdminSettings } from "../../lib/db";
 import PopupAnnouncement from "../../components/PopupAnnouncement";
 import { useChatNotifications } from "../../hooks/useChatNotifications";
 import { useHomeworkNotifications } from "../../hooks/useHomeworkNotifications";
+import { useTimetableNotifications } from "../../hooks/useTimetableNotifications";
 import {
   Menu,
   X,
@@ -50,8 +51,22 @@ export default function AdminDashboard() {
   const { unreadCount, markAsRead } = useChatNotifications({ id: "admin-1", name: "Admin", role: "Admin" }, isChatOpen);
 
   const { notifications } = useHomeworkNotifications('admin');
+  const { reminders: timetableReminders } = useTimetableNotifications('admin');
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
+
+  const allNotifications = [
+    ...timetableReminders.map(tr => ({
+      id: tr.id,
+      title: `Upcoming Class (${tr.grade})`,
+      message: tr.message,
+      date: tr.startTime,
+      type: 'zoom_class' as const,
+      isRead: false,
+      zoomLinkUrl: tr.zoomLinkUrl
+    })),
+    ...notifications
+  ];
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -270,7 +285,7 @@ export default function AdminDashboard() {
                 onClick={() => setShowNotifications(!showNotifications)}
               >
                 <Bell size={18} />
-                {notifications.length > 0 && (
+                {allNotifications.length > 0 && (
                   <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
                 )}
               </button>
@@ -285,21 +300,32 @@ export default function AdminDashboard() {
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                       <h3 className="font-bold text-gray-800">Notifications</h3>
                       <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
-                        {notifications.length} New
+                        {allNotifications.length} New
                       </span>
                     </div>
                     <div className="max-h-96 overflow-y-auto">
-                      {notifications.length === 0 ? (
+                      {allNotifications.length === 0 ? (
                         <div className="p-6 text-center text-gray-500">
                           <Bell className="mx-auto mb-2 text-gray-300" size={24} />
                           <p>No new notifications</p>
                         </div>
                       ) : (
-                        notifications.map((notif) => (
-                          <div key={notif.id} className="p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => { navigate('/admin/homework'); setShowNotifications(false); }}>
+                        allNotifications.map((notif) => (
+                          <div 
+                            key={notif.id} 
+                            className="p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer" 
+                            onClick={() => { 
+                              if (notif.type === 'zoom_class') {
+                                navigate('/admin/live-classes');
+                              } else {
+                                navigate('/admin/homework'); 
+                              }
+                              setShowNotifications(false); 
+                            }}
+                          >
                             <div className="flex items-start gap-3">
-                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                                <BookOpen size={16} className="text-blue-600" />
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${notif.type === 'zoom_class' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
+                                {notif.type === 'zoom_class' ? <Clock size={16} /> : <BookOpen size={16} />}
                               </div>
                               <div>
                                 <h4 className="text-sm font-bold text-gray-800">{notif.title}</h4>

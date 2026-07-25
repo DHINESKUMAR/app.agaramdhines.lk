@@ -52,6 +52,7 @@ import LiveChat from "../../components/LiveChat";
 import { useChatNotifications } from "../../hooks/useChatNotifications";
 import { useHomeworkNotifications } from "../../hooks/useHomeworkNotifications";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
+import { useTimetableNotifications } from "../../hooks/useTimetableNotifications";
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
@@ -202,6 +203,7 @@ export default function StudentDashboard() {
   const { unreadCount, markAsRead } = useChatNotifications(studentData ? { id: studentData.id, name: studentData.name, role: "Student", grade: studentData.grade } : null, isChatOpen);
 
   const { notifications } = useHomeworkNotifications('student', studentData?.grade);
+  const { reminders: timetableReminders } = useTimetableNotifications('student', studentData?.grade);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showQrScanner, setShowQrScanner] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -1156,6 +1158,45 @@ export default function StudentDashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Live Upcoming Class Reminder Banner (30-60 minutes before class) */}
+      {timetableReminders.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white px-4 py-3 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between z-50 border-b border-amber-400 gap-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-xl animate-bounce">
+              <Clock size={20} className="text-white" />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-100 flex items-center gap-1">
+                <span>⏰ Upcoming Class Reminder</span>
+                <span className="bg-white/30 px-2 py-0.5 rounded-full text-[10px] text-white">Live Alert</span>
+              </p>
+              <p className="text-sm font-semibold text-white">
+                {timetableReminders[0].message}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            {timetableReminders[0].zoomLinkUrl ? (
+              <a
+                href={timetableReminders[0].zoomLinkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white text-amber-700 hover:bg-amber-50 px-4 py-1.5 rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1"
+              >
+                <Video size={14} /> Join Class Now
+              </a>
+            ) : (
+              <button 
+                onClick={() => setActiveTab("home")}
+                className="bg-white text-amber-700 hover:bg-amber-50 px-4 py-1.5 rounded-xl text-xs font-bold shadow-md transition-all"
+              >
+                View Routine
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Pending Fees Reminder Banner */}
       {hasPendingFees && (
