@@ -90,53 +90,66 @@ const saveData = async (key: string, data: any) => {
     }
   }
   
-  if (isFirebaseConfigured) {
-    try {
-      if (Array.isArray(cleanData)) {
-        // Fetch existing document IDs to handle deletions cleanly
-        let existingDocIds: string[] = [];
-        try {
-          const snapshot = await getDocs(collection(db, key));
-          existingDocIds = snapshot.docs.map(d => d.id);
-        } catch (fetchErr) {
-          console.warn(`Could not read existing docs for ${key} before saving:`, fetchErr);
-        }
-
-        const CHUNK_SIZE = 400; // max 500 ops per writeBatch
-        const currentIds = new Set<string>();
-
-        // Write array elements in batches
-        for (let i = 0; i < cleanData.length; i += CHUNK_SIZE) {
-          const chunk = cleanData.slice(i, i + CHUNK_SIZE);
-          const batch = writeBatch(db);
-          chunk.forEach((item: any, idx: number) => {
-            const docId = String(item.id || item.code || `item_${idx}`);
-            currentIds.add(docId);
-            const docRef = doc(db, key, docId);
-            batch.set(docRef, item);
-          });
-          await batch.commit();
-        }
-
-        // Delete any documents no longer present in the array
-        const toDelete = existingDocIds.filter(id => !currentIds.has(id));
-        if (toDelete.length > 0) {
-          for (let i = 0; i < toDelete.length; i += CHUNK_SIZE) {
-            const deleteChunk = toDelete.slice(i, i + CHUNK_SIZE);
-            const deleteBatch = writeBatch(db);
-            deleteChunk.forEach(id => {
-              deleteBatch.delete(doc(db, key, id));
-            });
-            await deleteBatch.commit();
+  if (isFirebaseConfigured && !isQuotaExceeded) {
+    // Run Firestore sync asynchronously so UI and local state stay fast and resilient
+    (async () => {
+      try {
+        if (Array.isArray(cleanData)) {
+          // Fetch existing document IDs to handle deletions cleanly
+          let existingDocIds: string[] = [];
+          try {
+            const snapshot = await getDocs(collection(db, key));
+            existingDocIds = snapshot.docs.map(d => d.id);
+          } catch (fetchErr: any) {
+            if (fetchErr?.code === 'resource-exhausted' || fetchErr?.message?.includes('Quota exceeded')) {
+              isQuotaExceeded = true;
+            }
+            console.warn(`Could not read existing docs for ${key} before saving:`, fetchErr);
           }
+
+          if (isQuotaExceeded) return;
+
+          const CHUNK_SIZE = 400; // max 500 ops per writeBatch
+          const currentIds = new Set<string>();
+
+          // Write array elements in batches
+          for (let i = 0; i < cleanData.length; i += CHUNK_SIZE) {
+            const chunk = cleanData.slice(i, i + CHUNK_SIZE);
+            const batch = writeBatch(db);
+            chunk.forEach((item: any, idx: number) => {
+              const docId = String(item.id || item.code || `item_${idx}`);
+              currentIds.add(docId);
+              const docRef = doc(db, key, docId);
+              batch.set(docRef, item);
+            });
+            await batch.commit();
+          }
+
+          // Delete any documents no longer present in the array
+          const toDelete = existingDocIds.filter(id => !currentIds.has(id));
+          if (toDelete.length > 0) {
+            for (let i = 0; i < toDelete.length; i += CHUNK_SIZE) {
+              const deleteChunk = toDelete.slice(i, i + CHUNK_SIZE);
+              const deleteBatch = writeBatch(db);
+              deleteChunk.forEach(id => {
+                deleteBatch.delete(doc(db, key, id));
+              });
+              await deleteBatch.commit();
+            }
+          }
+        } else {
+          const docRef = doc(db, 'singletons', key);
+          await setDoc(docRef, { data: cleanData });
         }
-      } else {
-        const docRef = doc(db, 'singletons', key);
-        await setDoc(docRef, { data: cleanData });
+      } catch (error: any) {
+        if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota exceeded') || error?.toString().includes('resource-exhausted')) {
+          isQuotaExceeded = true;
+          console.warn(`Firestore quota exceeded on save. Switched to local storage.`);
+        } else {
+          console.warn(`Firebase error saving ${key}:`, error);
+        }
       }
-    } catch (error: any) {
-      console.error(`Firebase error saving ${key}:`, error);
-    }
+    })();
   }
 };
 
