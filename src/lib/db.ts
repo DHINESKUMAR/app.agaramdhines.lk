@@ -1,30 +1,8 @@
 import { db, isFirebaseConfigured } from './firebase';
-import { collection, doc, getDocs, getDoc, setDoc, writeBatch, query, where, deleteDoc, disableNetwork } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, setDoc, writeBatch, query, where } from 'firebase/firestore';
 
-let isQuotaExceeded = false;
 const memoryCache: Record<string, { data: any; timestamp: number }> = {};
-const CACHE_TTL_MS = 15000; // 15 seconds cache to avoid repeated getDocs calls
-
-const checkAndSetQuotaExceeded = (error: any) => {
-  const errStr = String(error || '').toLowerCase();
-  const code = error?.code || '';
-  if (
-    code === 'resource-exhausted' ||
-    code === 'unavailable' ||
-    errStr.includes('quota') ||
-    errStr.includes('exhausted') ||
-    errStr.includes('overloading') ||
-    errStr.includes('unavailable')
-  ) {
-    if (!isQuotaExceeded) {
-      isQuotaExceeded = true;
-      disableNetwork(db).catch(() => {});
-      console.warn(`Firestore quota exceeded or backend unavailable. Switched to offline local storage mode.`);
-    }
-    return true;
-  }
-  return false;
-};
+const CACHE_TTL_MS = 5000; // 5 seconds cache to balance performance and freshness
 
 // Helper to get data from Firebase with localStorage fallback and memory caching
 const getData = async (key: string, defaultValue: any) => {
@@ -34,7 +12,7 @@ const getData = async (key: string, defaultValue: any) => {
     return cached.data;
   }
 
-  if (isFirebaseConfigured && !isQuotaExceeded) {
+  if (isFirebaseConfigured) {
     try {
       if (Array.isArray(defaultValue)) {
         const querySnapshot = await getDocs(collection(db, key));
@@ -63,9 +41,7 @@ const getData = async (key: string, defaultValue: any) => {
         }
       }
     } catch (error: any) {
-      if (!checkAndSetQuotaExceeded(error)) {
-        console.warn(`Firebase error fetching ${key}. Using local storage.`, error);
-      }
+      console.warn(`Firebase error fetching ${key}. Using local storage.`, error);
     }
   }
 
@@ -86,12 +62,12 @@ const getData = async (key: string, defaultValue: any) => {
   }
 };
 
-// Helper to save data to Firebase and localStorage
+// Helper to save data to Firebase and localStorage simultaneously
 const saveData = async (key: string, data: any) => {
   // Deep clean to remove any undefined fields or functions that break Firestore SDK
   const cleanData = JSON.parse(JSON.stringify(data ?? null));
 
-  // Update memory cache and localStorage immediately
+  // 1. Save to local storage & memory cache immediately
   memoryCache[key] = { data: cleanData, timestamp: Date.now() };
 
   try {
@@ -107,62 +83,58 @@ const saveData = async (key: string, data: any) => {
       }
     }
   }
-  
-  if (isFirebaseConfigured && !isQuotaExceeded) {
-    // Run Firestore sync asynchronously so UI and local state stay fast and resilient
-    (async () => {
-      try {
-        if (Array.isArray(cleanData)) {
-          // Fetch existing document IDs to handle deletions cleanly
-          let existingDocIds: string[] = [];
-          try {
-            const snapshot = await getDocs(collection(db, key));
-            existingDocIds = snapshot.docs.map(d => d.id);
-          } catch (fetchErr: any) {
-            checkAndSetQuotaExceeded(fetchErr);
-            console.warn(`Could not read existing docs for ${key} before saving:`, fetchErr);
-          }
 
-          if (isQuotaExceeded) return;
+  // 2. Save to Firebase Firestore simultaneously and await completion
+  if (isFirebaseConfigured) {
+    try {
+      if (Array.isArray(cleanData)) {
+        // Fetch existing document IDs to handle deletions cleanly
+        let existingDocIds: string[] = [];
+        try {
+          const snapshot = await getDocs(collection(db, key));
+          existingDocIds = snapshot.docs.map(d => d.id);
+        } catch (fetchErr) {
+          console.warn(`Could not read existing docs for ${key} before saving to Firebase:`, fetchErr);
+        }
 
-          const CHUNK_SIZE = 400; // max 500 ops per writeBatch
-          const currentIds = new Set<string>();
+        const CHUNK_SIZE = 400; // max 500 ops per writeBatch
+        const currentIds = new Set<string>();
 
-          // Write array elements in batches
-          for (let i = 0; i < cleanData.length; i += CHUNK_SIZE) {
-            const chunk = cleanData.slice(i, i + CHUNK_SIZE);
-            const batch = writeBatch(db);
-            chunk.forEach((item: any, idx: number) => {
-              const docId = String(item.id || item.code || `item_${idx}`);
-              currentIds.add(docId);
-              const docRef = doc(db, key, docId);
-              batch.set(docRef, item);
+        // Write array elements in batches
+        for (let i = 0; i < cleanData.length; i += CHUNK_SIZE) {
+          const chunk = cleanData.slice(i, i + CHUNK_SIZE);
+          const batch = writeBatch(db);
+          chunk.forEach((item: any, idx: number) => {
+            const docId = String(item.id || item.code || `item_${idx}`);
+            currentIds.add(docId);
+            const docRef = doc(db, key, docId);
+            batch.set(docRef, item);
+          });
+          await batch.commit();
+        }
+
+        // Delete any documents no longer present in the array
+        const toDelete = existingDocIds.filter(id => !currentIds.has(id));
+        if (toDelete.length > 0) {
+          for (let i = 0; i < toDelete.length; i += CHUNK_SIZE) {
+            const deleteChunk = toDelete.slice(i, i + CHUNK_SIZE);
+            const deleteBatch = writeBatch(db);
+            deleteChunk.forEach(id => {
+              deleteBatch.delete(doc(db, key, id));
             });
-            await batch.commit();
+            await deleteBatch.commit();
           }
-
-          // Delete any documents no longer present in the array
-          const toDelete = existingDocIds.filter(id => !currentIds.has(id));
-          if (toDelete.length > 0) {
-            for (let i = 0; i < toDelete.length; i += CHUNK_SIZE) {
-              const deleteChunk = toDelete.slice(i, i + CHUNK_SIZE);
-              const deleteBatch = writeBatch(db);
-              deleteChunk.forEach(id => {
-                deleteBatch.delete(doc(db, key, id));
-              });
-              await deleteBatch.commit();
-            }
-          }
-        } else {
-          const docRef = doc(db, 'singletons', key);
-          await setDoc(docRef, { data: cleanData });
         }
-      } catch (error: any) {
-        if (!checkAndSetQuotaExceeded(error)) {
-          console.warn(`Firebase error saving ${key}:`, error);
-        }
+      } else {
+        const docRef = doc(db, 'singletons', key);
+        await setDoc(docRef, { data: cleanData });
       }
-    })();
+
+      // Update memoryCache timestamp after successful Firebase sync
+      memoryCache[key] = { data: cleanData, timestamp: Date.now() };
+    } catch (error: any) {
+      console.error(`Firebase error saving ${key}:`, error);
+    }
   }
 };
 

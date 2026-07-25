@@ -128,7 +128,10 @@ export default function Home() {
   const handleStudentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!username || !password) {
+    const cleanUsername = (username || "").trim().toLowerCase();
+    const cleanPassword = (password || "").trim();
+
+    if (!cleanUsername || !cleanPassword) {
       alert("Please enter Username and Password");
       return;
     }
@@ -136,16 +139,17 @@ export default function Home() {
     try {
       // Fetch student details from Database
       const students = await getStudents();
-      const student = students.find((s: any) => s.username === username && s.password === password);
+      const student = (students || []).find((s: any) => {
+        const u = String(s.username || "").trim().toLowerCase();
+        const p = String(s.password || "").trim();
+        return u === cleanUsername && p === cleanPassword;
+      });
 
       if (student) {
         if (student.zoomBlocked) {
           alert("zoom வகுப்பிற்கான கட்டணம் செலுத்தியப் பின் இணைக்கப்படுவீர்கள்");
           return;
         }
-
-        // Removed Firebase auto-create logic to fix auth/email-already-in-use error
-        // -----------------------------------------
 
         const studentData = {
           id: student.id,
