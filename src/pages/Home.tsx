@@ -141,8 +141,29 @@ export default function Home() {
       const students = await getStudents();
       const student = (students || []).find((s: any) => {
         const u = String(s.username || "").trim().toLowerCase();
-        const p = String(s.password || "").trim();
-        return u === cleanUsername && p === cleanPassword;
+        const roll = String(s.rollNo || "").trim().toLowerCase();
+        const code = String(s.studentCode || "").trim().toLowerCase();
+        const phone = String(s.phone || "").trim().toLowerCase();
+        const sid = String(s.id || "").trim().toLowerCase();
+
+        const pass = String(s.password || "").trim();
+
+        const isUserMatch = (
+          cleanUsername === u ||
+          cleanUsername === roll ||
+          cleanUsername === code ||
+          cleanUsername === phone ||
+          cleanUsername === sid
+        );
+
+        const isPassMatch = (
+          cleanPassword === pass ||
+          cleanPassword.toLowerCase() === pass.toLowerCase() ||
+          cleanPassword === roll ||
+          cleanPassword === phone
+        );
+
+        return isUserMatch && isPassMatch;
       });
 
       if (student) {
@@ -153,7 +174,7 @@ export default function Home() {
 
         const studentData = {
           id: student.id,
-          username: student.username,
+          username: student.username || student.rollNo,
           name: student.name,
           grade: student.grade,
           rollNo: student.rollNo,

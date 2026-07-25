@@ -12,54 +12,60 @@ const getData = async (key: string, defaultValue: any) => {
     return cached.data;
   }
 
+  // Read local storage data first for immediate system availability
+  let localData: any = null;
+  try {
+    const rawValue = localStorage.getItem(key);
+    if (rawValue && rawValue !== 'undefined') {
+      localData = JSON.parse(rawValue);
+      memoryCache[key] = { data: localData, timestamp: Date.now() };
+    }
+  } catch (e) {
+    console.warn(`Error reading localStorage for ${key}:`, e);
+  }
+
   if (isFirebaseConfigured) {
     try {
-      if (Array.isArray(defaultValue)) {
-        const querySnapshot = await getDocs(collection(db, key));
-        if (!querySnapshot.empty) {
-          const data = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-          memoryCache[key] = { data, timestamp: Date.now() };
-          try {
-            localStorage.setItem(key, JSON.stringify(data));
-          } catch (e) {
-            console.warn(`Failed to cache ${key} to localStorage.`, e);
+      const fetchFirebase = async () => {
+        if (Array.isArray(defaultValue)) {
+          const querySnapshot = await getDocs(collection(db, key));
+          if (!querySnapshot.empty) {
+            const fbData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            return fbData;
           }
-          return data;
-        }
-      } else {
-        const docRef = doc(db, 'singletons', key);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data().data;
-          memoryCache[key] = { data, timestamp: Date.now() };
-          try {
-            localStorage.setItem(key, JSON.stringify(data));
-          } catch (e) {
-            console.warn(`Failed to cache ${key} to localStorage.`, e);
+        } else {
+          const docRef = doc(db, 'singletons', key);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            return docSnap.data().data;
           }
-          return data;
         }
+        return null;
+      };
+
+      const fbData = await Promise.race([
+        fetchFirebase(),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 2500))
+      ]);
+
+      if (fbData !== null && fbData !== undefined) {
+        memoryCache[key] = { data: fbData, timestamp: Date.now() };
+        try {
+          localStorage.setItem(key, JSON.stringify(fbData));
+        } catch (e) {}
+        return fbData;
       }
     } catch (error: any) {
       console.warn(`Firebase error fetching ${key}. Using local storage.`, error);
     }
   }
 
-  // Fallback to localStorage
-  try {
-    const rawValue = localStorage.getItem(key);
-    if (!rawValue || rawValue === 'undefined') {
-      memoryCache[key] = { data: defaultValue, timestamp: Date.now() };
-      return defaultValue;
-    }
-    const parsed = JSON.parse(rawValue);
-    memoryCache[key] = { data: parsed, timestamp: Date.now() };
-    return parsed;
-  } catch (e) {
-    console.warn(`Error parsing localStorage key ${key}:`, e);
-    memoryCache[key] = { data: defaultValue, timestamp: Date.now() };
-    return defaultValue;
+  if (localData !== null && localData !== undefined) {
+    return localData;
   }
+
+  memoryCache[key] = { data: defaultValue, timestamp: Date.now() };
+  return defaultValue;
 };
 
 // Helper to save data to Firebase and localStorage simultaneously
@@ -67,7 +73,7 @@ const saveData = async (key: string, data: any) => {
   // Deep clean to remove any undefined fields or functions that break Firestore SDK
   const cleanData = JSON.parse(JSON.stringify(data ?? null));
 
-  // 1. Save to local storage & memory cache immediately
+  // 1. Save to local system storage & memory cache immediately
   memoryCache[key] = { data: cleanData, timestamp: Date.now() };
 
   try {
@@ -84,54 +90,34 @@ const saveData = async (key: string, data: any) => {
     }
   }
 
-  // 2. Save to Firebase Firestore simultaneously and await completion
+  // 2. Save to Firebase Firestore simultaneously
   if (isFirebaseConfigured) {
-    try {
+    const firebaseSaveTask = async () => {
       if (Array.isArray(cleanData)) {
-        // Fetch existing document IDs to handle deletions cleanly
-        let existingDocIds: string[] = [];
-        try {
-          const snapshot = await getDocs(collection(db, key));
-          existingDocIds = snapshot.docs.map(d => d.id);
-        } catch (fetchErr) {
-          console.warn(`Could not read existing docs for ${key} before saving to Firebase:`, fetchErr);
-        }
-
         const CHUNK_SIZE = 400; // max 500 ops per writeBatch
-        const currentIds = new Set<string>();
-
-        // Write array elements in batches
         for (let i = 0; i < cleanData.length; i += CHUNK_SIZE) {
           const chunk = cleanData.slice(i, i + CHUNK_SIZE);
           const batch = writeBatch(db);
           chunk.forEach((item: any, idx: number) => {
-            const docId = String(item.id || item.code || `item_${idx}`);
-            currentIds.add(docId);
+            const docId = String(item.id || item.code || item.rollNo || `item_${idx}`);
             const docRef = doc(db, key, docId);
             batch.set(docRef, item);
           });
           await batch.commit();
         }
-
-        // Delete any documents no longer present in the array
-        const toDelete = existingDocIds.filter(id => !currentIds.has(id));
-        if (toDelete.length > 0) {
-          for (let i = 0; i < toDelete.length; i += CHUNK_SIZE) {
-            const deleteChunk = toDelete.slice(i, i + CHUNK_SIZE);
-            const deleteBatch = writeBatch(db);
-            deleteChunk.forEach(id => {
-              deleteBatch.delete(doc(db, key, id));
-            });
-            await deleteBatch.commit();
-          }
-        }
       } else {
         const docRef = doc(db, 'singletons', key);
         await setDoc(docRef, { data: cleanData });
       }
-
-      // Update memoryCache timestamp after successful Firebase sync
       memoryCache[key] = { data: cleanData, timestamp: Date.now() };
+    };
+
+    try {
+      // Race Firebase save task with a 3-second timeout guard so UI is never stuck
+      await Promise.race([
+        firebaseSaveTask(),
+        new Promise(resolve => setTimeout(resolve, 3000))
+      ]);
     } catch (error: any) {
       console.error(`Firebase error saving ${key}:`, error);
     }
