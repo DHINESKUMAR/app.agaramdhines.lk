@@ -265,8 +265,8 @@ export const getAdminSettings = () => getData('adminSettings', {
   username: "agaramdhines",
   password: "0756452527Dd",
   email: "Ddhinesnivas111@gmail.com",
-  profileImage: "https://picsum.photos/seed/admin/100/100",
-  instituteName: "DINESHKUMAR AGARAM DHINES"
+  profileImage: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s",
+  instituteName: "Agaram Dhines Online Academy"
 });
 export const saveAdminSettings = (settings: any) => saveData('adminSettings', settings);
 

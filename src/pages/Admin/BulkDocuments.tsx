@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
-import { getStudents, getClasses } from "../../lib/db";
+import { getStudents, getClasses, getAdminSettings } from "../../lib/db";
 import { Printer, CheckSquare, Square, Search, Award, FileText, CreditCard, User } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 export default function BulkDocuments() {
   const [students, setStudents] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
+  const [adminSettings, setAdminSettings] = useState<any>(null);
   const [selectedGrade, setSelectedGrade] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -17,6 +18,7 @@ export default function BulkDocuments() {
   useEffect(() => {
     getStudents().then(data => setStudents(data || []));
     getClasses().then(data => setClasses(data || []));
+    getAdminSettings().then(data => setAdminSettings(data));
   }, []);
 
   const filteredStudents = students.filter(s => {
@@ -278,42 +280,108 @@ export default function BulkDocuments() {
           {printMode === 'idcard' && (
             <div className="id-grid">
               {selectedStudentsData.map(student => (
-                <div key={student.id} className="w-[3.375in] h-[2.125in] bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-xl p-0 relative overflow-hidden text-white shadow-lg print:shadow-none break-inside-avoid shrink-0" style={{ pageBreakInside: 'avoid' }}>
-                  {/* Background patterns */}
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10"></div>
-                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-white opacity-10 rounded-full -ml-10 -mb-10"></div>
+                <div key={student.id} className="w-[3.375in] h-[2.125in] bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 rounded-xl p-2.5 relative overflow-hidden text-white shadow-lg print:shadow-none break-inside-avoid shrink-0 flex flex-col justify-between" style={{ pageBreakInside: 'avoid' }}>
+                  {/* Subtle background glow accents */}
+                  <div className="absolute top-0 right-0 w-28 h-28 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
+                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-sky-400/20 rounded-full blur-xl pointer-events-none"></div>
 
-                  <div className="flex h-full">
-                    {/* Left side - Photo & QR */}
-                    <div className="w-[35%] bg-white/10 backdrop-blur-sm p-2 flex flex-col items-center justify-center border-r border-white/20">
-                      <div className="w-14 h-14 bg-white rounded-full mb-2 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
-                        {student.image ? (
-                          <img src={student.image} alt={student.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <User size={28} className="text-indigo-600" />
-                        )}
+                  {/* Top Header Row */}
+                  <div className="flex items-center justify-between gap-1.5 border-b border-white/20 pb-1 z-10">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <div className="w-9 h-9 bg-white rounded-full p-0.5 shadow-md border border-amber-300 shrink-0 flex items-center justify-center overflow-hidden">
+                        <img 
+                          src={adminSettings?.profileImage || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s"} 
+                          alt="AGARAM DHINES ONLINE ACADEMY" 
+                          crossOrigin="anonymous"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s";
+                          }}
+                          className="w-full h-full object-cover rounded-full" 
+                        />
                       </div>
-                      <div className="bg-white p-1 rounded shadow-sm">
-                        <QRCodeSVG value={student.id} size={55} level="H" includeMargin={false} />
+                      <div className="min-w-0">
+                        <h3 className="text-[9px] font-black uppercase tracking-wider text-white leading-tight drop-shadow-xs truncate">
+                          {adminSettings?.instituteName || "AGARAM DHINES ONLINE ACADEMY"}
+                        </h3>
+                        <p className="text-[7.5px] font-extrabold text-amber-200 leading-tight drop-shadow-xs truncate">
+                          அகரம் தினேஷ் ஆன்லைன் அகாடமி
+                        </p>
                       </div>
                     </div>
+                    <div className="text-right shrink-0">
+                      <span className="text-[6.5px] font-black bg-amber-400 text-indigo-950 px-1.5 py-0.5 rounded shadow-xs uppercase tracking-wider">
+                        OFFICIAL ID
+                      </span>
+                      <span className="text-[7px] font-extrabold text-sky-100 block mt-0.5 whitespace-nowrap">
+                        📞 778054232
+                      </span>
+                    </div>
+                  </div>
 
-                    {/* Right side - Details */}
-                    <div className="w-[65%] p-3 flex flex-col justify-between">
-                      <div>
-                        <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-100 mb-1 border-b border-white/20 pb-1">Agaram Academy</h3>
-                        <h2 className="text-sm font-bold leading-tight mb-1 truncate">{student.name}</h2>
-                        <div className="text-[9px] space-y-0.5 opacity-90">
-                          <p>Grade: <span className="font-semibold">{student.grade}</span></p>
-                          <p>Roll No: <span className="font-semibold">{student.rollNo || 'N/A'}</span></p>
-                          <p>Phone: <span className="font-semibold">{student.phone || 'N/A'}</span></p>
-                        </div>
+                  {/* Student Main Info Row */}
+                  <div className="flex items-center gap-2 my-0.5 z-10">
+                    <div className="w-10 h-10 rounded-full border-2 border-white/90 overflow-hidden shrink-0 bg-white/20 flex items-center justify-center shadow-md">
+                      {student.image ? (
+                        <img src={student.image} alt={student.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={20} className="text-white" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-[11px] font-extrabold text-white truncate leading-tight drop-shadow-xs">
+                        {student.name}
+                      </h2>
+                      <div className="flex items-center gap-2 text-[8px] text-sky-100 mt-0.5">
+                        <span>Grade: <strong className="text-amber-200">{student.grade}</strong></span>
+                        <span className="text-white/40">•</span>
+                        <span>Roll No: <strong className="text-white">{student.rollNo || 'N/A'}</strong></span>
                       </div>
-                      
-                      <div className="mt-auto bg-black/25 p-1.5 rounded text-[8px] font-mono leading-tight">
-                        <p className="flex justify-between"><span>User:</span> <span className="font-bold">{student.username}</span></p>
-                        <p className="flex justify-between"><span>Pass:</span> <span className="font-bold">{student.password}</span></p>
-                      </div>
+                    </div>
+                  </div>
+
+                  {/* Enrolled Subjects List - Colorful Badges */}
+                  <div className="z-10 bg-black/20 backdrop-blur-xs p-1 rounded-md border border-white/15">
+                    <span className="text-[6.5px] font-black uppercase tracking-wider text-sky-200 block mb-0.5">
+                      Subjects / பாடங்கள்:
+                    </span>
+                    <div className="flex flex-wrap gap-1 max-h-[26px] overflow-hidden">
+                      {(() => {
+                        const subs = student.subjects || student.enrolledClasses;
+                        const badgeColors = [
+                          'bg-amber-400 text-indigo-950',
+                          'bg-emerald-400 text-indigo-950',
+                          'bg-sky-300 text-indigo-950',
+                          'bg-pink-300 text-indigo-950',
+                          'bg-purple-300 text-indigo-950',
+                          'bg-yellow-300 text-indigo-950',
+                        ];
+                        if (Array.isArray(subs) && subs.length > 0) {
+                          return subs.map((s: string, idx: number) => (
+                            <span 
+                              key={idx} 
+                              className={`text-[7px] font-black px-1.5 py-0.2 rounded shadow-xs whitespace-nowrap ${badgeColors[idx % badgeColors.length]}`}
+                            >
+                              {s}
+                            </span>
+                          ));
+                        }
+                        return (
+                          <span className="text-[7px] font-bold px-1.5 py-0.2 rounded bg-amber-400 text-indigo-950">
+                            All Registered Courses
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Footer Credentials & QR Code */}
+                  <div className="flex items-end justify-between gap-1 mt-0.5 z-10">
+                    <div className="bg-black/25 backdrop-blur-xs px-1.5 py-0.5 rounded border border-white/20 text-[7.5px] font-mono leading-tight flex-1">
+                      <p className="text-white/80 flex justify-between"><span>User:</span> <span className="text-white font-bold">{student.username}</span></p>
+                      <p className="text-white/80 flex justify-between"><span>Pass:</span> <span className="text-amber-200 font-bold">{student.password}</span></p>
+                    </div>
+                    <div className="bg-white p-0.5 rounded shrink-0 shadow-md">
+                      <QRCodeSVG value={student.id} size={32} level="H" includeMargin={false} />
                     </div>
                   </div>
                 </div>

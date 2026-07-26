@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { getStudents, saveStudents, getClasses } from "../../lib/db";
+import { getStudents, saveStudents, getClasses, getAdminSettings } from "../../lib/db";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { secondaryAuth } from "../../lib/firebase";
 import * as XLSX from "xlsx";
-import { Printer, X, QrCode, Download, FileText, Copy, Check } from "lucide-react";
+import { Printer, X, QrCode, Download, FileText, Copy, Check, User } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
@@ -20,6 +20,7 @@ export default function Students() {
   const [importing, setImporting] = useState(false);
   const [bulkImportGrade, setBulkImportGrade] = useState("");
   const [docModal, setDocModal] = useState<{ type: "idcard" | "certificate" | "details" | null, student: any }>({ type: null, student: null });
+  const [adminSettings, setAdminSettings] = useState<any>(null);
   const [copiedIdAdmin, setCopiedIdAdmin] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -140,6 +141,7 @@ export default function Students() {
   useEffect(() => {
     getStudents().then(setStudents);
     getClasses().then(setClasses);
+    getAdminSettings().then(setAdminSettings);
     import('../../lib/db').then(({ getSubjects }) => getSubjects().then(setAllSubjects));
   }, [view]);
 
@@ -1265,54 +1267,109 @@ export default function Students() {
                 <div ref={printRef} className="bg-white shadow-lg">
                   {docModal.type === 'idcard' ? (
                     /* ID Card Template */
-                    <div className="w-[300px] h-[480px] relative overflow-hidden bg-white border border-gray-200 rounded-xl flex flex-col">
-                      {/* Header Background */}
-                      <div className="h-32 bg-gradient-to-br from-indigo-600 to-purple-700 relative">
-                        <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-                        <div className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 w-24 h-24 bg-white rounded-full p-1 shadow-md">
+                    <div className="w-[480px] h-[300px] bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 rounded-2xl p-4 relative overflow-hidden text-white shadow-2xl shrink-0 flex flex-col justify-between">
+                      {/* Subtle background glow accents */}
+                      <div className="absolute top-0 right-0 w-36 h-36 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
+                      <div className="absolute bottom-0 left-0 w-32 h-32 bg-sky-400/20 rounded-full blur-xl pointer-events-none"></div>
+
+                      {/* Top Header Row */}
+                      <div className="flex items-center justify-between gap-2 border-b border-white/20 pb-2 z-10">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-12 h-12 bg-white rounded-full p-0.5 shadow-md border border-amber-300 shrink-0 flex items-center justify-center overflow-hidden">
+                            <img 
+                              src={adminSettings?.profileImage || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s"} 
+                              alt="AGARAM DHINES ONLINE ACADEMY" 
+                              crossOrigin="anonymous"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s";
+                              }}
+                              className="w-full h-full object-cover rounded-full" 
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="text-xs font-black uppercase tracking-wider text-white leading-tight drop-shadow-xs truncate">
+                              {adminSettings?.instituteName || "AGARAM DHINES ONLINE ACADEMY"}
+                            </h3>
+                            <p className="text-[10px] font-extrabold text-amber-200 leading-tight drop-shadow-xs truncate">
+                              அகரம் தினேஷ் ஆன்லைன் அகாடமி
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-[9px] font-black bg-amber-400 text-indigo-950 px-2 py-0.5 rounded shadow-xs uppercase tracking-wider">
+                            OFFICIAL ID
+                          </span>
+                          <span className="text-[10px] font-extrabold text-sky-100 block mt-0.5 whitespace-nowrap">
+                            📞 778054232
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Student Main Info Row */}
+                      <div className="flex items-center gap-3 my-1 z-10">
+                        <div className="w-13 h-13 rounded-full border-2 border-white/90 overflow-hidden shrink-0 bg-white/20 flex items-center justify-center shadow-md">
                           {docModal.student.image ? (
-                            <img src={docModal.student.image} alt={docModal.student.name} className="w-full h-full object-cover rounded-full" />
+                            <img src={docModal.student.image} alt={docModal.student.name} className="w-full h-full object-cover" />
                           ) : (
-                            <div className="w-full h-full bg-gray-200 rounded-full flex items-center justify-center text-3xl font-bold text-gray-500">
-                              {docModal.student.name.charAt(0).toUpperCase()}
-                            </div>
+                            <User size={26} className="text-white" />
                           )}
                         </div>
-                      </div>
-                      
-                      {/* Content */}
-                      <div className="flex-1 pt-12 pb-6 px-6 flex flex-col items-center text-center">
-                        <h2 className="text-xl font-bold text-gray-900 uppercase tracking-wide mb-1">{docModal.student.name}</h2>
-                        <p className="text-sm text-indigo-600 font-medium mb-4">{docModal.student.grade}</p>
-                        
-                        <div className="w-full space-y-2 text-left mt-2">
-                          <div className="flex justify-between border-b border-gray-100 pb-1">
-                            <span className="text-xs text-gray-500 font-medium">ROLL NO</span>
-                            <span className="text-xs font-bold text-gray-800">{docModal.student.rollNo || 'N/A'}</span>
-                          </div>
-                          <div className="flex justify-between border-b border-gray-100 pb-1">
-                            <span className="text-xs text-gray-500 font-medium">USER</span>
-                            <span className="text-xs font-bold text-gray-800">{docModal.student.username}</span>
-                          </div>
-                          <div className="flex justify-between border-b border-gray-100 pb-1">
-                            <span className="text-xs text-gray-500 font-medium">PASS</span>
-                            <span className="text-xs font-bold text-gray-800">{docModal.student.password}</span>
+                        <div className="min-w-0 flex-1">
+                          <h2 className="text-base font-extrabold text-white truncate leading-tight drop-shadow-xs">
+                            {docModal.student.name}
+                          </h2>
+                          <div className="flex items-center gap-3 text-xs text-sky-100 mt-0.5">
+                            <span>Grade: <strong className="text-amber-200">{docModal.student.grade}</strong></span>
+                            <span className="text-white/40">•</span>
+                            <span>Roll No: <strong className="text-white">{docModal.student.rollNo || 'N/A'}</strong></span>
                           </div>
                         </div>
-                        
-                        <div className="mt-auto pt-4 w-full flex justify-center">
-                          <QRCodeSVG 
-                            value={docModal.student.id} 
-                            size={64} 
-                            level={"H"}
-                            includeMargin={false}
-                          />
+                      </div>
+
+                      {/* Enrolled Subjects List - Colorful Badges */}
+                      <div className="z-10 bg-black/20 backdrop-blur-xs p-1.5 rounded-md border border-white/15">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-sky-200 block mb-1">
+                          Subjects / பாடங்கள்:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 max-h-[38px] overflow-hidden">
+                          {(() => {
+                            const subs = docModal.student.subjects || docModal.student.enrolledClasses;
+                            const badgeColors = [
+                              'bg-amber-400 text-indigo-950',
+                              'bg-emerald-400 text-indigo-950',
+                              'bg-sky-300 text-indigo-950',
+                              'bg-pink-300 text-indigo-950',
+                              'bg-purple-300 text-indigo-950',
+                              'bg-yellow-300 text-indigo-950',
+                            ];
+                            if (Array.isArray(subs) && subs.length > 0) {
+                              return subs.map((s: string, idx: number) => (
+                                <span 
+                                  key={idx} 
+                                  className={`text-[9.5px] font-black px-2 py-0.5 rounded shadow-xs whitespace-nowrap ${badgeColors[idx % badgeColors.length]}`}
+                                >
+                                  {s}
+                                </span>
+                              ));
+                            }
+                            return (
+                              <span className="text-[9.5px] font-bold px-2 py-0.5 rounded bg-amber-400 text-indigo-950">
+                                All Registered Courses
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
-                      
-                      {/* Footer */}
-                      <div className="h-10 bg-gray-900 flex items-center justify-center">
-                        <p className="text-[10px] text-white/80 font-medium tracking-wider uppercase">Agaram Dhines Academy</p>
+
+                      {/* Footer Credentials & QR Code */}
+                      <div className="flex items-end justify-between gap-2 mt-1 z-10">
+                        <div className="bg-black/25 backdrop-blur-xs px-2 py-1 rounded border border-white/20 text-[10px] font-mono leading-tight flex-1">
+                          <p className="text-white/80 flex justify-between"><span>User:</span> <span className="text-white font-bold">{docModal.student.username}</span></p>
+                          <p className="text-white/80 flex justify-between"><span>Pass:</span> <span className="text-amber-200 font-bold">{docModal.student.password}</span></p>
+                        </div>
+                        <div className="bg-white p-1 rounded shrink-0 shadow-md">
+                          <QRCodeSVG value={docModal.student.id} size={42} level="H" includeMargin={false} />
+                        </div>
                       </div>
                     </div>
                   ) : docModal.type === 'certificate' ? (
