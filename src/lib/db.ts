@@ -134,7 +134,18 @@ const getData = async (key: string, defaultValue: any) => {
   if (isFirebaseConfigured) {
     try {
       const fetchFirebase = async () => {
-        // 1. For array collections (like students, fees, classes), check full collection first
+        // 1. Try singletons document FIRST as it contains the authoritative complete array state
+        try {
+          const singletonRef = doc(db, 'singletons', key);
+          const singletonSnap = await getDoc(singletonRef);
+          if (singletonSnap.exists() && singletonSnap.data()?.data !== undefined) {
+            return singletonSnap.data().data;
+          }
+        } catch (singErr) {
+          console.warn(`Error fetching singleton ${key}:`, singErr);
+        }
+
+        // 2. For array collections, fall back to collection query if singleton is not present
         if (Array.isArray(defaultValue)) {
           try {
             const querySnapshot = await getDocs(collection(db, key));
@@ -145,17 +156,6 @@ const getData = async (key: string, defaultValue: any) => {
           } catch (colErr) {
             console.warn(`Error fetching collection ${key}:`, colErr);
           }
-        }
-
-        // 2. Try singletons document
-        try {
-          const singletonRef = doc(db, 'singletons', key);
-          const singletonSnap = await getDoc(singletonRef);
-          if (singletonSnap.exists() && singletonSnap.data()?.data !== undefined) {
-            return singletonSnap.data().data;
-          }
-        } catch (singErr) {
-          console.warn(`Error fetching singleton ${key}:`, singErr);
         }
 
         return null;
