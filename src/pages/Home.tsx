@@ -132,7 +132,7 @@ export default function Home() {
     const cleanPassword = (password || "").trim();
 
     if (!cleanUsername || !cleanPassword) {
-      alert("Please enter Username and Password");
+      alert("Invalid username or password. / தவறான பயனர் பெயர் அல்லது கடவுச்சொல்.");
       return;
     }
 
@@ -184,11 +184,11 @@ export default function Home() {
         localStorage.setItem('userSession', JSON.stringify(studentData));
         navigate("/student-dashboard", { state: studentData });
       } else {
-        alert("Invalid username or password.");
+        alert("Invalid username or password. / தவறான பயனர் பெயர் அல்லது கடவுச்சொல்.");
       }
     } catch (error: any) {
       console.error("Student Login Error:", error);
-      alert("Login failed. Please try again.");
+      alert("Invalid username or password. / தவறான பயனர் பெயர் அல்லது கடவுச்சொல்.");
     }
   };
 

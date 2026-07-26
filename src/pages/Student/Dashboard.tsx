@@ -529,6 +529,12 @@ export default function StudentDashboard() {
       const filterItemByGradeAndSubject = (c: any) => {
         if (!c) return false;
 
+        // 1. Public or All grades check
+        if (c.isPublic || c.grade === "Public" || c.grade === "public" || c.grade === "All" || c.grade === "all") {
+          return true;
+        }
+
+        // 2. Grade check
         const itemGradesList: string[] = [];
         if (Array.isArray(c.grades) && c.grades.length > 0) {
           c.grades.forEach((g: any) => itemGradesList.push(g?.toString().trim().toLowerCase() || ""));
@@ -542,15 +548,19 @@ export default function StudentDashboard() {
           matchesGrade = true;
         } else {
           for (const itemGrade of itemGradesList) {
+            if (!itemGrade) {
+              matchesGrade = true;
+              break;
+            }
             const itemGradeNum = itemGrade.replace(/[^0-9]/g, '');
             if (
-              !itemGrade ||
+              itemGrade === "public" ||
+              itemGrade.includes("public") ||
+              itemGrade.includes("all") ||
               itemGrade === studentGrade ||
               (normalizedStudentGrade && itemGradeNum === normalizedStudentGrade) ||
               (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade)) ||
               (studentGrade && itemGrade.includes(studentGrade)) ||
-              itemGrade.includes("all") ||
-              itemGrade.includes("public") ||
               (itemGrade.includes("30") && studentGrade.includes("30"))
             ) {
               matchesGrade = true;
@@ -561,6 +571,7 @@ export default function StudentDashboard() {
 
         if (!matchesGrade) return false;
 
+        // 3. Subject check
         const itemSubjectsList: string[] = [];
         if (Array.isArray(c.subjects) && c.subjects.length > 0) {
           c.subjects.forEach((s: any) => itemSubjectsList.push(s?.toString().trim().toLowerCase() || ""));
@@ -570,16 +581,37 @@ export default function StudentDashboard() {
         }
 
         const nonGeneralSubjects = itemSubjectsList.filter(
-          s => s && s !== "general" && s !== "e-learning" && s !== "uncategorized"
+          s => s && s !== "general" && s !== "e-learning" && s !== "uncategorized" && s !== "public" && s !== "all"
         );
 
         if (nonGeneralSubjects.length === 0 || studentSubjectsArray.length === 0) {
           return true;
         }
 
-        const hasMatch = nonGeneralSubjects.some(itemSub => 
-          studentSubjectsArray.some(stSub => 
-            stSub === itemSub || stSub.includes(itemSub) || itemSub.includes(stSub)
+        const studentHasGeneralOrAll = studentSubjectsArray.some(stSub =>
+          !stSub ||
+          stSub.includes("all") ||
+          stSub.includes("general") ||
+          stSub.includes("அனைத்து") ||
+          stSub.includes("public") ||
+          (normalizedStudentGrade && stSub.includes(normalizedStudentGrade)) ||
+          (studentGrade && stSub.includes(studentGrade))
+        );
+
+        if (studentHasGeneralOrAll) {
+          return true;
+        }
+
+        const hasMatch = nonGeneralSubjects.some(itemSub =>
+          studentSubjectsArray.some(stSub =>
+            stSub === itemSub ||
+            stSub.includes(itemSub) ||
+            itemSub.includes(stSub) ||
+            (stSub.includes("tamil") && itemSub.includes("tamil")) ||
+            (stSub.includes("தமிழ்") && itemSub.includes("தமிழ்")) ||
+            (stSub.includes("science") && itemSub.includes("science")) ||
+            (stSub.includes("கணிதம்") && itemSub.includes("கணிதம்")) ||
+            (stSub.includes("math") && itemSub.includes("math"))
           )
         );
 
@@ -588,16 +620,16 @@ export default function StudentDashboard() {
 
       const filterBySubjectAndGrade = (item: any) => {
         if (!item) return false;
-        if (item.isPublic) return true;
+        if (item.isPublic || item.grade === "Public" || item.grade === "public" || item.grade === "All" || item.grade === "all") return true;
         return filterItemByGradeAndSubject(item);
       };
 
-      setCourses(allCourses.filter(filterItemByGradeAndSubject));
-      setCourseMaterials(allCourseMaterials.filter(filterItemByGradeAndSubject));
+      setCourses(allCourses.filter(filterBySubjectAndGrade));
+      setCourseMaterials(allCourseMaterials.filter(filterBySubjectAndGrade));
       
       setZoomLinks(allZoomLinks.filter((z: any) => {
         const itemGrade = z.grade?.toString().trim().toLowerCase() || "";
-        return itemGrade === studentGrade || (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade)) || itemGrade.includes("all");
+        return itemGrade === studentGrade || (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade)) || itemGrade.includes("all") || itemGrade.includes("public");
       }));
       
       setYoutubeLinks(allYoutubeLinks.filter(filterBySubjectAndGrade));

@@ -134,31 +134,51 @@ const getData = async (key: string, defaultValue: any) => {
   if (isFirebaseConfigured) {
     try {
       const fetchFirebase = async () => {
-        // 1. Try singletons document FIRST as it contains the authoritative complete array state
+        let singData: any = null;
+        let colData: any = null;
+
+        // 1. Try singletons document
         try {
           const singletonRef = doc(db, 'singletons', key);
           const singletonSnap = await getDoc(singletonRef);
           if (singletonSnap.exists() && singletonSnap.data()?.data !== undefined) {
-            return singletonSnap.data().data;
+            singData = singletonSnap.data().data;
           }
         } catch (singErr) {
           console.warn(`Error fetching singleton ${key}:`, singErr);
         }
 
-        // 2. For array collections, fall back to collection query if singleton is not present
+        // 2. For array collections, check collection query as well
         if (Array.isArray(defaultValue)) {
           try {
             const querySnapshot = await getDocs(collection(db, key));
             if (!querySnapshot.empty) {
-              const fbData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-              return fbData;
+              colData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
             }
           } catch (colErr) {
             console.warn(`Error fetching collection ${key}:`, colErr);
           }
+
+          const cand1 = Array.isArray(singData) ? singData : [];
+          const cand2 = Array.isArray(colData) ? colData : [];
+          const cand3 = Array.isArray(localData) ? localData : [];
+
+          // Compare candidates and pick the one with most data or non-empty
+          if (cand1.length > 0 || cand2.length > 0 || cand3.length > 0) {
+            if (cand1.length >= cand2.length && cand1.length >= cand3.length && cand1.length > 0) {
+              return cand1;
+            }
+            if (cand2.length >= cand1.length && cand2.length >= cand3.length && cand2.length > 0) {
+              return cand2;
+            }
+            if (cand3.length > 0) {
+              return cand3;
+            }
+          }
+          return [];
         }
 
-        return null;
+        return singData;
       };
 
       const fbData = await Promise.race([
