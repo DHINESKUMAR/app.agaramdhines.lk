@@ -522,9 +522,13 @@ export default function StudentDashboard() {
       const studentGrade = freshStudentData.grade?.toString().trim().toLowerCase() || "";
       const normalizedStudentGrade = studentGrade.replace(/[^0-9]/g, '');
 
-      const studentSubjectsArray = (freshStudentData.subjects || freshStudentData.enrolledClasses || []).map((s: any) => s?.toString().trim().toLowerCase());
+      const studentSubjectsArray = (freshStudentData.subjects || freshStudentData.enrolledClasses || [])
+        .map((s: any) => s?.toString().trim().toLowerCase())
+        .filter(Boolean);
 
       const filterItemByGradeAndSubject = (c: any) => {
+        if (!c) return false;
+
         const itemGradesList: string[] = [];
         if (Array.isArray(c.grades) && c.grades.length > 0) {
           c.grades.forEach((g: any) => itemGradesList.push(g?.toString().trim().toLowerCase() || ""));
@@ -534,17 +538,24 @@ export default function StudentDashboard() {
         }
 
         let matchesGrade = false;
-        for (const itemGrade of itemGradesList) {
-          const itemGradeNum = itemGrade.replace(/[^0-9]/g, '');
-          if (
-            itemGrade === studentGrade ||
-            (normalizedStudentGrade && itemGradeNum === normalizedStudentGrade) ||
-            (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade)) ||
-            itemGrade.includes("all") ||
-            itemGrade.includes("public")
-          ) {
-            matchesGrade = true;
-            break;
+        if (itemGradesList.length === 0) {
+          matchesGrade = true;
+        } else {
+          for (const itemGrade of itemGradesList) {
+            const itemGradeNum = itemGrade.replace(/[^0-9]/g, '');
+            if (
+              !itemGrade ||
+              itemGrade === studentGrade ||
+              (normalizedStudentGrade && itemGradeNum === normalizedStudentGrade) ||
+              (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade)) ||
+              (studentGrade && itemGrade.includes(studentGrade)) ||
+              itemGrade.includes("all") ||
+              itemGrade.includes("public") ||
+              (itemGrade.includes("30") && studentGrade.includes("30"))
+            ) {
+              matchesGrade = true;
+              break;
+            }
           }
         }
 
@@ -562,14 +573,23 @@ export default function StudentDashboard() {
           s => s && s !== "general" && s !== "e-learning" && s !== "uncategorized"
         );
 
-        if (nonGeneralSubjects.length > 0) {
-          const hasMatch = nonGeneralSubjects.some(sub => studentSubjectsArray.includes(sub));
-          if (!hasMatch) {
-            return false;
-          }
+        if (nonGeneralSubjects.length === 0 || studentSubjectsArray.length === 0) {
+          return true;
         }
 
-        return true;
+        const hasMatch = nonGeneralSubjects.some(itemSub => 
+          studentSubjectsArray.some(stSub => 
+            stSub === itemSub || stSub.includes(itemSub) || itemSub.includes(stSub)
+          )
+        );
+
+        return hasMatch;
+      };
+
+      const filterBySubjectAndGrade = (item: any) => {
+        if (!item) return false;
+        if (item.isPublic) return true;
+        return filterItemByGradeAndSubject(item);
       };
 
       setCourses(allCourses.filter(filterItemByGradeAndSubject));
@@ -577,44 +597,9 @@ export default function StudentDashboard() {
       
       setZoomLinks(allZoomLinks.filter((z: any) => {
         const itemGrade = z.grade?.toString().trim().toLowerCase() || "";
-        return itemGrade === studentGrade || (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade));
+        return itemGrade === studentGrade || (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade)) || itemGrade.includes("all");
       }));
       
-      // Filter YouTube links and Web Posts by grade or isPublic, and subject enrollment
-      
-      const filterBySubjectAndGrade = (item: any) => {
-        // 1. Grade check
-        const itemGrade = item.grade?.toString().trim().toLowerCase() || "";
-        const matchesGrade = item.isPublic || 
-          itemGrade === studentGrade || 
-          (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade)) ||
-          itemGrade === "public";
-        
-        if (!matchesGrade) return false;
-        
-        // 2. Public bypass
-        if (item.isPublic) return true;
-        
-        // 3. Subject check
-        const itemSubjects: string[] = [];
-        if (item.subjects && Array.isArray(item.subjects)) {
-          item.subjects.forEach((s: any) => {
-            if (s) itemSubjects.push(s.toString().trim().toLowerCase());
-          });
-        }
-        if (item.subject && !itemSubjects.includes(item.subject.toString().trim().toLowerCase())) {
-          itemSubjects.push(item.subject.toString().trim().toLowerCase());
-        }
-        
-        // If content has no assigned subject, show to all in this grade
-        if (itemSubjects.length === 0 || itemSubjects.every(s => s === "" || s === "e-learning" || s === "general" || s === "uncategorized")) {
-          return true;
-        }
-        
-        // Only show if student is enrolled in at least one of the assigned subjects
-        return itemSubjects.some(sub => studentSubjectsArray.includes(sub));
-      };
-
       setYoutubeLinks(allYoutubeLinks.filter(filterBySubjectAndGrade));
       setWebPosts(allWebPosts.filter(filterBySubjectAndGrade));
 
