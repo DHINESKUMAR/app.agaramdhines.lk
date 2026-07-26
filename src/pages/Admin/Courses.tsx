@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getCourses, saveCourses, getClasses, getStaffs, getCourseWebsiteLinks, saveCourseWebsiteLinks, getSubjects, saveSubjects } from '../../lib/db';
-import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, LayoutGrid, Folder, Globe, Save, Edit3 } from 'lucide-react';
+import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, LayoutGrid, Folder, Globe, Save, Edit3, Check } from 'lucide-react';
 
 const GRADES = [
   "தரம் 01", "தரம் 02", "தரம் 03", "தரம் 04", "தரம் 05", 
@@ -15,11 +15,14 @@ export default function Courses() {
   const [staffs, setStaffs] = useState<any[]>([]);
   const [allSubjects, setAllSubjects] = useState<any[]>([]);
   const [courseLinks, setCourseLinks] = useState<Record<string, string>>({});
-  const [isManualSubject, setIsManualSubject] = useState(false);
   const [filterClass, setFilterClass] = useState<string>("");
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [customGrade, setCustomGrade] = useState("");
+
+  const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [customSubjectInput, setCustomSubjectInput] = useState<string>('');
 
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
 
@@ -30,6 +33,62 @@ export default function Courses() {
     getSubjects().then(setAllSubjects);
     getCourseWebsiteLinks().then(links => setCourseLinks(links || {}));
   }, [view]);
+
+  const ALL_AVAILABLE_GRADES = Array.from(new Set([
+    "30 DAY'S TAMIL COURSE",
+    ...GRADES,
+    ...classes.map(c => c.name)
+  ])).filter(Boolean);
+
+  const availableSubjectsList = Array.from(new Set([
+    "30 நாள் தமிழ் பாடநெறி (தரம் 11)",
+    "தமிழ் வினா விடை",
+    "Tamil",
+    ...classes.flatMap(c => c.subjects || []),
+    ...staffs.flatMap(s => s.assignedClasses?.map((c: any) => c.subject) || []),
+    ...allSubjects.map(s => s.name)
+  ])).filter(Boolean);
+
+  const toggleGrade = (gradeName: string) => {
+    if (selectedGrades.includes(gradeName)) {
+      setSelectedGrades(selectedGrades.filter(g => g !== gradeName));
+    } else {
+      setSelectedGrades([...selectedGrades, gradeName]);
+    }
+  };
+
+  const selectAllGrades = () => {
+    setSelectedGrades([...ALL_AVAILABLE_GRADES]);
+  };
+
+  const clearGrades = () => {
+    setSelectedGrades([]);
+  };
+
+  const toggleSubject = (subjectName: string) => {
+    if (selectedSubjects.includes(subjectName)) {
+      setSelectedSubjects(selectedSubjects.filter(s => s !== subjectName));
+    } else {
+      setSelectedSubjects([...selectedSubjects, subjectName]);
+    }
+  };
+
+  const selectAllSubjects = () => {
+    setSelectedSubjects([...availableSubjectsList]);
+  };
+
+  const clearSubjects = () => {
+    setSelectedSubjects([]);
+  };
+
+  const handleAddCustomSubject = () => {
+    if (!customSubjectInput.trim()) return;
+    const newSubName = customSubjectInput.trim();
+    if (!selectedSubjects.includes(newSubName)) {
+      setSelectedSubjects([...selectedSubjects, newSubName]);
+    }
+    setCustomSubjectInput('');
+  };
 
   const handleRenameFolder = async (oldName: string) => {
     const newName = prompt("Enter new folder name:", oldName);
@@ -100,47 +159,88 @@ export default function Courses() {
     return colors[Math.abs(hash) % colors.length];
   };
 
-  const classSubjects = formData.grade 
-    ? classes.find(c => c.name === formData.grade)?.subjects || []
-    : [];
-
-  const assignedSubjects = Array.from(new Set(
-    staffs.flatMap(s => s.assignedClasses?.filter((c: any) => c.grade === formData.grade).map((c: any) => c.subject) || [])
-  ));
-
-  const availableSubjectsList = Array.from(new Set([
-    ...classSubjects,
-    ...assignedSubjects,
-    ...allSubjects.map(s => s.name)
-  ])).filter(Boolean);
-
   const handleAddCourse = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title || !formData.link || !formData.grade || !formData.subject) {
-      alert("Class, Subject, Title and Link are required!");
+    if (selectedGrades.length === 0) {
+      alert("Please select at least one Target Grade!");
+      return;
+    }
+    if (selectedSubjects.length === 0) {
+      alert("Please select at least one Target Subject!");
+      return;
+    }
+    if (!formData.title || !formData.link) {
+      alert("Title and Link are required!");
       return;
     }
 
-    const subjectExists = allSubjects.some(s => s.name.toLowerCase() === formData.subject.toLowerCase());
-    if (!subjectExists && isManualSubject) {
-        const newSub = { id: Date.now().toString(), name: formData.subject };
-        const updatedSubs = [...allSubjects, newSub];
-        setAllSubjects(updatedSubs);
-        await saveSubjects(updatedSubs);
+    // Save custom subjects to allSubjects if needed
+    const updatedAllSubjects = [...allSubjects];
+    for (const subj of selectedSubjects) {
+      if (!updatedAllSubjects.some(s => s.name.toLowerCase() === subj.toLowerCase())) {
+        const newSub = { id: Date.now().toString() + Math.random().toString().slice(2, 6), name: subj };
+        updatedAllSubjects.push(newSub);
+      }
+    }
+    if (updatedAllSubjects.length > allSubjects.length) {
+      setAllSubjects(updatedAllSubjects);
+      await saveSubjects(updatedAllSubjects);
     }
 
-    let updatedCourses;
+    let updatedCourses = [...courses];
+
     if (editingId) {
-      updatedCourses = courses.map(c => c.id === editingId ? { ...c, ...formData } : c);
+      let isFirst = true;
+      for (const g of selectedGrades) {
+        for (const s of selectedSubjects) {
+          if (isFirst) {
+            updatedCourses = updatedCourses.map(c => 
+              c.id === editingId ? { ...c, grade: g, subject: s, title: formData.title, link: formData.link, folder: formData.folder } : c
+            );
+            isFirst = false;
+          } else {
+            updatedCourses.push({
+              id: Date.now().toString() + Math.random().toString().slice(2, 6),
+              grade: g,
+              subject: s,
+              title: formData.title,
+              link: formData.link,
+              folder: formData.folder
+            });
+          }
+        }
+      }
       setEditingId(null);
     } else {
-      const newCourse = { id: Date.now().toString(), ...formData };
-      updatedCourses = [...courses, newCourse];
+      let count = 0;
+      const newItems: any[] = [];
+      for (const g of selectedGrades) {
+        for (const s of selectedSubjects) {
+          newItems.push({
+            id: (Date.now() + count++).toString(),
+            grade: g,
+            subject: s,
+            title: formData.title,
+            link: formData.link,
+            folder: formData.folder
+          });
+        }
+      }
+      updatedCourses = [...updatedCourses, ...newItems];
     }
-    
+
     setCourses(updatedCourses);
     await saveCourses(updatedCourses);
-    alert(editingId ? 'Material Updated' : 'Material Added');
+
+    const totalCreated = selectedGrades.length * selectedSubjects.length;
+    alert(
+      totalCreated === 1 
+        ? 'Material Saved Successfully' 
+        : `${totalCreated} Materials Added Successfully across ${selectedGrades.length} Grades and ${selectedSubjects.length} Subjects!`
+    );
+
+    setSelectedGrades([]);
+    setSelectedSubjects([]);
     setFormData({ grade: '', subject: '', title: '', link: '', folder: '' });
     setView('view');
   };
@@ -154,6 +254,8 @@ export default function Courses() {
   };
 
   const handleEdit = (course: any) => {
+    setSelectedGrades([course.grade]);
+    setSelectedSubjects([course.subject]);
     setFormData({
       grade: course.grade,
       subject: course.subject,
@@ -326,64 +428,143 @@ export default function Courses() {
         </div>
         
         <form className="space-y-6" onSubmit={handleAddCourse}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Target Grade</label>
-              <select 
-                value={formData.grade}
-                onChange={(e) => setFormData({...formData, grade: e.target.value, subject: ''})}
-                className="w-full border-2 border-slate-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all text-sm font-bold bg-slate-50"
-              >
-                <option value="">Select Grade</option>
-                {classes.length > 0 ? (
-                  classes.map((cls) => (
-                    <option key={cls.id} value={cls.name}>{cls.name}</option>
-                  ))
-                ) : (
-                  GRADES.map(grade => (
-                    <option key={grade} value={grade}>{grade}</option>
-                  ))
-                )}
-              </select>
-            </div>
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Subject</label>
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setIsManualSubject(!isManualSubject);
-                    setFormData({...formData, subject: ''});
-                  }}
-                  className="text-[10px] font-black text-indigo-600 hover:indigo-800 uppercase tracking-tighter flex items-center gap-1"
-                >
-                  {isManualSubject ? 'Select from list' : 'Add New Subject'}
-                  <Edit3 size={10} />
-                </button>
+          {/* Multi Grade Selection */}
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div>
+                <label className="block text-xs font-black text-slate-700 uppercase tracking-widest">
+                  Target Grades / Classes <span className="text-red-500">*</span>
+                </label>
+                <p className="text-[11px] text-slate-400 font-medium">Click to select one or multiple target grades</p>
               </div>
-              {isManualSubject ? (
-                <input 
-                  type="text"
-                  placeholder="Enter new subject name..."
-                  value={formData.subject}
-                  onChange={(e) => setFormData({...formData, subject: e.target.value})}
-                  className="w-full border-2 border-indigo-100 bg-indigo-50/30 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all text-sm font-bold"
-                />
-              ) : (
-                <select 
-                  value={formData.subject}
-                  onChange={(e) => setFormData({...formData, subject: e.target.value})}
-                  className="w-full border-2 border-slate-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all text-sm font-bold bg-slate-50 disabled:opacity-50"
-                  disabled={!formData.grade}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={selectAllGrades}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-lg hover:bg-indigo-100 transition-colors"
                 >
-                  <option value="">Select Subject</option>
-                  {availableSubjectsList.map((subject: any) => (
-                    <option key={subject} value={subject}>{subject}</option>
-                  ))}
-                </select>
-              )}
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={clearGrades}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg hover:bg-slate-200 transition-colors"
+                >
+                  Clear
+                </button>
+                <span className="text-xs font-extrabold bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full">
+                  {selectedGrades.length} selected
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-2xl border-2 border-slate-100 max-h-44 overflow-y-auto">
+              {ALL_AVAILABLE_GRADES.map(g => {
+                const isSelected = selectedGrades.includes(g);
+                return (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => toggleGrade(g)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 border border-indigo-600'
+                        : 'bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    {isSelected && <Check size={14} className="stroke-[3]" />}
+                    {g}
+                  </button>
+                );
+              })}
             </div>
           </div>
+
+          {/* Multi Subject Selection */}
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div>
+                <label className="block text-xs font-black text-slate-700 uppercase tracking-widest">
+                  Target Subjects <span className="text-red-500">*</span>
+                </label>
+                <p className="text-[11px] text-slate-400 font-medium">Click to select one or multiple target subjects</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={selectAllSubjects}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-lg hover:bg-indigo-100 transition-colors"
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSubjects}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg hover:bg-slate-200 transition-colors"
+                >
+                  Clear
+                </button>
+                <span className="text-xs font-extrabold bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full">
+                  {selectedSubjects.length} selected
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-2xl border-2 border-slate-100 max-h-44 overflow-y-auto mb-3">
+              {availableSubjectsList.map(s => {
+                const isSelected = selectedSubjects.includes(s);
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => toggleSubject(s)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      isSelected
+                        ? 'bg-purple-600 text-white shadow-md shadow-purple-200 border border-purple-600'
+                        : 'bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    {isSelected && <Check size={14} className="stroke-[3]" />}
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Subject Input */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Or type custom subject name..."
+                value={customSubjectInput}
+                onChange={(e) => setCustomSubjectInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddCustomSubject();
+                  }
+                }}
+                className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleAddCustomSubject}
+                className="bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition-all shrink-0 cursor-pointer"
+              >
+                <Plus size={14} /> Add Subject
+              </button>
+            </div>
+          </div>
+
+          {/* Combination summary banner */}
+          {selectedGrades.length > 0 && selectedSubjects.length > 0 && (
+            <div className="bg-indigo-50/70 p-4 rounded-2xl border border-indigo-100 flex items-center justify-between text-xs font-bold text-indigo-900">
+              <span>Total Materials to be generated:</span>
+              <span className="bg-indigo-600 text-white px-3 py-1 rounded-full font-black text-sm">
+                {selectedGrades.length * selectedSubjects.length} Items ({selectedGrades.length} Grades × {selectedSubjects.length} Subjects)
+              </span>
+            </div>
+          )}
 
           <div>
              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Unit / Folder (Optional)</label>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getCourseMaterials, saveCourseMaterials, getClasses, getStaffs, getSubjects, saveSubjects } from '../../lib/db';
-import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, LayoutGrid, Folder, Globe, Save, Edit3, FileText, Download } from 'lucide-react';
+import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, LayoutGrid, Folder, Globe, Save, Edit3, FileText, Download, Check } from 'lucide-react';
 
 const GRADES = [
   "தரம் 01", "தரம் 02", "தரம் 03", "தரம் 04", "தரம் 05", 
@@ -14,9 +14,12 @@ export default function CourseMaterials() {
   const [classes, setClasses] = useState<any[]>([]);
   const [staffs, setStaffs] = useState<any[]>([]);
   const [allSubjects, setAllSubjects] = useState<any[]>([]);
-  const [isManualSubject, setIsManualSubject] = useState(false);
   const [filterClass, setFilterClass] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [customSubjectInput, setCustomSubjectInput] = useState<string>('');
 
   const [formData, setFormData] = useState({
     grade: '',
@@ -32,47 +35,142 @@ export default function CourseMaterials() {
     getSubjects().then(setAllSubjects);
   }, [view]);
 
-  const classSubjects = formData.grade 
-    ? classes.find(c => c.name === formData.grade)?.subjects || []
-    : [];
-
-  const assignedSubjects = Array.from(new Set(
-    staffs.flatMap(s => s.assignedClasses?.filter((c: any) => c.grade === formData.grade).map((c: any) => c.subject) || [])
-  ));
+  const ALL_AVAILABLE_GRADES = Array.from(new Set([
+    "30 DAY'S TAMIL COURSE",
+    ...GRADES,
+    ...classes.map(c => c.name)
+  ])).filter(Boolean);
 
   const availableSubjectsList = Array.from(new Set([
-    ...classSubjects,
-    ...assignedSubjects,
+    "30 நாள் தமிழ் பாடநெறி (தரம் 11)",
+    "தமிழ் வினா விடை",
+    "Tamil",
+    ...classes.flatMap(c => c.subjects || []),
+    ...staffs.flatMap(s => s.assignedClasses?.map((c: any) => c.subject) || []),
     ...allSubjects.map(s => s.name)
   ])).filter(Boolean);
 
+  const toggleGrade = (gradeName: string) => {
+    if (selectedGrades.includes(gradeName)) {
+      setSelectedGrades(selectedGrades.filter(g => g !== gradeName));
+    } else {
+      setSelectedGrades([...selectedGrades, gradeName]);
+    }
+  };
+
+  const selectAllGrades = () => {
+    setSelectedGrades([...ALL_AVAILABLE_GRADES]);
+  };
+
+  const clearGrades = () => {
+    setSelectedGrades([]);
+  };
+
+  const toggleSubject = (subjectName: string) => {
+    if (selectedSubjects.includes(subjectName)) {
+      setSelectedSubjects(selectedSubjects.filter(s => s !== subjectName));
+    } else {
+      setSelectedSubjects([...selectedSubjects, subjectName]);
+    }
+  };
+
+  const selectAllSubjects = () => {
+    setSelectedSubjects([...availableSubjectsList]);
+  };
+
+  const clearSubjects = () => {
+    setSelectedSubjects([]);
+  };
+
+  const handleAddCustomSubject = () => {
+    if (!customSubjectInput.trim()) return;
+    const newSubName = customSubjectInput.trim();
+    if (!selectedSubjects.includes(newSubName)) {
+      setSelectedSubjects([...selectedSubjects, newSubName]);
+    }
+    setCustomSubjectInput('');
+  };
+
   const handleAddMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title || !formData.link || !formData.grade || !formData.subject) {
-      alert("Grade, Subject, Title and Link are required!");
+    if (selectedGrades.length === 0) {
+      alert("Please select at least one Grade!");
+      return;
+    }
+    if (selectedSubjects.length === 0) {
+      alert("Please select at least one Subject!");
+      return;
+    }
+    if (!formData.title || !formData.link) {
+      alert("Title and Link are required!");
       return;
     }
 
-    const subjectExists = allSubjects.some(s => s.name.toLowerCase() === formData.subject.toLowerCase());
-    if (!subjectExists && isManualSubject) {
-        const newSub = { id: Date.now().toString(), name: formData.subject };
-        const updatedSubs = [...allSubjects, newSub];
-        setAllSubjects(updatedSubs);
-        await saveSubjects(updatedSubs);
+    // Save custom subjects to allSubjects if needed
+    const updatedAllSubjects = [...allSubjects];
+    for (const subj of selectedSubjects) {
+      if (!updatedAllSubjects.some(s => s.name.toLowerCase() === subj.toLowerCase())) {
+        const newSub = { id: Date.now().toString() + Math.random().toString().slice(2, 6), name: subj };
+        updatedAllSubjects.push(newSub);
+      }
+    }
+    if (updatedAllSubjects.length > allSubjects.length) {
+      setAllSubjects(updatedAllSubjects);
+      await saveSubjects(updatedAllSubjects);
     }
 
-    let updatedMaterials;
+    let updatedMaterials = [...materials];
+
     if (editingId) {
-      updatedMaterials = materials.map(m => m.id === editingId ? { ...m, ...formData } : m);
+      let isFirst = true;
+      for (const g of selectedGrades) {
+        for (const s of selectedSubjects) {
+          if (isFirst) {
+            updatedMaterials = updatedMaterials.map(m => 
+              m.id === editingId ? { ...m, grade: g, subject: s, title: formData.title, link: formData.link } : m
+            );
+            isFirst = false;
+          } else {
+            updatedMaterials.push({
+              id: Date.now().toString() + Math.random().toString().slice(2, 6),
+              grade: g,
+              subject: s,
+              title: formData.title,
+              link: formData.link
+            });
+          }
+        }
+      }
       setEditingId(null);
     } else {
-      const newMaterial = { id: Date.now().toString(), ...formData };
-      updatedMaterials = [...materials, newMaterial];
+      let count = 0;
+      const newItems: any[] = [];
+      for (const g of selectedGrades) {
+        for (const s of selectedSubjects) {
+          newItems.push({
+            id: (Date.now() + count++).toString(),
+            grade: g,
+            subject: s,
+            title: formData.title,
+            link: formData.link
+          });
+        }
+      }
+      updatedMaterials = [...updatedMaterials, ...newItems];
     }
-    
+
     setMaterials(updatedMaterials);
     await saveCourseMaterials(updatedMaterials);
-    alert(editingId ? 'Course Material Updated Successfully' : 'Course Material Added Successfully');
+
+    const totalCreated = selectedGrades.length * selectedSubjects.length;
+    alert(
+      totalCreated === 1 
+        ? 'Course Material Saved Successfully' 
+        : `${totalCreated} Course Materials Added Successfully across ${selectedGrades.length} Grades and ${selectedSubjects.length} Subjects!`
+    );
+
+    setSelectedGrades([]);
+    setSelectedSubjects([]);
     setFormData({ grade: '', subject: '', title: '', link: '' });
     setView('view');
   };
@@ -87,6 +185,8 @@ export default function CourseMaterials() {
   };
 
   const handleEdit = (material: any) => {
+    setSelectedGrades([material.grade]);
+    setSelectedSubjects([material.subject]);
     setFormData({
       grade: material.grade,
       subject: material.subject,
@@ -133,6 +233,8 @@ export default function CourseMaterials() {
             onClick={() => {
               setView('menu');
               setEditingId(null);
+              setSelectedGrades([]);
+              setSelectedSubjects([]);
               setFormData({ grade: '', subject: '', title: '', link: '' });
             }}
             className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded-2xl font-bold transition-all text-sm border border-slate-200"
@@ -149,6 +251,8 @@ export default function CourseMaterials() {
             onClick={() => {
               setView('add');
               setEditingId(null);
+              setSelectedGrades([]);
+              setSelectedSubjects([]);
               setFormData({ grade: '', subject: '', title: '', link: '' });
             }}
             className="bg-white p-8 rounded-[2.5rem] border-2 border-slate-100 hover:border-red-400 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col items-center justify-center text-center group cursor-pointer"
@@ -157,7 +261,7 @@ export default function CourseMaterials() {
               <Plus size={36} />
             </div>
             <h2 className="text-2xl font-black text-slate-800 mb-2">Add Course Material</h2>
-            <p className="text-slate-400 text-sm font-medium">Upload a new PDF drive link for a specific subject and grade</p>
+            <p className="text-slate-400 text-sm font-medium">Upload a new PDF drive link for multiple subjects and grades</p>
           </button>
 
           <button
@@ -180,71 +284,132 @@ export default function CourseMaterials() {
           </h2>
 
           <form onSubmit={handleAddMaterial} className="space-y-6">
+            {/* Multi Grade Selection */}
             <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Grade / Class</label>
-              <select
-                required
-                value={formData.grade}
-                onChange={(e) => setFormData({ ...formData, grade: e.target.value, subject: '' })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 text-slate-800 font-bold focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all outline-none"
-              >
-                <option value="">Select Grade</option>
-                <option value="30 DAY'S TAMIL COURSE">30 DAY'S TAMIL COURSE (Grade 11)</option>
-                {GRADES.map(g => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-bold text-slate-700">Subject</label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsManualSubject(!isManualSubject);
-                    setFormData({ ...formData, subject: '' });
-                  }}
-                  className="text-xs font-black text-red-600 hover:text-red-700 hover:underline"
-                >
-                  {isManualSubject ? "Choose from list" : "Enter manually"}
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div>
+                  <label className="block text-sm font-bold text-slate-800">
+                    Target Grades / Classes (வகுப்புகள் - பல தேர்வு செய்யலாம்) <span className="text-red-500">*</span>
+                  </label>
+                  <p className="text-xs text-slate-500">Click to select one or multiple grades</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllGrades}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-lg hover:bg-indigo-100 transition-colors"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearGrades}
+                    className="text-xs font-bold text-slate-500 hover:text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg hover:bg-slate-200 transition-colors"
+                  >
+                    Clear
+                  </button>
+                  <span className="text-xs font-extrabold bg-red-100 text-red-700 px-2.5 py-1 rounded-full">
+                    {selectedGrades.length} selected
+                  </span>
+                </div>
               </div>
 
-              {isManualSubject ? (
+              <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-200 max-h-48 overflow-y-auto">
+                {ALL_AVAILABLE_GRADES.map(g => {
+                  const isSelected = selectedGrades.includes(g);
+                  return (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => toggleGrade(g)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        isSelected
+                          ? 'bg-red-600 text-white shadow-md shadow-red-200 border border-red-600'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      {isSelected && <Check size={14} className="stroke-[3]" />}
+                      {g}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Multi Subject Selection */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div>
+                  <label className="block text-sm font-bold text-slate-800">
+                    Target Subjects (பாடம் - பல தேர்வு செய்யலாம்) <span className="text-red-500">*</span>
+                  </label>
+                  <p className="text-xs text-slate-500">Click to select one or multiple subjects</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllSubjects}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-lg hover:bg-indigo-100 transition-colors"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearSubjects}
+                    className="text-xs font-bold text-slate-500 hover:text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg hover:bg-slate-200 transition-colors"
+                  >
+                    Clear
+                  </button>
+                  <span className="text-xs font-extrabold bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full">
+                    {selectedSubjects.length} selected
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-200 max-h-48 overflow-y-auto mb-3">
+                {availableSubjectsList.map(s => {
+                  const isSelected = selectedSubjects.includes(s);
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => toggleSubject(s)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        isSelected
+                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 border border-indigo-600'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      {isSelected && <Check size={14} className="stroke-[3]" />}
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom Subject Addition */}
+              <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  required
-                  placeholder="E.g., Science, Mathematics, Tamil"
-                  value={formData.subject}
-                  onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 text-slate-800 font-bold focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all outline-none"
+                  placeholder="Or type custom subject name..."
+                  value={customSubjectInput}
+                  onChange={(e) => setCustomSubjectInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCustomSubject();
+                    }
+                  }}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 outline-none"
                 />
-              ) : (
-                <select
-                  required
-                  value={formData.subject}
-                  onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 text-slate-800 font-bold focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all outline-none"
+                <button
+                  type="button"
+                  onClick={handleAddCustomSubject}
+                  className="bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition-all shrink-0"
                 >
-                  <option value="">Select Subject</option>
-                  {formData.grade === "30 DAY'S TAMIL COURSE" ? (
-                    // Listed Grade 11 subjects for the 30-day course
-                    <>
-                      <option value="30 நாள் தமிழ் பாடநெறி (தரம் 11)">30 நாள் தமிழ் பாடநெறி (தரம் 11)</option>
-                      <option value="தமிழ் வினா விடை">தமிழ் வினா விடை</option>
-                      <option value="Tamil">Tamil</option>
-                      {availableSubjectsList.filter(s => s !== "Tamil" && s !== "தமிழ் வினா விடை" && s !== "30 நாள் தமிழ் பாடநெறி (தரம் 11)").map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </>
-                  ) : (
-                    availableSubjectsList.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))
-                  )}
-                </select>
-              )}
+                  <Plus size={14} /> Add Subject
+                </button>
+              </div>
             </div>
 
             <div>
@@ -271,9 +436,19 @@ export default function CourseMaterials() {
               />
             </div>
 
+            {/* Total Combinations Summary */}
+            {selectedGrades.length > 0 && selectedSubjects.length > 0 && (
+              <div className="bg-red-50/60 p-4 rounded-2xl border border-red-100 flex items-center justify-between text-xs font-bold text-red-900">
+                <span>Total Materials to be created:</span>
+                <span className="bg-red-600 text-white px-3 py-1 rounded-full font-black text-sm">
+                  {selectedGrades.length * selectedSubjects.length} Items ({selectedGrades.length} Grades × {selectedSubjects.length} Subjects)
+                </span>
+              </div>
+            )}
+
             <button
               type="submit"
-              className="w-full bg-red-600 hover:bg-red-700 text-white font-black py-4 px-6 rounded-2xl shadow-lg shadow-red-100 hover:shadow-xl transition-all flex items-center justify-center gap-2"
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-black py-4 px-6 rounded-2xl shadow-lg shadow-red-100 hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <Save size={18} />
               {editingId ? "Update Material" : "Save Material"}
@@ -375,3 +550,4 @@ export default function CourseMaterials() {
     </div>
   );
 }
+

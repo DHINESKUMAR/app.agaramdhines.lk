@@ -392,50 +392,95 @@ export default function BulkDocuments() {
           {printMode === 'certificate' && (
             <div className="cert-container">
               {selectedStudentsData.map(student => (
-                <div key={student.id} className="w-[11in] h-[8.5in] bg-white p-8 relative break-inside-avoid shrink-0" style={{ pageBreakInside: 'avoid' }}>
-                  {/* Colorful Border */}
-                  <div className="absolute inset-4 border-[12px] border-double border-indigo-900 rounded-2xl"></div>
-                  <div className="absolute inset-8 border-2 border-yellow-500 rounded-xl opacity-50"></div>
+                <div key={student.id} className="w-[11in] h-[8.5in] bg-gradient-to-br from-amber-50/60 via-white to-indigo-50/40 p-10 relative break-inside-avoid shrink-0 flex flex-col justify-between overflow-hidden shadow-xl print:shadow-none" style={{ pageBreakInside: 'avoid' }}>
+                  {/* Ornate Gold & Royal Blue Borders */}
+                  <div className="absolute inset-4 border-[10px] border-double border-indigo-900 rounded-3xl pointer-events-none"></div>
+                  <div className="absolute inset-7 border-2 border-amber-400/80 rounded-2xl pointer-events-none"></div>
+                  
+                  {/* Ornate Corner Accents */}
+                  <div className="absolute top-6 left-6 w-16 h-16 border-t-4 border-l-4 border-amber-500 pointer-events-none"></div>
+                  <div className="absolute top-6 right-6 w-16 h-16 border-t-4 border-r-4 border-amber-500 pointer-events-none"></div>
+                  <div className="absolute bottom-6 left-6 w-16 h-16 border-b-4 border-l-4 border-amber-500 pointer-events-none"></div>
+                  <div className="absolute bottom-6 right-6 w-16 h-16 border-b-4 border-r-4 border-amber-500 pointer-events-none"></div>
 
-                  {/* Background Watermark */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-[0.03]">
-                    <Award size={500} />
+                  {/* Background Watermark Logo */}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-[0.04] pointer-events-none">
+                    <Award size={520} className="text-indigo-900" />
                   </div>
 
-                  <div className="relative h-full flex flex-col items-center justify-center text-center px-20">
-                    <h1 className="text-6xl font-serif font-black text-indigo-900 mb-2 tracking-wide">Certificate of Excellence</h1>
-                    <p className="text-2xl text-yellow-600 font-serif italic mb-12 font-semibold">Agaram Dhines Academy</p>
+                  <div className="relative z-10 h-full w-full flex flex-col items-center justify-between text-center px-12 py-4">
+                    {/* Top Academy Logo & Branding Header */}
+                    <div className="flex flex-col items-center">
+                      <div className="w-20 h-20 bg-white rounded-full p-1 shadow-lg border-2 border-amber-400 mb-2 overflow-hidden flex items-center justify-center">
+                        <img 
+                          src={adminSettings?.profileImage || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s"} 
+                          alt="AGARAM DHINES ONLINE ACADEMY" 
+                          crossOrigin="anonymous"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s";
+                          }}
+                          className="w-full h-full object-cover rounded-full" 
+                        />
+                      </div>
+                      <h3 className="text-2xl font-black uppercase tracking-wider text-indigo-950 leading-tight">
+                        {adminSettings?.instituteName || "AGARAM DHINES ONLINE ACADEMY"}
+                      </h3>
+                      <p className="text-base font-extrabold text-amber-600 mt-0.5 tracking-wide">
+                        அகரம் தினேஷ் ஆன்லைன் அகாடமி <span className="text-indigo-800 text-sm ml-2 font-bold">| 📞 778054232</span>
+                      </p>
+                    </div>
 
-                    <p className="text-xl text-gray-600 mb-4 font-medium tracking-wide uppercase">This is proudly presented to</p>
-                    <h2 className="text-5xl font-bold text-gray-900 mb-8 border-b-4 border-indigo-200 pb-4 inline-block px-12">{student.name}</h2>
+                    {/* Certificate Main Title */}
+                    <div className="my-2">
+                      <h1 className="text-5xl font-serif font-black text-indigo-900 tracking-wide uppercase drop-shadow-xs">
+                        Certificate of Excellence
+                      </h1>
+                      <p className="text-sm font-black text-amber-600 uppercase tracking-[0.3em] mt-1">
+                        Official Academic Award
+                      </p>
+                    </div>
 
-                    <p className="text-2xl text-gray-700 mb-12 max-w-4xl leading-relaxed font-serif">
-                      For outstanding academic performance and dedication in <span className="font-bold text-indigo-800">Grade {student.grade}</span>.
-                      Your commitment to excellence is truly commendable.
+                    {/* Presentation Line & Name */}
+                    <div className="w-full max-w-3xl">
+                      <p className="text-base text-gray-600 font-medium tracking-widest uppercase mb-1">
+                        This is proudly presented to
+                      </p>
+                      <h2 className="text-4xl font-extrabold text-indigo-950 border-b-4 border-amber-400 pb-2 px-10 inline-block font-serif drop-shadow-xs">
+                        {student.name}
+                      </h2>
+                    </div>
+
+                    {/* Citation */}
+                    <p className="text-lg text-gray-700 max-w-3xl leading-relaxed font-serif my-2">
+                      For outstanding academic performance, dedication, and active participation in <span className="font-bold text-indigo-900">Grade {student.grade}</span> at AGARAM DHINES ONLINE ACADEMY.
                     </p>
 
-                    <div className="flex justify-between items-end w-full mt-auto pt-10 px-10">
-                      <div className="text-center">
-                        <div className="w-56 border-b-2 border-gray-800 mb-3"></div>
-                        <p className="font-bold text-gray-800 text-lg uppercase tracking-widest">Director</p>
+                    {/* Footer with Signatures, Seal & Student Credentials + QR */}
+                    <div className="flex justify-between items-end w-full mt-auto pt-4">
+                      {/* Date */}
+                      <div className="text-center w-48">
+                        <p className="font-bold text-gray-900 text-sm mb-1">{new Date().toLocaleDateString()}</p>
+                        <div className="w-full border-b-2 border-indigo-900 mb-1"></div>
+                        <p className="font-bold text-indigo-900 text-xs uppercase tracking-widest">Date / தேதி</p>
                       </div>
 
-                      {/* QR and Details */}
-                      <div className="flex items-center gap-5 text-left bg-gray-50/80 p-5 rounded-xl border border-gray-200 shadow-sm backdrop-blur-sm z-10">
-                        <div className="bg-white p-2 rounded-lg shadow-sm border border-gray-100">
-                          <QRCodeSVG value={student.id} size={90} level="H" includeMargin={false} />
+                      {/* Center Stamp & Credentials Badge */}
+                      <div className="flex items-center gap-4 bg-white/90 p-3 rounded-2xl border-2 border-amber-300 shadow-md backdrop-blur-sm">
+                        <div className="bg-white p-1 rounded-lg border border-indigo-100 shadow-xs">
+                          <QRCodeSVG value={student.id} size={70} level="H" includeMargin={false} />
                         </div>
-                        <div className="text-sm text-gray-700 space-y-1.5 font-medium">
-                          <p><span className="font-bold text-indigo-900 w-16 inline-block">Roll No:</span> {student.rollNo || 'N/A'}</p>
-                          <p><span className="font-bold text-indigo-900 w-16 inline-block">Phone:</span> {student.phone || 'N/A'}</p>
-                          <p><span className="font-bold text-indigo-900 w-16 inline-block">User:</span> <span className="font-mono">{student.username}</span></p>
-                          <p><span className="font-bold text-indigo-900 w-16 inline-block">Pass:</span> <span className="font-mono">{student.password}</span></p>
+                        <div className="text-left text-xs font-medium text-slate-800 space-y-0.5">
+                          <p><span className="font-bold text-indigo-900 w-16 inline-block">Roll No:</span> <strong className="text-slate-900">{student.rollNo || 'N/A'}</strong></p>
+                          <p><span className="font-bold text-indigo-900 w-16 inline-block">Username:</span> <span className="font-mono font-bold text-indigo-700">{student.username}</span></p>
+                          <p><span className="font-bold text-indigo-900 w-16 inline-block">Password:</span> <span className="font-mono font-bold text-amber-600">{student.password}</span></p>
                         </div>
                       </div>
 
-                      <div className="text-center">
-                        <div className="w-56 border-b-2 border-gray-800 mb-3"></div>
-                        <p className="font-bold text-gray-800 text-lg uppercase tracking-widest">Date</p>
+                      {/* Director Signature */}
+                      <div className="text-center w-48">
+                        <div className="font-serif italic text-xl text-indigo-900 font-bold mb-1">Dhines Nivas</div>
+                        <div className="w-full border-b-2 border-indigo-900 mb-1"></div>
+                        <p className="font-bold text-indigo-900 text-xs uppercase tracking-widest">Director / இயக்குனர்</p>
                       </div>
                     </div>
                   </div>
