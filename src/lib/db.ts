@@ -111,12 +111,15 @@ export const resetDbHealthMetrics = () => {
 
 // Helper to get data from Firebase with localStorage fallback and memory caching
 const getData = async (key: string, defaultValue: any) => {
-  // Check memory cache first
+  // Check memory cache first - only return if cached data is valid and non-empty for arrays
   const cached = memoryCache[key];
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
-    const itemCount = Array.isArray(cached.data) ? Math.max(1, cached.data.length) : 1;
-    recordReadOperation(itemCount, true);
-    return cached.data;
+    const isArrayDefault = Array.isArray(defaultValue);
+    if (!isArrayDefault || (Array.isArray(cached.data) && cached.data.length > 0)) {
+      const itemCount = Array.isArray(cached.data) ? Math.max(1, cached.data.length) : 1;
+      recordReadOperation(itemCount, true);
+      return cached.data;
+    }
   }
 
   // Read local storage data first for immediate system availability
@@ -125,7 +128,9 @@ const getData = async (key: string, defaultValue: any) => {
     const rawValue = localStorage.getItem(key);
     if (rawValue && rawValue !== 'undefined') {
       localData = JSON.parse(rawValue);
-      memoryCache[key] = { data: localData, timestamp: Date.now() };
+      if (!Array.isArray(localData) || localData.length > 0) {
+        memoryCache[key] = { data: localData, timestamp: Date.now() };
+      }
     }
   } catch (e) {
     console.warn(`Error reading localStorage for ${key}:`, e);
@@ -148,12 +153,8 @@ const getData = async (key: string, defaultValue: any) => {
           console.warn(`Error fetching singleton ${key}:`, singErr);
         }
 
-        // 2. For array collections, check singleton first, then collection query
+        // 2. For array collections, check collection query as well and merge candidates
         if (Array.isArray(defaultValue)) {
-          if (Array.isArray(singData)) {
-            return singData;
-          }
-
           try {
             const querySnapshot = await getDocs(collection(db, key));
             if (!querySnapshot.empty) {
@@ -163,12 +164,18 @@ const getData = async (key: string, defaultValue: any) => {
             console.warn(`Error fetching collection ${key}:`, colErr);
           }
 
-          if (Array.isArray(colData) && colData.length > 0) {
-            return colData;
-          }
+          const cand1 = Array.isArray(singData) ? singData : [];
+          const cand2 = Array.isArray(colData) ? colData : [];
 
-          if (Array.isArray(localData)) {
-            return localData;
+          if (cand1.length > 0 || cand2.length > 0) {
+            const itemMap = new Map<string, any>();
+            [...cand2, ...cand1].forEach((item: any) => {
+              if (item && typeof item === 'object') {
+                const k = String(item.id || item.username || item.rollNo || item.studentCode || Math.random()).trim().toLowerCase();
+                itemMap.set(k, { ...(itemMap.get(k) || {}), ...item });
+              }
+            });
+            return Array.from(itemMap.values());
           }
 
           return [];
@@ -177,13 +184,19 @@ const getData = async (key: string, defaultValue: any) => {
         return singData;
       };
 
-      const timeoutMs = localData ? 1500 : 8000;
+      const hasLocalContent = localData && (!Array.isArray(localData) || localData.length > 0);
+      const timeoutMs = hasLocalContent ? 3000 : 10000;
       const fbData = await Promise.race([
         fetchFirebase(),
         new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs))
       ]);
 
       if (fbData !== null && fbData !== undefined) {
+        if (Array.isArray(fbData) && fbData.length === 0 && Array.isArray(localData) && localData.length > 0) {
+          memoryCache[key] = { data: localData, timestamp: Date.now() };
+          return localData;
+        }
+
         memoryCache[key] = { data: fbData, timestamp: Date.now() };
         try {
           localStorage.setItem(key, JSON.stringify(fbData));
@@ -198,7 +211,9 @@ const getData = async (key: string, defaultValue: any) => {
   }
 
   if (localData !== null && localData !== undefined) {
-    memoryCache[key] = { data: localData, timestamp: Date.now() };
+    if (!Array.isArray(localData) || localData.length > 0) {
+      memoryCache[key] = { data: localData, timestamp: Date.now() };
+    }
     const itemCount = Array.isArray(localData) ? Math.max(1, localData.length) : 1;
     recordReadOperation(itemCount, true);
     return localData;
@@ -615,10 +630,8 @@ export const getChatMessages = () => getData('chatMessages', []);
 export const saveChatMessages = (messages: any) => saveData('chatMessages', messages);
 
 export const initDB = async () => {
-  const students = await getStudents();
-  if (!students || students.length === 0) {
-    await saveStudents([]);
-  }
+  await getStudents();
+  await getStaffs();
   
   const zoomLinks = await getZoomLinks();
   if (!zoomLinks || zoomLinks.length === 0) {
