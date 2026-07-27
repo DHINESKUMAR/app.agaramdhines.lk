@@ -19,7 +19,7 @@ export const isFirebaseConfigured = true;
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true
+  experimentalForceLongPolling: true
 });
 export const googleProvider = new GoogleAuthProvider();
 

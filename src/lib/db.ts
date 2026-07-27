@@ -2,7 +2,7 @@ import { db, isFirebaseConfigured } from './firebase';
 import { collection, doc, getDocs, getDoc, setDoc, writeBatch, query, where } from 'firebase/firestore';
 
 const memoryCache: Record<string, { data: any; timestamp: number }> = {};
-const CACHE_TTL_MS = 5000; // 5 seconds cache to balance performance and freshness
+const CACHE_TTL_MS = 120000; // 2 minutes memory cache for instant performance
 
 // --- Database Health & Usage Tracking ---
 export interface DbMetrics {
@@ -177,9 +177,10 @@ const getData = async (key: string, defaultValue: any) => {
         return singData;
       };
 
+      const timeoutMs = localData ? 1500 : 8000;
       const fbData = await Promise.race([
         fetchFirebase(),
-        new Promise<null>(resolve => setTimeout(() => resolve(null), 8000))
+        new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs))
       ]);
 
       if (fbData !== null && fbData !== undefined) {
@@ -197,8 +198,9 @@ const getData = async (key: string, defaultValue: any) => {
   }
 
   if (localData !== null && localData !== undefined) {
+    memoryCache[key] = { data: localData, timestamp: Date.now() };
     const itemCount = Array.isArray(localData) ? Math.max(1, localData.length) : 1;
-    recordReadOperation(itemCount, false);
+    recordReadOperation(itemCount, true);
     return localData;
   }
 
