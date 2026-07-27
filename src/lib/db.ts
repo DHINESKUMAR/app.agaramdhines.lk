@@ -323,6 +323,82 @@ export const getAdminSettings = () => getData('adminSettings', {
 });
 export const saveAdminSettings = (settings: any) => saveData('adminSettings', settings);
 
+export const getHomePageContent = () => getData('homePageContent', {
+  heroTagText: "New Version 2.0 Released",
+  heroTitle: "WELCOME TO AGARAM DHINES ONLINE ACADEMY",
+  button1Text: "வகுப்புகள் பற்றி அறிந்து கொள்ள",
+  button1Url: "https://www.agaramdhines.lk/courses/",
+  button2Text: "Visit agaramdhines.lk",
+  button2Url: "https://www.agaramdhines.lk",
+  button3Text: "Login Portal",
+  slides: [
+    {
+      id: "default-1",
+      image: "https://img.freepik.com/free-vector/flat-design-e-learning-concept-with-laptop_23-2148593003.jpg",
+      title: "Welcome to Agaram Dhines Academy",
+      subtitle: "Learn from anywhere, anytime.",
+      isActive: true
+    },
+    {
+      id: "default-2",
+      image: "https://img.freepik.com/free-vector/online-education-banner-template_23-2149005626.jpg",
+      title: "New Classes Starting Soon!",
+      subtitle: "Enroll now for the upcoming semester.",
+      isActive: true
+    },
+    {
+      id: "default-3",
+      image: "https://img.freepik.com/free-vector/gradient-back-school-sale-banner-template_23-2149045028.jpg",
+      title: "Special Discount on Zoom Classes",
+      subtitle: "Get up to 20% off on early registration.",
+      isActive: true
+    }
+  ],
+  navItems: [
+    { id: 'Home', name: 'Home', link: '#' },
+    { id: 'WEBSITE', name: 'WEBSITE', link: 'https://www.agaramdhines.lk/' },
+    { id: 'COURSES', name: 'COURSES', link: 'https://www.agaramdhines.lk/courses/' },
+    { id: 'ZOOM CLASS', name: 'ZOOM CLASS', link: 'https://www.agaramdhines.lk/category/%e0%ae%a4%e0%ae%ae%e0%ae%bf%e0%ae%b4%e0%af%8d-zoom-class-06-to-11/' },
+    { id: 'REGISTRATION', name: 'REGISTRATION', link: 'https://www.agaramdhines.lk/lp-profile/' },
+    { id: 'YOUTUBE', name: 'YOUTUBE', link: 'https://www.youtube.com/@agaramdhines' },
+    { id: 'Login', name: 'Login', link: '#login' }
+  ],
+  noticeBanner: "",
+  showNoticeBanner: false,
+  noticeBoardTitle: "புதிய அறிவிப்புகள் / Notice Board",
+  notices: [
+    {
+      id: "notice-1",
+      title: "தரம் 06 - 11 புதிய தமிழ் Zoom வகுப்புகள் ஆரம்பம்",
+      date: "2026-07-27",
+      type: "Important",
+      content: "புதிய தவணைக்கான தமிழ் ஆன்லைன் நேரலை Zoom வகுப்புகள் வெற்றிகரமாக ஆரம்பமாகியுள்ளது. மாணவர்கள் உடனே இணையலாம்.",
+      link: "https://www.agaramdhines.lk/courses/",
+      isPinned: true
+    },
+    {
+      id: "notice-2",
+      title: "தரம் 11 சிறப்பு வினா விடை கருத்தரங்கு",
+      date: "2026-07-25",
+      type: "Event",
+      content: "வரவிருக்கும் சாதாரண தரப் பரீட்சைக்கான மாதிரி வினாத்தாள் கலந்துரையாடல் வெள்ளி மற்றும் சனிக்கிழமைகளில் நடைபெறும்.",
+      link: "",
+      isPinned: false
+    }
+  ],
+  footerDescription: "The ultimate education management ERP with all advance features to run your institution smoothly.",
+  facebookUrl: "https://facebook.com",
+  twitterUrl: "https://twitter.com",
+  instagramUrl: "https://instagram.com",
+  playStoreUrl: "https://play.google.com",
+  appStoreUrl: "https://apple.com",
+  contactPhone: "0778054232",
+  contactWhatsapp: "94778054232",
+  contactEmail: "Ddhinesnivas111@gmail.com"
+});
+
+export const saveHomePageContent = (content: any) => saveData('homePageContent', content);
+
 export const getChatbotSettings = () => getData('chatbotSettings', {
   grade06: {
     title: "தரம் 06",

@@ -38,6 +38,7 @@ import LiveChat from "./pages/Admin/LiveChat";
 import ChatbotSettings from "./pages/Admin/ChatbotSettings";
 import Behaviour from "./pages/Admin/Behaviour";
 import QuestionPaper from "./pages/Admin/QuestionPaper";
+import HomePageSettings from "./pages/Admin/HomePageSettings";
 import ResetPassword from "./pages/ResetPassword";
 import StudentDashboard from "./pages/Student/Dashboard";
 import StaffDashboard from "./pages/Staff/Dashboard";
@@ -105,6 +106,7 @@ export default function App() {
           <Route path="announcements" element={<Announcements />} />
           <Route path="live-chat" element={<LiveChat />} />
           <Route path="chatbot-settings" element={<ChatbotSettings />} />
+          <Route path="home-settings" element={<HomePageSettings />} />
           <Route path="behaviour" element={<Behaviour />} />
           <Route path="question-paper" element={<QuestionPaper />} />
           <Route path="subjects-grades" element={<Subjects />} />

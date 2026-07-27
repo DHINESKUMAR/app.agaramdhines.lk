@@ -28,6 +28,7 @@ import {
   Link,
   Video as VideoIcon,
   Award,
+  Globe,
   Youtube as YoutubeIcon,
   Maximize,
   ChevronDown,
@@ -188,6 +189,7 @@ export default function AdminDashboard() {
         { name: "Chatbot Settings", path: "/admin/chatbot-settings" },
       ]
     },
+    { name: "Home Page Settings", path: "/admin/home-settings", icon: <Globe size={18} /> },
     { name: "General Settings", path: "/admin/settings", icon: <Settings size={18} /> },
   ];
 

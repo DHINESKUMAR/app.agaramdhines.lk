@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithGoogle, auth } from "../lib/firebase";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
-import { GraduationCap, Globe, LogIn, Mail, Shield, MessageCircle, Users, Play, Facebook, Twitter, Instagram, Apple, PlayCircle, Award, BookOpen, Home as HomeIcon, Video, UserPlus, Phone, ChevronLeft, ChevronRight, X, Menu } from "lucide-react";
-import { getStudents, getStaffs, getAdminSettings, getPasswordRequests, savePasswordRequests, getAnnouncements, saveStudents, saveStaffs } from "../lib/db";
+import { GraduationCap, Globe, LogIn, Mail, Shield, MessageCircle, Users, Play, Facebook, Twitter, Instagram, Apple, PlayCircle, Award, BookOpen, Home as HomeIcon, Video, UserPlus, Phone, ChevronLeft, ChevronRight, X, Menu, Megaphone, Pin, ExternalLink, Calendar } from "lucide-react";
+import { getStudents, getStaffs, getAdminSettings, getPasswordRequests, savePasswordRequests, getAnnouncements, saveStudents, saveStaffs, getHomePageContent } from "../lib/db";
 import { motion, AnimatePresence } from "motion/react";
 import Chatbot from "../components/Chatbot";
 import QrScanner from "../components/QrScanner";
@@ -28,12 +28,13 @@ export default function Home() {
   const [showStudentPassword, setShowStudentPassword] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [announcementSlides, setAnnouncementSlides] = useState<any[]>([]);
+  const [homeContent, setHomeContent] = useState<any>(null);
   
   const [activeNav, setActiveNav] = useState('Home');
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const navItems = [
+  const defaultNavItems = [
     { id: 'Home', name: 'Home', link: '#' },
     { id: 'WEBSITE', name: 'WEBSITE', link: 'https://www.agaramdhines.lk/' },
     { id: 'COURSES', name: 'COURSES', link: 'https://www.agaramdhines.lk/courses/' },
@@ -42,6 +43,10 @@ export default function Home() {
     { id: 'YOUTUBE', name: 'YOUTUBE', link: 'https://www.youtube.com/@agaramdhines' },
     { id: 'Login', name: 'Login', link: '#login' },
   ];
+
+  const navItems = homeContent?.navItems && homeContent.navItems.length > 0 
+    ? homeContent.navItems 
+    : defaultNavItems;
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [forgotPasswordModal, setForgotPasswordModal] = useState<{isOpen: boolean, type: 'student' | 'staff', username: string, submitted: boolean}>({
     isOpen: false,
@@ -71,7 +76,10 @@ export default function Home() {
     }
   ];
 
-  const slides = announcementSlides.length > 0 ? announcementSlides : defaultSlides;
+  const activeHomeSlides = (homeContent?.slides || []).filter((s: any) => s.isActive !== false);
+  const slides = activeHomeSlides.length > 0 
+    ? [...activeHomeSlides, ...announcementSlides] 
+    : announcementSlides.length > 0 ? announcementSlides : defaultSlides;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -106,6 +114,10 @@ export default function Home() {
 
     getAdminSettings().then(data => {
       if (data) setSettings(data);
+    });
+
+    getHomePageContent().then(data => {
+      if (data) setHomeContent(data);
     });
 
     getAnnouncements().then(data => {
@@ -388,6 +400,11 @@ export default function Home() {
       <CursorTrail />
       {/* Header */}
       <header className="fixed top-0 w-full bg-white/90 backdrop-blur-md shadow-sm z-50 border-b border-gray-100">
+        {homeContent?.showNoticeBanner && homeContent?.noticeBanner && (
+          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white text-xs sm:text-sm font-bold py-2 px-4 text-center flex items-center justify-center gap-2 shadow-inner">
+            <span>{homeContent.noticeBanner}</span>
+          </div>
+        )}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo(0,0)}>
             {settings?.profileImage ? (
@@ -403,7 +420,7 @@ export default function Home() {
           </div>
           
           <nav className="hidden md:flex items-center gap-2 bg-[#1e1e24] px-4 py-2 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative">
-            {navItems.map((item) => {
+            {navItems.map((item: any) => {
               const isActive = activeNav === item.id;
               return (
                 <a
@@ -463,7 +480,7 @@ export default function Home() {
               exit={{ opacity: 0, y: -10 }}
               className="md:hidden absolute top-24 left-0 w-full bg-[#1e1e24] shadow-2xl py-4 flex flex-col z-40 border-t border-gray-800"
             >
-              {navItems.map((item) => (
+              {navItems.map((item: any) => (
                 <a
                   key={item.id}
                   href={item.link}
@@ -485,7 +502,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-700 font-semibold text-sm mb-8 border border-blue-100">
             <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-            New Version 2.0 Released
+            {homeContent?.heroTagText || "New Version 2.0 Released"}
           </div>
           <motion.h1 
             initial={{ opacity: 0, y: 30 }}
@@ -493,27 +510,115 @@ export default function Home() {
             transition={{ duration: 0.8, ease: "easeOut" }}
             className="text-3xl md:text-5xl font-extrabold tracking-tight mb-10 leading-tight animate-wave-text pb-2 uppercase"
           >
-            WELCOME TO {settings?.instituteName || "AGARAM DHINES ONLINE ACADEMY"}
+            {homeContent?.heroTitle || `WELCOME TO ${settings?.instituteName || "AGARAM DHINES ONLINE ACADEMY"}`}
           </motion.h1>
           
+          {/* Notice Board Section (புதிய அறிவிப்புகள்) */}
+          {(homeContent?.notices || []).length > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="mb-12 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-indigo-500/10 backdrop-blur-md p-6 sm:p-8 rounded-3xl border border-amber-500/20 shadow-xl text-left"
+            >
+              <div className="flex items-center justify-between border-b border-amber-500/20 pb-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-bold shadow-md shadow-amber-200">
+                    <Megaphone size={22} className="animate-bounce" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
+                      {homeContent?.noticeBoardTitle || "புதிய அறிவிப்புகள் / Notice Board"}
+                    </h2>
+                    <p className="text-xs sm:text-sm text-gray-600 font-medium">வகுப்புகள் மற்றும் முக்கிய செய்திகள் குறித்த உடனுக்குடனான தகவல்கள்</p>
+                  </div>
+                </div>
+
+                <span className="hidden sm:inline-flex px-3 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-full border border-amber-300">
+                  {homeContent.notices.length} Announcements
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[...homeContent.notices]
+                  .sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0))
+                  .map((notice: any) => (
+                    <div 
+                      key={notice.id}
+                      className={`p-5 rounded-2xl border transition-all hover:shadow-md flex flex-col justify-between ${
+                        notice.isPinned 
+                          ? 'bg-white/90 border-amber-400 shadow-amber-100/50 border-l-4 border-l-amber-500' 
+                          : 'bg-white/80 border-gray-200 hover:border-blue-300'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            {notice.isPinned && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-md shadow-sm">
+                                <Pin size={10} className="fill-white" /> PINNED
+                              </span>
+                            )}
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
+                              notice.type?.includes('Important') ? 'bg-rose-100 text-rose-700' :
+                              notice.type === 'Event' ? 'bg-indigo-100 text-indigo-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {notice.type || 'Notice'}
+                            </span>
+                          </div>
+
+                          <span className="text-xs text-gray-400 font-medium flex items-center gap-1">
+                            <Calendar size={12} /> {notice.date}
+                          </span>
+                        </div>
+
+                        <h3 className="font-bold text-gray-900 text-base mb-2 leading-snug">
+                          {notice.title}
+                        </h3>
+
+                        {notice.content && (
+                          <p className="text-xs sm:text-sm text-gray-600 leading-relaxed font-normal">
+                            {notice.content}
+                          </p>
+                        )}
+                      </div>
+
+                      {notice.link && (
+                        <a 
+                          href={notice.link} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="mt-4 pt-3 border-t border-gray-100 text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 transition-colors group"
+                        >
+                          <span>விபரங்களை அறிய இங்கு கிளிக் செய்யவும்</span>
+                          <ExternalLink size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                        </a>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </motion.div>
+          )}
+
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 flex-wrap">
             <button 
-              onClick={() => window.open("https://www.agaramdhines.lk/courses/", "_blank")}
+              onClick={() => window.open(homeContent?.button1Url || "https://www.agaramdhines.lk/courses/", "_blank")}
               className="w-full sm:w-auto bg-gradient-to-r from-pink-500 to-rose-500 text-white px-8 py-4 rounded-full font-bold text-lg hover:from-pink-600 hover:to-rose-600 transition-all shadow-lg shadow-pink-200 hover:-translate-y-1 flex items-center justify-center gap-2"
             >
-              <BookOpen size={20} /> வகுப்புகள் பற்றி அறிந்து கொள்ள
+              <BookOpen size={20} /> {homeContent?.button1Text || "வகுப்புகள் பற்றி அறிந்து கொள்ள"}
             </button>
             <button 
-              onClick={() => window.open("https://www.agaramdhines.lk", "_blank")}
+              onClick={() => window.open(homeContent?.button2Url || "https://www.agaramdhines.lk", "_blank")}
               className="w-full sm:w-auto bg-blue-600 text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 hover:-translate-y-1 flex items-center justify-center gap-2"
             >
-              <Globe size={20} /> Visit agaramdhines.lk
+              <Globe size={20} /> {homeContent?.button2Text || "Visit agaramdhines.lk"}
             </button>
             <button 
               onClick={() => document.getElementById('login')?.scrollIntoView({ behavior: 'smooth' })}
               className="w-full sm:w-auto bg-white text-gray-800 border-2 border-gray-200 px-8 py-4 rounded-full font-bold text-lg hover:border-blue-200 hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
             >
-              <LogIn size={20} className="text-blue-600" /> Login Portal
+              <LogIn size={20} className="text-blue-600" /> {homeContent?.button3Text || "Login Portal"}
             </button>
           </div>
           
@@ -930,16 +1035,16 @@ export default function Home() {
               <span className="text-2xl font-extrabold tracking-tight text-white">{settings?.instituteName || "Agaram Dhines Academy"}</span>
             </div>
             <p className="text-gray-400 mb-6">
-              The ultimate education management ERP with all advance features to run your institution smoothly.
+              {homeContent?.footerDescription || "The ultimate education management ERP with all advance features to run your institution smoothly."}
             </p>
             <div className="flex gap-4">
-              <a href="#" className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-blue-600 transition-colors">
+              <a href={homeContent?.facebookUrl || "#"} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-blue-600 transition-colors">
                 <Facebook size={18} />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-blue-400 transition-colors">
+              <a href={homeContent?.twitterUrl || "#"} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-blue-400 transition-colors">
                 <Twitter size={18} />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-pink-600 transition-colors">
+              <a href={homeContent?.instagramUrl || "#"} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-pink-600 transition-colors">
                 <Instagram size={18} />
               </a>
             </div>
@@ -973,14 +1078,20 @@ export default function Home() {
           <div>
             <h4 className="text-lg font-bold mb-6">Download App</h4>
             <div className="space-y-4">
-              <button className="w-full bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl p-3 flex items-center gap-3 transition-colors text-left">
+              <button 
+                onClick={() => window.open(homeContent?.playStoreUrl || "https://play.google.com", "_blank")}
+                className="w-full bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl p-3 flex items-center gap-3 transition-colors text-left"
+              >
                 <PlayCircle size={28} className="text-gray-300" />
                 <div>
                   <div className="text-xs text-gray-400">Get it on</div>
                   <div className="font-bold">Google Play</div>
                 </div>
               </button>
-              <button className="w-full bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl p-3 flex items-center gap-3 transition-colors text-left">
+              <button 
+                onClick={() => window.open(homeContent?.appStoreUrl || "https://apple.com", "_blank")}
+                className="w-full bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl p-3 flex items-center gap-3 transition-colors text-left"
+              >
                 <Apple size={28} className="text-gray-300" />
                 <div>
                   <div className="text-xs text-gray-400">Download on the</div>
