@@ -59,6 +59,50 @@ export default function FeeDefaulters() {
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [currentWhatsAppIndex, setCurrentWhatsAppIndex] = useState(0);
   const [sentStatus, setSentStatus] = useState<Record<string, boolean>>({});
+  const [customMonthsText, setCustomMonthsText] = useState<string>("");
+
+  const getFormattedMonths = (student: any) => {
+    if (customMonthsText) return customMonthsText;
+
+    const monthSources = (student?.unpaidMonths?.length > 0) ? student.unpaidMonths : selectedMonths;
+    if (!monthSources || monthSources.length === 0) {
+      return new Date().toLocaleString('en-US', { month: 'long' });
+    }
+    
+    const monthNames = monthSources.map((m: string) => {
+      if (/^\d{4}-\d{2}$/.test(m)) {
+        const [year, month] = m.split('-').map(Number);
+        const date = new Date(year, month - 1, 1);
+        return date.toLocaleString('en-US', { month: 'long' });
+      }
+      return m;
+    });
+
+    if (monthNames.length === 1) {
+      return monthNames[0];
+    } else if (monthNames.length === 2) {
+      return `${monthNames[0]} & ${monthNames[1]}`;
+    } else {
+      return monthNames.slice(0, -1).join(", ") + " & " + monthNames[monthNames.length - 1];
+    }
+  };
+
+  const getWhatsAppMessageText = (student: any) => {
+    const monthsStr = getFormattedMonths(student);
+    return `📢 ”${monthsStr}” மாத வகுப்புக் கட்டணம் – அறிவிப்பு
+
+அன்புள்ள பெற்றோர்களே,
+
+உங்கள் மகன் / மகளின் ”${monthsStr}” மாத வகுப்புக் கட்டணம் இன்னும் செலுத்தப்படவில்லை.
+
+தயவுசெய்து குறித்த திகதிக்குள் கட்டணத்தை செலுத்தவும்.
+
+⚠️ 20 - 30 ஆம் திகதிக்குப் பின்னரும் கட்டணம் செலுத்தப்படாவிட்டால், எந்த முன்னறிவிப்பும் இன்றி WhatsApp குழுமம் மற்றும் Website அணுகலில் இருந்து நீக்கப்படுவீர்கள்.
+
+தாமதம் ஏற்படின், தயவுசெய்து முன்கூட்டியே அறிவிக்கவும்.
+
+நன்றி. 🙏`;
+  };
 
   useEffect(() => {
     Promise.all([
@@ -219,6 +263,7 @@ export default function FeeDefaulters() {
       return;
     }
     
+    setCustomMonthsText("");
     setCurrentWhatsAppIndex(0);
     setShowWhatsAppModal(true);
   };
@@ -229,16 +274,7 @@ export default function FeeDefaulters() {
   const handleSendWhatsApp = () => {
     if (!currentStudent) return;
 
-    let monthsText = "";
-    if (currentStudent.unpaidMonths?.length > 0 && currentStudent.unpaidSubjects?.length > 0) {
-      monthsText = `your fees for ${currentStudent.unpaidMonths.length} months and ${currentStudent.unpaidSubjects.length} subjects are pending`;
-    } else if (currentStudent.unpaidMonths?.length > 0) {
-      monthsText = `your fees for ${currentStudent.unpaidMonths.length} months are pending`;
-    } else {
-      monthsText = `your subject fees for ${currentStudent.unpaidSubjects.map((s:any) => s.name).join(', ')} are pending`;
-    }
-
-    const message = `Dear ${currentStudent.name}, ${monthsText}. Total due amount is LKR ${currentStudent.dueAmount}. Please pay as soon as possible. Thank you.`;
+    const message = getWhatsAppMessageText(currentStudent);
     const encodedMessage = encodeURIComponent(message);
     
     // Use phone number if available, otherwise just open WhatsApp Web to select contact
@@ -597,16 +633,26 @@ export default function FeeDefaulters() {
                     </div>
                   </div>
 
+                  <div className="mb-4">
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                      மாதம் (Month Name / Selection):
+                    </label>
+                    <input
+                      type="text"
+                      value={customMonthsText !== "" ? customMonthsText : getFormattedMonths(currentStudent)}
+                      onChange={(e) => setCustomMonthsText(e.target.value)}
+                      placeholder="e.g. June & July அல்லது June"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-emerald-800 bg-emerald-50/50 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      * இந்த பெட்டியில் மாற்றும் போது மேலுள்ள அறிவிப்பில் மாதம் தானாக மாறும்.
+                    </p>
+                  </div>
+
                   <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-2">Message Preview</p>
-                    <div className="bg-white border border-gray-200 rounded-md p-3 text-sm text-gray-700 whitespace-pre-wrap">
-                      Dear {currentStudent.name}, {
-                        (currentStudent.unpaidMonths?.length > 0 && currentStudent.unpaidSubjects?.length > 0)
-                        ? `your fees for ${currentStudent.unpaidMonths.length} months and ${currentStudent.unpaidSubjects.length} subjects are pending`
-                        : currentStudent.unpaidMonths?.length > 0
-                          ? `your fees for ${currentStudent.unpaidMonths.length} months are pending`
-                          : `your subject fees for ${currentStudent.unpaidSubjects.map((s:any) => s.name).join(', ')} are pending`
-                      }. Total due amount is LKR {currentStudent.dueAmount}. Please pay as soon as possible. Thank you.
+                    <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-2">Message Preview (அனுப்பப்படும் செய்தி)</p>
+                    <div className="bg-white border border-gray-200 rounded-lg p-4 text-xs sm:text-sm text-gray-800 whitespace-pre-wrap leading-relaxed font-medium shadow-inner max-h-60 overflow-y-auto">
+                      {getWhatsAppMessageText(currentStudent)}
                     </div>
                   </div>
                 </div>
