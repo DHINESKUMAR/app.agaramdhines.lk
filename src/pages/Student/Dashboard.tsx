@@ -591,27 +591,48 @@ export default function StudentDashboard() {
           return true;
         }
 
-        const studentHasGeneralOrAll = studentSubjectsArray.some(stSub =>
-          !stSub ||
-          stSub.includes("all") ||
-          stSub.includes("general") ||
-          stSub.includes("அனைத்து") ||
-          stSub.includes("public") ||
-          (normalizedStudentGrade && stSub.includes(normalizedStudentGrade)) ||
-          (studentGrade && stSub.includes(studentGrade))
-        );
+        const studentHasGeneralOrAll = studentSubjectsArray.some(stSub => {
+          if (!stSub) return true;
+          const clean = stSub.trim().toLowerCase();
+          return (
+            clean === "all" ||
+            clean === "general" ||
+            clean === "public" ||
+            clean === "அனைத்து" ||
+            clean === "அனைத்து பாடங்களும்" ||
+            clean === "all subjects" ||
+            clean === "uncategorized" ||
+            clean === studentGrade ||
+            clean === `grade ${normalizedStudentGrade}` ||
+            clean === `தரம் ${normalizedStudentGrade}`
+          );
+        });
 
         if (studentHasGeneralOrAll) {
           return true;
         }
 
-        const hasMatch = nonGeneralSubjects.some(itemSub =>
-          studentSubjectsArray.some(stSub =>
-            stSub === itemSub ||
-            stSub.includes(itemSub) ||
-            itemSub.includes(stSub)
-          )
-        );
+        const normalizeSub = (str: string) => {
+          return str.toLowerCase()
+            .replace(/\(தரம்\s*\d+\)/gi, '')
+            .replace(/\(grade\s*\d+\)/gi, '')
+            .replace(/தரம்\s*\d+/gi, '')
+            .replace(/grade\s*\d+/gi, '')
+            .replace(/[\(\)\-\:\,\.]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        };
+
+        const hasMatch = nonGeneralSubjects.some(itemSub => {
+          const normItem = normalizeSub(itemSub);
+          return studentSubjectsArray.some(stSub => {
+            const normSt = normalizeSub(stSub);
+            if (!normSt || !normItem) return false;
+            if (stSub.trim().toLowerCase() === itemSub.trim().toLowerCase()) return true;
+            if (normSt === normItem) return true;
+            return false;
+          });
+        });
 
         return hasMatch;
       };
