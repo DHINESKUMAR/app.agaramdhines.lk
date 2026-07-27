@@ -148,8 +148,12 @@ const getData = async (key: string, defaultValue: any) => {
           console.warn(`Error fetching singleton ${key}:`, singErr);
         }
 
-        // 2. For array collections, check collection query as well
+        // 2. For array collections, check singleton first, then collection query
         if (Array.isArray(defaultValue)) {
+          if (Array.isArray(singData)) {
+            return singData;
+          }
+
           try {
             const querySnapshot = await getDocs(collection(db, key));
             if (!querySnapshot.empty) {
@@ -159,20 +163,14 @@ const getData = async (key: string, defaultValue: any) => {
             console.warn(`Error fetching collection ${key}:`, colErr);
           }
 
-          const cand1 = Array.isArray(singData) ? singData : [];
-          const cand2 = Array.isArray(colData) ? colData : [];
-          const cand3 = Array.isArray(localData) ? localData : [];
-
-          if (cand1.length > 0 || cand2.length > 0 || cand3.length > 0) {
-            const itemMap = new Map<string, any>();
-            [...cand3, ...cand2, ...cand1].forEach((item: any) => {
-              if (item) {
-                const k = String(item.id || item.username || item.rollNo || item.studentCode || Math.random()).trim().toLowerCase();
-                itemMap.set(k, { ...(itemMap.get(k) || {}), ...item });
-              }
-            });
-            return Array.from(itemMap.values());
+          if (Array.isArray(colData) && colData.length > 0) {
+            return colData;
           }
+
+          if (Array.isArray(localData)) {
+            return localData;
+          }
+
           return [];
         }
 
@@ -249,6 +247,26 @@ const saveData = async (key: string, data: any) => {
       // 2. If data is an array, sync items to individual collection docs in Firestore
       if (Array.isArray(cleanData)) {
         try {
+          const newDocIds = new Set(cleanData.map((item: any, idx: number) => String(item.id || item.code || item.rollNo || `item_${idx}`)));
+
+          // Delete stale documents from collection if any exist
+          try {
+            const existingSnapshot = await getDocs(collection(db, key));
+            const deleteBatch = writeBatch(db);
+            let hasDeletions = false;
+            existingSnapshot.docs.forEach((docSnap) => {
+              if (!newDocIds.has(docSnap.id)) {
+                deleteBatch.delete(docSnap.ref);
+                hasDeletions = true;
+              }
+            });
+            if (hasDeletions) {
+              await deleteBatch.commit();
+            }
+          } catch (delErr) {
+            console.warn(`Collection stale cleanup for ${key} failed:`, delErr);
+          }
+
           const CHUNK_SIZE = 400;
           for (let i = 0; i < cleanData.length; i += CHUNK_SIZE) {
             const chunk = cleanData.slice(i, i + CHUNK_SIZE);
