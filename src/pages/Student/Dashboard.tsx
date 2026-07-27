@@ -525,9 +525,26 @@ export default function StudentDashboard() {
       const studentGrade = freshStudentData.grade?.toString().trim().toLowerCase() || "";
       const normalizedStudentGrade = studentGrade.replace(/[^0-9]/g, '');
 
-      const studentSubjectsArray = (freshStudentData.subjects || freshStudentData.enrolledClasses || [])
+      let rawStudentSubs: any[] = [];
+      if (Array.isArray(freshStudentData.subjects) && freshStudentData.subjects.length > 0) {
+        rawStudentSubs = freshStudentData.subjects;
+      } else if (Array.isArray(freshStudentData.enrolledClasses) && freshStudentData.enrolledClasses.length > 0) {
+        rawStudentSubs = freshStudentData.enrolledClasses;
+      }
+
+      const studentGradeStr = (freshStudentData.grade || "").toString().trim().toLowerCase();
+      const studentGradeNum = studentGradeStr.replace(/[^0-9]/g, '');
+
+      const studentSubjectsArray = rawStudentSubs
         .map((s: any) => s?.toString().trim().toLowerCase())
-        .filter(Boolean);
+        .filter((s: string) => {
+          if (!s) return false;
+          // Filter out grade names if they were mistakenly stored as subjects in enrolledClasses
+          const cleanS = s.replace(/[^0-9]/g, '');
+          if (s === studentGradeStr) return false;
+          if (studentGradeNum && cleanS === studentGradeNum && (s.startsWith("தரம்") || s.startsWith("grade"))) return false;
+          return true;
+        });
 
       const filterItemByGradeAndSubject = (c: any) => {
         if (!c) return false;
@@ -584,15 +601,19 @@ export default function StudentDashboard() {
         }
 
         const nonGeneralSubjects = itemSubjectsList.filter(
-          s => s && s !== "general" && s !== "e-learning" && s !== "uncategorized" && s !== "public" && s !== "all"
+          s => s && s !== "general" && s !== "e-learning" && s !== "uncategorized" && s !== "public" && s !== "all" && s !== "அனைத்து" && s !== "அனைத்து பாடங்களும்"
         );
 
-        if (nonGeneralSubjects.length === 0 || studentSubjectsArray.length === 0) {
+        if (nonGeneralSubjects.length === 0) {
           return true;
         }
 
-        const studentHasGeneralOrAll = studentSubjectsArray.some(stSub => {
-          if (!stSub) return true;
+        if (studentSubjectsArray.length === 0) {
+          return true;
+        }
+
+        const studentHasWildcard = studentSubjectsArray.some(stSub => {
+          if (!stSub) return false;
           const clean = stSub.trim().toLowerCase();
           return (
             clean === "all" ||
@@ -601,14 +622,11 @@ export default function StudentDashboard() {
             clean === "அனைத்து" ||
             clean === "அனைத்து பாடங்களும்" ||
             clean === "all subjects" ||
-            clean === "uncategorized" ||
-            clean === studentGrade ||
-            clean === `grade ${normalizedStudentGrade}` ||
-            clean === `தரம் ${normalizedStudentGrade}`
+            clean === "uncategorized"
           );
         });
 
-        if (studentHasGeneralOrAll) {
+        if (studentHasWildcard) {
           return true;
         }
 
