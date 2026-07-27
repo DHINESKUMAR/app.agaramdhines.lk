@@ -3,7 +3,7 @@ import { getStudents, saveStudents, getClasses, getAdminSettings } from "../../l
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { secondaryAuth } from "../../lib/firebase";
 import * as XLSX from "xlsx";
-import { Printer, X, QrCode, Download, FileText, Copy, Check, User } from "lucide-react";
+import { Printer, X, QrCode, Download, FileText, Copy, Check, User, LayoutGrid, List, Search, Eye, Edit, Trash2, ArrowLeft, BookOpen, ShieldCheck, ShieldAlert } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
@@ -22,6 +22,7 @@ export default function Students() {
   const [docModal, setDocModal] = useState<{ type: "idcard" | "certificate" | "details" | null, student: any }>({ type: null, student: null });
   const [adminSettings, setAdminSettings] = useState<any>(null);
   const [copiedIdAdmin, setCopiedIdAdmin] = useState(false);
+  const [studentViewMode, setStudentViewMode] = useState<'grid' | 'table'>('grid');
   const printRef = useRef<HTMLDivElement>(null);
 
   const handleDownloadDoc = async (format: 'png' | 'pdf') => {
@@ -1076,58 +1077,45 @@ export default function Students() {
 
     return (
       <>
-        <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-          <div className="flex items-center">
-            <button
-              onClick={() => setView("menu")}
-              className="mr-4 text-gray-600 hover:text-gray-900"
-            >
-              ← Back
-            </button>
-            <h2 className="text-xl font-bold text-gray-800">View Students</h2>
-          </div>
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <div className="flex gap-2">
+        <div className="w-full max-w-full mx-auto bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sm:p-6 lg:p-8">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4 border-b border-slate-100 pb-5">
+            <div className="flex items-center gap-3">
               <button
-                onClick={handleExportCSV}
-                className="bg-emerald-600 text-white rounded-md px-3 py-1.5 text-sm whitespace-nowrap hover:bg-emerald-700 flex items-center gap-2"
-                title="Export CSV (Excel)"
+                onClick={() => setView("menu")}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors flex items-center justify-center"
+                title="Back to Menu"
               >
-                <Download size={16} /> CSV
+                <ArrowLeft size={18} />
               </button>
-              <button
-                onClick={handleExportPDF}
-                className="bg-red-600 text-white rounded-md px-3 py-1.5 text-sm whitespace-nowrap hover:bg-red-700 flex items-center gap-2"
-                title="Export PDF"
-              >
-                <FileText size={16} /> PDF
-              </button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl sm:text-2xl font-bold text-slate-900">View Students</h2>
+                  <span className="bg-indigo-50 text-indigo-700 font-bold text-xs px-2.5 py-1 rounded-full border border-indigo-100">
+                    {filteredStudents.length} Students
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">Manage and search all registered student profiles</p>
+              </div>
             </div>
-            <button
-               onClick={() => {
-                 setBulkSubjectData(prev => ({...prev, grade: filterClass}));
-                 setShowBulkSubjectModal(true);
-               }}
-               className="bg-indigo-600 text-white rounded-md px-3 py-1.5 text-sm whitespace-nowrap hover:bg-indigo-700"
-            >
-               Bulk Assign Subjects
-            </button>
-            <div className="flex items-center space-x-2 w-full sm:w-auto">
-              <input
-                type="text"
-                placeholder="Search by Name or Roll No..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white w-full sm:w-64"
-              />
-            </div>
-            <div className="flex items-center space-x-2 w-full sm:w-auto">
-              <span className="text-sm text-gray-600 whitespace-nowrap">Filter by Class:</span>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Search Box */}
+              <div className="relative flex-1 sm:w-64 min-w-[200px]">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search Name, Roll No, Phone..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-full transition-all"
+                />
+              </div>
+
+              {/* Class Filter */}
               <select
                 value={filterClass}
                 onChange={(e) => setFilterClass(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white w-full sm:w-auto"
+                className="py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 font-medium"
               >
                 <option value="">All Classes ({students.length})</option>
                 <option value="unassigned" className="text-red-600 font-bold">Unassigned ({unassignedCount})</option>
@@ -1142,81 +1130,287 @@ export default function Students() {
                   </option>
                 ))}
               </select>
+
+              {/* Bulk Assign Subjects Button */}
+              <button
+                onClick={() => {
+                  setBulkSubjectData(prev => ({...prev, grade: filterClass}));
+                  setShowBulkSubjectModal(true);
+                }}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-3.5 py-2 text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 shadow-sm shadow-indigo-100"
+              >
+                <BookOpen size={16} /> Bulk Assign Subjects
+              </button>
+
+              {/* Export Buttons */}
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+                <button
+                  onClick={handleExportCSV}
+                  className="bg-white hover:bg-emerald-50 text-emerald-700 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all flex items-center gap-1 shadow-2xs"
+                  title="Export CSV (Excel)"
+                >
+                  <Download size={14} /> CSV
+                </button>
+                <button
+                  onClick={handleExportPDF}
+                  className="bg-white hover:bg-red-50 text-red-700 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all flex items-center gap-1 shadow-2xs"
+                  title="Export PDF"
+                >
+                  <FileText size={14} /> PDF
+                </button>
+              </div>
+
+              {/* View Mode Switcher (Grid vs Table) */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <button
+                  onClick={() => setStudentViewMode('grid')}
+                  className={`p-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                    studentViewMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                  title="Grid View"
+                >
+                  <LayoutGrid size={16} />
+                </button>
+                <button
+                  onClick={() => setStudentViewMode('table')}
+                  className={`p-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                    studentViewMode === 'table' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                  title="Table View"
+                >
+                  <List size={16} />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
         
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-5 p-5">
           {filteredStudents.length === 0 ? (
-            <div className="text-center text-gray-500 py-8 col-span-full">No students found.</div>
-          ) : (
-            filteredStudents.map(student => (
-              <div key={student.id} className="border border-gray-200 rounded-lg text-center p-4 bg-white shadow-sm flex flex-col items-center">
-                <div className="w-[60px] h-[60px] rounded-full bg-gray-100 flex items-center justify-center mb-2 overflow-hidden">
-                  {student.image ? (
-                    <img src={student.image} alt={student.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-gray-500 font-bold text-xl">{student.name.charAt(0)}</span>
-                  )}
-                </div>
-                <p className="text-gray-500 text-sm mt-2">Roll No: {student.rollNo || "N/A"}</p>
-                <p className="font-bold uppercase text-sm mt-1">{student.name}</p>
-                <p className="text-indigo-600 text-xs font-semibold mt-1 px-2 py-0.5 bg-indigo-50 rounded-full inline-block">{student.grade}</p>
-                
-                {student.subjects && student.subjects.length > 0 && (
-                  <div className="mt-2 text-xs text-gray-500 bg-gray-50 p-1.5 rounded border border-gray-100 w-full" title={student.subjects.join(", ")}>
-                    <span className="font-semibold">{student.subjects.length}</span> Subjects Assigned
+            <div className="text-center py-16 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+              <User size={40} className="mx-auto text-slate-300 mb-2" />
+              <p className="text-slate-600 font-semibold">No students found matching your filter or search.</p>
+              <p className="text-slate-400 text-xs mt-1">Try clearing the search box or changing class filter.</p>
+            </div>
+          ) : studentViewMode === 'grid' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-5">
+              {filteredStudents.map(student => (
+                <div 
+                  key={student.id} 
+                  className="bg-white border border-slate-200 hover:border-indigo-300 hover:shadow-xl transition-all duration-200 rounded-2xl p-4 flex flex-col items-center justify-between text-center relative group"
+                >
+                  <div className="w-full flex flex-col items-center">
+                    {/* Student Image / Avatar */}
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-100 to-purple-100 border-2 border-indigo-200 shadow-sm flex items-center justify-center mb-3 overflow-hidden group-hover:scale-105 transition-transform">
+                      {student.image ? (
+                        <img src={student.image} alt={student.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-indigo-700 font-extrabold text-2xl uppercase">{student.name ? student.name.charAt(0) : 'S'}</span>
+                      )}
+                    </div>
+
+                    {/* Student Name */}
+                    <h3 className="font-bold text-slate-900 text-sm leading-tight uppercase line-clamp-2 title-case px-1" title={student.name}>
+                      {student.name}
+                    </h3>
+
+                    {/* Roll No */}
+                    <p className="text-xs font-semibold text-slate-500 mt-1 bg-slate-100 px-2 py-0.5 rounded-md">
+                      Roll No: {student.rollNo || "N/A"}
+                    </p>
+
+                    {/* Class / Grade Badge */}
+                    <span className="mt-2 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-0.5 rounded-full inline-block">
+                      {student.grade || "No Grade"}
+                    </span>
+
+                    {/* Username or Phone info if present */}
+                    {(student.phone || student.username) && (
+                      <p className="text-[11px] text-slate-400 mt-1 truncate max-w-full">
+                        {student.phone ? `📱 ${student.phone}` : `@${student.username}`}
+                      </p>
+                    )}
+
+                    {/* Subjects Badge */}
+                    {student.subjects && student.subjects.length > 0 && (
+                      <div className="mt-2 text-[11px] font-medium text-slate-600 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 w-full truncate" title={student.subjects.join(", ")}>
+                        📚 <span className="font-bold text-indigo-600">{student.subjects.length}</span> Subjects
+                      </div>
+                    )}
                   </div>
-                )}
-                
-                <div className="mt-2 w-full">
-                  <button 
-                    onClick={() => handleToggleZoomBlock(student)}
-                    className={`text-xs px-2 py-1 rounded w-full font-medium transition-colors ${student.zoomBlocked ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
-                    title={student.zoomBlocked ? "Unblock Zoom" : "Block Zoom (Unpaid)"}
-                  >
-                    {student.zoomBlocked ? "Zoom Blocked" : "Zoom Active"}
-                  </button>
+
+                  <div className="w-full mt-3 pt-3 border-t border-slate-100">
+                    {/* Zoom Status Toggle */}
+                    <button 
+                      onClick={() => handleToggleZoomBlock(student)}
+                      className={`text-[11px] font-bold px-2 py-1 rounded-lg w-full transition-all flex items-center justify-center gap-1 ${
+                        student.zoomBlocked 
+                          ? 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100' 
+                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                      }`}
+                      title={student.zoomBlocked ? "Click to Unblock Zoom" : "Click to Block Zoom (Unpaid Fee)"}
+                    >
+                      {student.zoomBlocked ? (
+                        <>
+                          <ShieldAlert size={12} /> Zoom Blocked
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck size={12} /> Zoom Active
+                        </>
+                      )}
+                    </button>
+
+                    {/* Action Toolbar */}
+                    <div className="flex items-center justify-center gap-1 mt-2.5 pt-2 border-t border-slate-100">
+                      <button 
+                        onClick={() => setDocModal({ type: "idcard", student })}
+                        className="px-2 py-1 hover:bg-indigo-50 text-indigo-700 rounded-md text-[11px] font-bold border border-indigo-100 transition-colors" 
+                        title="Generate ID Card"
+                      >
+                        ID
+                      </button>
+                      <button 
+                        onClick={() => setDocModal({ type: "certificate", student })}
+                        className="px-2 py-1 hover:bg-purple-50 text-purple-700 rounded-md text-[11px] font-bold border border-purple-100 transition-colors" 
+                        title="Generate Certificate"
+                      >
+                        Cert
+                      </button>
+                      <button 
+                        onClick={() => setDocModal({ type: "details", student })}
+                        className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-md transition-colors" 
+                        title="View Full Profile"
+                      >
+                        <Eye size={15} />
+                      </button>
+                      <button 
+                        onClick={() => handleEditClick(student)}
+                        className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-md transition-colors" 
+                        title="Edit Student"
+                      >
+                        <Edit size={15} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(student.id)}
+                        className="p-1.5 hover:bg-red-50 text-red-600 rounded-md transition-colors" 
+                        title="Delete Student"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-center gap-2 mt-3 w-full border-t pt-3 flex-wrap">
-                  <button 
-                    onClick={() => setDocModal({ type: "idcard", student })}
-                    className="p-1 hover:bg-gray-100 rounded text-indigo-600 text-xs font-medium" 
-                    title="ID Card"
-                  >
-                    ID
-                  </button>
-                  <button 
-                    onClick={() => setDocModal({ type: "certificate", student })}
-                    className="p-1 hover:bg-gray-100 rounded text-purple-600 text-xs font-medium" 
-                    title="Certificate"
-                  >
-                    Cert
-                  </button>
-                  <button 
-                    onClick={() => setDocModal({ type: "details", student })}
-                    className="p-1 hover:bg-gray-100 rounded text-gray-600" 
-                    title="View"
-                  >
-                    👁️
-                  </button>
-                  <button 
-                    onClick={() => handleEditClick(student)}
-                    className="p-1 hover:bg-gray-100 rounded text-blue-600" 
-                    title="Edit"
-                  >
-                    ✏️
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(student.id)}
-                    className="p-1 hover:bg-gray-100 rounded text-red-600" 
-                    title="Delete"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-            ))
+              ))}
+            </div>
+          ) : (
+            /* Table View Mode */
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-700 border-b border-slate-200 text-xs font-bold uppercase tracking-wider">
+                    <th className="px-4 py-3">Student</th>
+                    <th className="px-4 py-3">Roll No</th>
+                    <th className="px-4 py-3">Class / Grade</th>
+                    <th className="px-4 py-3">Phone / Username</th>
+                    <th className="px-4 py-3">Subjects</th>
+                    <th className="px-4 py-3">Zoom Status</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {filteredStudents.map((student) => (
+                    <tr key={student.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold flex items-center justify-center overflow-hidden shrink-0">
+                            {student.image ? (
+                              <img src={student.image} alt={student.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <span>{student.name ? student.name.charAt(0).toUpperCase() : 'S'}</span>
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-bold text-slate-900 uppercase text-xs sm:text-sm">{student.name}</div>
+                            <div className="text-[11px] text-slate-400 font-mono">{student.id}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-700 text-xs whitespace-nowrap">
+                        {student.rollNo || "-"}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
+                          {student.grade || "Unassigned"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 text-xs whitespace-nowrap">
+                        {student.phone || `@${student.username}` || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600 max-w-[200px] truncate" title={student.subjects?.join(", ")}>
+                        {student.subjects && student.subjects.length > 0 ? (
+                          <span className="bg-slate-100 text-slate-700 font-medium px-2 py-0.5 rounded border border-slate-200">
+                            {student.subjects.length} subjects
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">None</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <button 
+                          onClick={() => handleToggleZoomBlock(student)}
+                          className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 ${
+                            student.zoomBlocked 
+                              ? 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100' 
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                          }`}
+                        >
+                          {student.zoomBlocked ? <ShieldAlert size={12} /> : <ShieldCheck size={12} />}
+                          {student.zoomBlocked ? "Blocked" : "Active"}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1">
+                          <button 
+                            onClick={() => setDocModal({ type: "idcard", student })}
+                            className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-xs font-bold border border-indigo-100 transition-colors"
+                            title="ID Card"
+                          >
+                            ID
+                          </button>
+                          <button 
+                            onClick={() => setDocModal({ type: "certificate", student })}
+                            className="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded text-xs font-bold border border-purple-100 transition-colors"
+                            title="Certificate"
+                          >
+                            Cert
+                          </button>
+                          <button 
+                            onClick={() => setDocModal({ type: "details", student })}
+                            className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-lg transition-colors"
+                            title="View Profile"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button 
+                            onClick={() => handleEditClick(student)}
+                            className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-lg transition-colors"
+                            title="Edit"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(student.id)}
+                            className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
@@ -1542,7 +1736,6 @@ export default function Students() {
             </div>
           </div>
         )}
-      </div>
 
       {showBulkSubjectModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
