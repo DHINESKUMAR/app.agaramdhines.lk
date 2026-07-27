@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Youtube as YoutubeIcon, PlayCircle, Trash2, ArrowLeft, Plus, ExternalLink, BookOpen, Folder, Globe, FileText, LayoutGrid, List, Share2, ChevronDown } from 'lucide-react';
-import { getYoutubeLinks, saveYoutubeLinks, getWebPosts, saveWebPosts, addNotification, getSubjects, saveSubjects } from '../../lib/db';
+import { getYoutubeLinks, saveYoutubeLinks, getWebPosts, saveWebPosts, addNotification, getSubjects, saveSubjects, getClasses, saveClasses } from '../../lib/db';
 
 export default function Youtube() {
   const [activeTab, setActiveTab] = useState<'youtube' | 'webposts'>('youtube');
   const [links, setLinks] = useState<any[]>([]);
   const [webPosts, setWebPosts] = useState<any[]>([]);
   const [dbSubjects, setDbSubjects] = useState<any[]>([]);
+  const [dbClasses, setDbClasses] = useState<any[]>([]);
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
   const [selectedAdminSubject, setSelectedAdminSubject] = useState<string>("All");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -121,10 +122,11 @@ export default function Youtube() {
   });
 
   useEffect(() => {
-    Promise.all([getYoutubeLinks(), getWebPosts(), getSubjects()]).then(([linksData, postsData, subjectsData]) => {
+    Promise.all([getYoutubeLinks(), getWebPosts(), getSubjects(), getClasses()]).then(([linksData, postsData, subjectsData, classesData]) => {
       setLinks(Array.isArray(linksData) ? linksData : []);
       setWebPosts(Array.isArray(postsData) ? postsData : []);
       setDbSubjects(Array.isArray(subjectsData) ? subjectsData : []);
+      setDbClasses(Array.isArray(classesData) ? classesData : []);
     });
   }, []);
 
@@ -135,15 +137,77 @@ export default function Youtube() {
     "தரம் 11", "தரம் 12", "தரம் 13"
   ];
 
+  const isSameGrade = (g1: any, g2: any) => {
+    if (!g1 || !g2) return false;
+    const s1 = String(g1).trim().toLowerCase();
+    const s2 = String(g2).trim().toLowerCase();
+    if (s1 === s2) return true;
+    const num1 = s1.replace(/[^0-9]/g, '');
+    const num2 = s2.replace(/[^0-9]/g, '');
+    return !!(num1 && num2 && num1 === num2);
+  };
+
   // Get unique subjects relative to active tab
   const tabSubjects = Array.from(new Set(
     (activeTab === 'youtube' ? links : webPosts).map(item => item.subject)
   )).filter((s): s is string => !!s).sort();
 
-  // Get unique subjects registered in the database (Manage Subjects)
-  const subjectOptions = Array.from(new Set(
-    dbSubjects.map(s => s && s.name).filter((s): s is string => !!s)
-  )).sort();
+  // Get unique subjects registered specifically for the selected grade
+  const getGradeSubjectOptions = () => {
+    if (!selectedGrade || selectedGrade === "Public (All Students)") {
+      return Array.from(new Set(
+        dbSubjects.map(s => s && s.name).filter((s): s is string => !!s)
+      )).sort();
+    }
+
+    // 1. Get subjects from registered classes matching selectedGrade
+    const classSubjects = dbClasses
+      .filter(c => c && isSameGrade(c.name, selectedGrade))
+      .flatMap(c => Array.isArray(c.subjects) ? c.subjects : (c.subject ? [c.subject] : []))
+      .map(s => String(s).trim())
+      .filter(Boolean);
+
+    // 2. Get subjects already present in youtubeLinks for selectedGrade
+    const linkSubjects = links
+      .filter(l => l && isSameGrade(l.grade, selectedGrade))
+      .flatMap(l => {
+        const arr = [];
+        if (l.subject) arr.push(String(l.subject).trim());
+        if (Array.isArray(l.subjects)) l.subjects.forEach((s: any) => arr.push(String(s).trim()));
+        return arr;
+      })
+      .filter(Boolean);
+
+    // 3. Get subjects already present in webPosts for selectedGrade
+    const postSubjects = webPosts
+      .filter(p => p && isSameGrade(p.grade, selectedGrade))
+      .flatMap(p => {
+        const arr = [];
+        if (p.subject) arr.push(String(p.subject).trim());
+        if (Array.isArray(p.subjects)) p.subjects.forEach((s: any) => arr.push(String(s).trim()));
+        return arr;
+      })
+      .filter(Boolean);
+
+    // 4. Get subjects from dbSubjects that explicitly match selectedGrade
+    const dbGradeSubjects = dbSubjects
+      .filter(s => s && (isSameGrade(s.grade, selectedGrade) || (Array.isArray(s.grades) && s.grades.some((g: any) => isSameGrade(g, selectedGrade)))))
+      .map(s => String(s.name).trim())
+      .filter(Boolean);
+
+    const combined = Array.from(new Set([...classSubjects, ...linkSubjects, ...postSubjects, ...dbGradeSubjects])).sort();
+
+    if (combined.length > 0) {
+      return combined;
+    }
+
+    // Fallback if no specific subjects found for this grade
+    return Array.from(new Set(
+      dbSubjects.map(s => s && s.name).filter((s): s is string => !!s)
+    )).sort();
+  };
+
+  const subjectOptions = getGradeSubjectOptions();
 
   // Get unique folders relative to active tab and selected grade
   const tabFolders = Array.from(new Set(
