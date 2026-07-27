@@ -542,15 +542,14 @@ export const getSubjects = async () => {
   const map = new Map<string, any>();
 
   for (const item of listArray) {
-    if (!item) continue;
-    const nameKey = String(item.name || "").trim().toLowerCase();
+    if (!item || !item.name) continue;
+    const nameKey = String(item.name).replace(/\s+/g, ' ').trim().toLowerCase();
     if (!nameKey) continue;
 
     if (!map.has(nameKey)) {
       map.set(nameKey, item);
     } else {
       const existing = map.get(nameKey);
-      // Keep item with fee or category if existing lacks it
       if ((!existing.fee || existing.fee === "0") && item.fee && item.fee !== "0") {
         map.set(nameKey, item);
       }
@@ -558,13 +557,17 @@ export const getSubjects = async () => {
   }
 
   const defaults = [
-    { id: "seed_tamil_quiz", name: "தமிழ் வினா விடை", category: "Sub", fee: "500" },
-    { id: "seed_30day_tamil", name: "30 நாள் தமிழ் பாடநெறி (தரம் 11)", category: "Sub", fee: "6000" },
-    { id: "seed_tamil_main", name: "tamil", category: "Main", fee: "0" }
+    { id: "sub_1", name: "தமிழ் வினா விடை", category: "Sub", fee: "500" },
+    { id: "sub_2", name: "30 நாள் தமிழ் பாடநெறி (தரம் 11)", category: "Sub", fee: "6000" },
+    { id: "sub_3", name: "தமிழ் மொழி இலக்கியம்", category: "Main", fee: "0" },
+    { id: "sub_4", name: "தமிழ் மொழி வளம் (GAME)", category: "Main", fee: "0" },
+    { id: "sub_5", name: "30 நாள் (15 - 30) வது நாள்", category: "Sub", fee: "3000" },
+    { id: "sub_6", name: "தமிழ் இலக்கிய நயம்", category: "Sub", fee: "4000" },
+    { id: "sub_7", name: "TAMIL", category: "Main", fee: "0" }
   ];
 
   defaults.forEach(def => {
-    const nameKey = def.name.trim().toLowerCase();
+    const nameKey = def.name.replace(/\s+/g, ' ').trim().toLowerCase();
     if (!map.has(nameKey)) {
       map.set(nameKey, def);
     }
@@ -633,58 +636,52 @@ export const initDB = async () => {
   await getStudents();
   await getStaffs();
   
-  const zoomLinks = await getZoomLinks();
-  if (!zoomLinks || zoomLinks.length === 0) {
-    await saveZoomLinks([
-      { id: "1", grade: "தரம் 10", title: "Tamil Live Class", link: "https://zoom.us/j/123456789", datetime: "2026-03-05T10:00" }
-    ]);
-  }
-  
-  const courses = await getCourses();
-  if (!courses || courses.length === 0) {
-    await saveCourses([
-      { id: "1", grade: "தரம் 10", title: "Science", link: "https://www.agaramdhines.lk/courses/g10-science" }
-    ]);
-  }
-  
-  const youtubeLinks = await getYoutubeLinks();
-  if (!youtubeLinks || youtubeLinks.length === 0) {
-    await saveYoutubeLinks([
-      { id: "1", title: "Tamil Chapter 1", link: "https://www.youtube.com/watch?v=12345", folder: "General", grade: "தரம் 10", date: new Date().toISOString() },
-      { id: "new-folder-y-sample", title: "Welcome to New Folder Y", link: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", folder: "New Folder Y", grade: "தரம் 10", date: new Date().toISOString() }
-    ]);
-  } else if (!youtubeLinks.find((l: any) => l.folder === "New Folder Y")) {
-    // If it exists but doesn't have the new folder, add it
-    const updatedLinks = [
-      ...youtubeLinks,
-      { id: `new-folder-y-${Date.now()}`, title: "Folder Initialization", link: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", folder: "New Folder Y", grade: "தரம் 10", date: new Date().toISOString() }
-    ];
-    await saveYoutubeLinks(updatedLinks);
-  }
-  
-  const schedule = await getSchedule();
-  if (!schedule || schedule.length === 0) {
-    await saveSchedule([
-      { id: "1", grade: "தரம் 10", day: "Monday", time: "08:00 AM", subject: "Tamil", link: "https://zoom.us/j/123" }
-    ]);
-  }
-  
-  const classLinks = await getClassLinks();
-  if (!classLinks || Object.keys(classLinks).length === 0) {
-    await saveClassLinks({});
-  }
-  
-  const homework = await getHomework();
-  if (!homework || homework.length === 0) {
-    await saveHomework([
-      {
-        id: "1",
-        grade: "தரம் 10",
-        title: "Tamil Chapter 1 Exercise",
-        description: "Complete all exercises at the end of Chapter 1.",
-        date: new Date().toISOString().split('T')[0]
-      }
-    ]);
+  if (!isFirebaseConfigured) {
+    const zoomLinks = await getZoomLinks();
+    if (!zoomLinks || zoomLinks.length === 0) {
+      await saveZoomLinks([
+        { id: "1", grade: "தரம் 10", title: "Tamil Live Class", link: "https://zoom.us/j/123456789", datetime: "2026-03-05T10:00" }
+      ]);
+    }
+    
+    const courses = await getCourses();
+    if (!courses || courses.length === 0) {
+      await saveCourses([
+        { id: "1", grade: "தரம் 10", title: "Science", link: "https://www.agaramdhines.lk/courses/g10-science" }
+      ]);
+    }
+    
+    const youtubeLinks = await getYoutubeLinks();
+    if (!youtubeLinks || youtubeLinks.length === 0) {
+      await saveYoutubeLinks([
+        { id: "1", title: "Tamil Chapter 1", link: "https://www.youtube.com/watch?v=12345", folder: "General", grade: "தரம் 10", date: new Date().toISOString() }
+      ]);
+    }
+    
+    const schedule = await getSchedule();
+    if (!schedule || schedule.length === 0) {
+      await saveSchedule([
+        { id: "1", grade: "தரம் 10", day: "Monday", time: "08:00 AM", subject: "Tamil", link: "https://zoom.us/j/123" }
+      ]);
+    }
+    
+    const classLinks = await getClassLinks();
+    if (!classLinks || Object.keys(classLinks).length === 0) {
+      await saveClassLinks({});
+    }
+    
+    const homework = await getHomework();
+    if (!homework || homework.length === 0) {
+      await saveHomework([
+        {
+          id: "1",
+          grade: "தரம் 10",
+          title: "Tamil Chapter 1 Exercise",
+          description: "Complete all exercises at the end of Chapter 1.",
+          date: new Date().toISOString().split('T')[0]
+        }
+      ]);
+    }
   }
 };
 

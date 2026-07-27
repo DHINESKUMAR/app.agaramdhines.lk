@@ -8,11 +8,33 @@ export default function Youtube() {
   const [webPosts, setWebPosts] = useState<any[]>([]);
   const [dbSubjects, setDbSubjects] = useState<any[]>([]);
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
+  const [selectedAdminSubject, setSelectedAdminSubject] = useState<string>("All");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<any>(null);
   const [viewType, setViewType] = useState<'grid' | 'list'>('grid');
   const [isNewFolder, setIsNewFolder] = useState(false);
   const [isNewSubject, setIsNewSubject] = useState(false);
+
+  const getSubjectColorClasses = (subjectName: string) => {
+    const themes: Record<string, { bg: string, text: string, border: string, dot: string, badge: string }> = {
+      indigo: { bg: 'bg-indigo-50 hover:bg-indigo-100/80', text: 'text-indigo-900', border: 'border-indigo-200', dot: 'bg-indigo-500', badge: 'bg-indigo-100 text-indigo-700' },
+      blue: { bg: 'bg-blue-50 hover:bg-blue-100/80', text: 'text-blue-900', border: 'border-blue-200', dot: 'bg-blue-500', badge: 'bg-blue-100 text-blue-700' },
+      emerald: { bg: 'bg-emerald-50 hover:bg-emerald-100/80', text: 'text-emerald-900', border: 'border-emerald-200', dot: 'bg-emerald-500', badge: 'bg-emerald-100 text-emerald-700' },
+      rose: { bg: 'bg-rose-50 hover:bg-rose-100/80', text: 'text-rose-900', border: 'border-rose-200', dot: 'bg-rose-500', badge: 'bg-rose-100 text-rose-700' },
+      amber: { bg: 'bg-amber-50 hover:bg-amber-100/80', text: 'text-amber-900', border: 'border-amber-200', dot: 'bg-amber-500', badge: 'bg-amber-100 text-amber-700' },
+      violet: { bg: 'bg-violet-50 hover:bg-violet-100/80', text: 'text-violet-900', border: 'border-violet-200', dot: 'bg-violet-500', badge: 'bg-violet-100 text-violet-700' },
+      cyan: { bg: 'bg-cyan-50 hover:bg-cyan-100/80', text: 'text-cyan-900', border: 'border-cyan-200', dot: 'bg-cyan-500', badge: 'bg-cyan-100 text-cyan-700' },
+      pink: { bg: 'bg-pink-50 hover:bg-pink-100/80', text: 'text-pink-900', border: 'border-pink-200', dot: 'bg-pink-500', badge: 'bg-pink-100 text-pink-700' },
+    };
+    
+    const colors = ["indigo", "blue", "emerald", "rose", "amber", "violet", "cyan", "pink"];
+    let hash = 0;
+    for (let i = 0; i < (subjectName || "").length; i++) {
+      hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const color = colors[Math.abs(hash) % colors.length];
+    return themes[color];
+  };
 
   const startEdit = (item: any) => {
     setEditingId(item.id);
@@ -343,8 +365,17 @@ export default function Youtube() {
 
   if (selectedGrade) {
     const isGradePublic = selectedGrade === "Public (All Students)";
-    const gradeLinks = links.filter(l => l && (isGradePublic ? l.isPublic : l.grade === selectedGrade));
-    const gradePosts = webPosts.filter(p => p && (isGradePublic ? p.isPublic : p.grade === selectedGrade));
+    const rawGradeLinks = links.filter(l => l && (isGradePublic ? l.isPublic : l.grade === selectedGrade));
+    const rawGradePosts = webPosts.filter(p => p && (isGradePublic ? p.isPublic : p.grade === selectedGrade));
+
+    // Filter by selectedAdminSubject
+    const gradeLinks = selectedAdminSubject === "All"
+      ? rawGradeLinks
+      : rawGradeLinks.filter(l => l.subject === selectedAdminSubject || (Array.isArray(l.subjects) && l.subjects.includes(selectedAdminSubject)));
+
+    const gradePosts = selectedAdminSubject === "All"
+      ? rawGradePosts
+      : rawGradePosts.filter(p => p.subject === selectedAdminSubject || (Array.isArray(p.subjects) && p.subjects.includes(selectedAdminSubject)));
     
     // Group links by folder
     const folders: { [key: string]: any[] } = {};
@@ -390,6 +421,67 @@ export default function Youtube() {
           </div>
         </div>
 
+        {/* All Subjects Cards Display Bar (Purple Box, Orange Box, Blue Box Cards) */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BookOpen size={18} className="text-indigo-600" />
+              <h3 className="font-bold text-slate-800 text-sm">Registered Subjects for {selectedGrade}</h3>
+            </div>
+            {selectedAdminSubject !== "All" && (
+              <button 
+                onClick={() => setSelectedAdminSubject("All")}
+                className="text-xs font-bold text-indigo-600 hover:underline bg-indigo-50 px-2.5 py-1 rounded-lg"
+              >
+                Clear Filter (Show All)
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <button
+              onClick={() => setSelectedAdminSubject("All")}
+              className={`p-3 rounded-2xl border-2 transition-all flex flex-col justify-between text-left ${
+                selectedAdminSubject === "All"
+                  ? "border-indigo-600 bg-indigo-600 text-white shadow-md font-bold"
+                  : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300"
+              }`}
+            >
+              <span className="text-xs font-black">All Subjects</span>
+              <span className="text-[10px] opacity-80 mt-1 font-medium">
+                {rawGradeLinks.length} Videos · {rawGradePosts.length} Posts
+              </span>
+            </button>
+
+            {(subjectOptions as string[]).map(subName => {
+              const subTheme = getSubjectColorClasses(subName);
+              const isSelected = selectedAdminSubject === subName;
+              const subVideos = rawGradeLinks.filter(l => l.subject === subName || (Array.isArray(l.subjects) && l.subjects.includes(subName)));
+              const subPosts = rawGradePosts.filter(p => p.subject === subName || (Array.isArray(p.subjects) && p.subjects.includes(subName)));
+
+              return (
+                <button
+                  key={subName}
+                  onClick={() => setSelectedAdminSubject(subName)}
+                  className={`p-3 rounded-2xl border-2 transition-all flex flex-col justify-between text-left ${
+                    isSelected
+                      ? "border-indigo-600 bg-indigo-600 text-white shadow-md font-bold ring-2 ring-indigo-500/20"
+                      : `${subTheme.bg} ${subTheme.border} ${subTheme.text}`
+                  }`}
+                >
+                  <div>
+                    <span className={`inline-block w-2 h-2 rounded-full ${isSelected ? "bg-white" : subTheme.dot} mr-1.5`}></span>
+                    <span className="text-xs font-black line-clamp-2">{subName}</span>
+                  </div>
+                  <span className={`text-[10px] mt-2 font-bold ${isSelected ? "text-indigo-100" : "opacity-75"}`}>
+                    {subVideos.length} Videos · {subPosts.length} Posts
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Add Form */}
           <div className="lg:col-span-1">
@@ -401,7 +493,7 @@ export default function Youtube() {
               <form onSubmit={handleAddEntry} className="space-y-4">
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <label className="block text-xs font-bold text-gray-400 uppercase">Subject</label>
+                    <label className="block text-xs font-bold text-gray-400 uppercase">Subject Checkboxes</label>
                     <button 
                       type="button"
                       onClick={() => setIsNewSubject(!isNewSubject)}
@@ -410,31 +502,37 @@ export default function Youtube() {
                       {isNewSubject ? "Select Existing" : "+ Add New Subject"}
                     </button>
                   </div>
-                  {(selectedGrade === "தரம் 11" || selectedGrade === "தரம் 10") && !isNewSubject ? (
+                  {!isNewSubject ? (
                     <div className="space-y-2 border border-slate-200 rounded-xl p-3 bg-slate-50 max-h-60 overflow-y-auto">
-                      {subjectOptions.map(sub => {
+                      {(subjectOptions as string[]).map(sub => {
                         const isChecked = formData.subjects ? formData.subjects.includes(sub) : (formData.subject === sub);
+                        const subTheme = getSubjectColorClasses(sub);
                         return (
-                          <label key={sub} className="flex items-center space-x-2.5 text-xs font-bold text-slate-700 cursor-pointer select-none py-1 hover:text-blue-600 transition-colors">
-                            <input 
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={(e) => {
-                                let updatedSubjects = formData.subjects ? [...formData.subjects] : (formData.subject ? [formData.subject] : []);
-                                if (e.target.checked) {
-                                  if (!updatedSubjects.includes(sub)) updatedSubjects.push(sub);
-                                } else {
-                                  updatedSubjects = updatedSubjects.filter(item => item !== sub);
-                                }
-                                setFormData(prev => ({
-                                  ...prev,
-                                  subjects: updatedSubjects,
-                                  subject: updatedSubjects[0] || ''
-                                }));
-                              }}
-                              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                            />
-                            <span>{sub}</span>
+                          <label key={sub} className="flex items-center justify-between text-xs font-bold text-slate-700 cursor-pointer select-none py-1 px-1 rounded-lg hover:bg-slate-100 transition-colors">
+                            <div className="flex items-center space-x-2">
+                              <input 
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  let updatedSubjects = formData.subjects ? [...formData.subjects] : (formData.subject ? [formData.subject] : []);
+                                  if (e.target.checked) {
+                                    if (!updatedSubjects.includes(sub)) updatedSubjects.push(sub);
+                                  } else {
+                                    updatedSubjects = updatedSubjects.filter(item => item !== sub);
+                                  }
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    subjects: updatedSubjects,
+                                    subject: updatedSubjects[0] || ''
+                                  }));
+                                }}
+                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                              />
+                              <span>{sub}</span>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${subTheme.badge}`}>
+                              Box
+                            </span>
                           </label>
                         );
                       })}

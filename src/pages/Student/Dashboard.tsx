@@ -36,7 +36,9 @@ import {
   Megaphone,
   ChevronDown,
   ChevronRight,
-  Copy
+  Copy,
+  CheckCircle2,
+  Folder
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
@@ -86,6 +88,7 @@ export default function StudentDashboard() {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [selectedMaterialSubject, setSelectedMaterialSubject] = useState<string | null>(null);
+  const [selectedELearningSubject, setSelectedELearningSubject] = useState<string>("All");
 
   // Helper to get a color based on subject name
   const getSubjectColorClasses = (subjectName: string) => {
@@ -606,12 +609,7 @@ export default function StudentDashboard() {
           studentSubjectsArray.some(stSub =>
             stSub === itemSub ||
             stSub.includes(itemSub) ||
-            itemSub.includes(stSub) ||
-            (stSub.includes("tamil") && itemSub.includes("tamil")) ||
-            (stSub.includes("தமிழ்") && itemSub.includes("தமிழ்")) ||
-            (stSub.includes("science") && itemSub.includes("science")) ||
-            (stSub.includes("கணிதம்") && itemSub.includes("கணிதம்")) ||
-            (stSub.includes("math") && itemSub.includes("math"))
+            itemSub.includes(stSub)
           )
         );
 
@@ -1635,14 +1633,27 @@ export default function StudentDashboard() {
               <p className="text-slate-500 mb-8 ml-13">View your class details and schedules.</p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Find all unique subjects offered for this grade from classes */}
-                {(classes.find(c => c.name === studentData.grade)?.subjects || []).map((subjectName: any) => {
-                  const isEnrolled = enrolledClasses.includes(subjectName);
-                  const staffForSubject = staffs.filter((s: any) => s.assignedClasses?.some((c: any) => c.grade === studentData.grade && c.subject === subjectName));
-                  const subjectTimetable = timetable.filter(t => t.subject === subjectName);
-                  const subjectZoomLinks = zoomLinks.filter(z => z.subject === subjectName);
+                {/* Find all unique subjects offered for this grade from classes, or from enrolledClasses */}
+                {Array.from(new Set([
+                  ...(classes.find(c => 
+                    c.name === studentData.grade || 
+                    c.name?.replace(/[^0-9]/g, '') === studentData.grade?.toString().replace(/[^0-9]/g, '')
+                  )?.subjects || []),
+                  ...(studentData.subjects || []),
+                  ...(enrolledClasses || [])
+                ])).map((subjectName: any) => {
+                  const subLower = String(subjectName || "").trim().toLowerCase();
+                  const isEnrolled = enrolledClasses.length === 0 || enrolledClasses.some((e: any) => {
+                    const eLower = String(e || "").trim().toLowerCase();
+                    return eLower === subLower || eLower.includes(subLower) || subLower.includes(eLower);
+                  });
+                  const staffForSubject = staffs.filter((s: any) => s.assignedClasses?.some((c: any) => 
+                    (c.grade === studentData.grade || c.grade?.toString().replace(/[^0-9]/g, '') === studentData.grade?.toString().replace(/[^0-9]/g, '')) && 
+                    String(c.subject || "").trim().toLowerCase() === subLower
+                  ));
+                  const subjectTimetable = timetable.filter(t => String(t.subject || "").trim().toLowerCase() === subLower);
+                  const subjectZoomLinks = zoomLinks.filter(z => String(z.subject || "").trim().toLowerCase() === subLower);
                   
-                  // Only display subjects the student is enrolled in, or if enrolledClasses is completely empty (fallback for older students)
                   if (!isEnrolled && enrolledClasses.length > 0) return null;
 
                   return (
@@ -2317,61 +2328,186 @@ export default function StudentDashboard() {
           </div>
         )}
 
-        {activeTab === "youtube" && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
-              <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-                <div>
-                  <h2 className="text-2xl font-bold mb-1 text-slate-800 flex items-center">
-                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mr-3">
-                      <Youtube size={20} />
-                    </div>
-                    E-Learning Center
-                  </h2>
-                  <p className="text-slate-500 ml-13">Everything you need to learn at home.</p>
+        {activeTab === "youtube" && (() => {
+          const activeELearningSubjects = Array.from(
+            new Set([
+              ...(studentData?.subjects || studentData?.enrolledClasses || []).map((s: any) => s?.toString().trim()),
+              ...youtubeLinks.map((l: any) => l.subject?.toString().trim()),
+              ...youtubeLinks.flatMap((l: any) => Array.isArray(l.subjects) ? l.subjects.map((s: any) => s?.toString().trim()) : []),
+              ...webPosts.map((p: any) => p.subject?.toString().trim()),
+              ...webPosts.flatMap((p: any) => Array.isArray(p.subjects) ? p.subjects.map((s: any) => s?.toString().trim()) : []),
+            ])
+          ).filter((s): s is string => !!s && s.toLowerCase() !== 'general' && s.toLowerCase() !== 'uncategorized' && s.toLowerCase() !== 'e-learning' && s.toLowerCase() !== 'public' && s.toLowerCase() !== 'all').sort();
+
+          const filteredYoutubeLinks = selectedELearningSubject === "All"
+            ? youtubeLinks
+            : youtubeLinks.filter((link: any) => {
+                const sub = link.subject?.toString().trim();
+                const subs = Array.isArray(link.subjects) ? link.subjects.map((s: any) => s?.toString().trim()) : [];
+                return sub === selectedELearningSubject || subs.includes(selectedELearningSubject);
+              });
+
+          const filteredWebPosts = selectedELearningSubject === "All"
+            ? webPosts
+            : webPosts.filter((post: any) => {
+                const sub = post.subject?.toString().trim();
+                const subs = Array.isArray(post.subjects) ? post.subjects.map((s: any) => s?.toString().trim()) : [];
+                return sub === selectedELearningSubject || subs.includes(selectedELearningSubject);
+              });
+
+          return (
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+                <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold mb-1 text-slate-800 flex items-center">
+                      <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mr-3">
+                        <Youtube size={20} />
+                      </div>
+                      E-Learning Center
+                    </h2>
+                    <p className="text-slate-500 ml-13">Everything you need to learn at home.</p>
+                  </div>
+                  <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
+                    <button 
+                      onClick={() => setELearningType("videos")}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${eLearningType === 'videos' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      Videos
+                    </button>
+                    <button 
+                      onClick={() => setELearningType("posts")}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${eLearningType === 'posts' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      Web Posts
+                    </button>
+                  </div>
                 </div>
-                <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
-                  <button 
-                    onClick={() => setELearningType("videos")}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${eLearningType === 'videos' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                  >
-                    Videos
-                  </button>
-                  <button 
-                    onClick={() => setELearningType("posts")}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${eLearningType === 'posts' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                  >
-                    Web Posts
-                  </button>
-                </div>
-              </div>
-              
-              {eLearningType === 'videos' ? (
-                <div className="space-y-4 pt-4">
-                  {youtubeLinks.length === 0 ? (
-                    <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
-                      <Youtube className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-                      <p>No videos found.</p>
+
+                {/* Subject Selection Header / Filter Bar */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 mb-8 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <BookOpen size={18} className="text-indigo-600" />
+                        <h3 className="font-bold text-slate-800 text-base">Select Subject / பாடத்தைத் தெரிவுசெய்க</h3>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Displaying recordings, materials, and posts for your selected subject.
+                      </p>
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {Object.entries(youtubeLinks.reduce((acc: any, link: any) => {
-                        const folder = link.folder || "இன்னும் வகைப்படுத்தப்படவில்லை (Uncategorized)";
-                        if (!acc[folder]) acc[folder] = [];
-                        acc[folder].push(link);
-                        return acc;
-                      }, {})).sort(([folderA, linksA]: any, [folderB, linksB]: any) => {
-                        return getMaxElementTime(linksB) - getMaxElementTime(linksA);
-                      }).map(([folder, folderLinks]: [string, any]) => {
-                        const isExpanded = expandedFolders[folder];
-                        const folderColor = getFolderColor(folder);
+                    
+                    {/* Subject Dropdown Selector */}
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedELearningSubject}
+                        onChange={(e) => {
+                          setSelectedELearningSubject(e.target.value);
+                          if (e.target.value !== "All") {
+                            setSelectedMaterialSubject(e.target.value);
+                          }
+                        }}
+                        className="bg-white border-2 border-indigo-200 text-slate-800 text-sm font-bold rounded-xl px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm cursor-pointer"
+                      >
+                        <option value="All">அனைத்துப் பாடங்களும் (All Subjects)</option>
+                        {activeELearningSubjects.map((sub: string) => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Subject Boxes / Cards */}
+                  {activeELearningSubjects.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 pt-1">
+                      <button
+                        onClick={() => setSelectedELearningSubject("All")}
+                        className={`p-3 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
+                          selectedELearningSubject === "All"
+                            ? "border-indigo-600 bg-indigo-600 text-white shadow-md font-bold"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300"
+                        }`}
+                      >
+                        <span className="text-xs font-black">All Subjects</span>
+                        <span className="text-[10px] opacity-80 mt-2 font-medium">அனைத்தும்</span>
+                      </button>
+                      
+                      {activeELearningSubjects.map((sub: string) => {
+                        const color = getSubjectColorClasses(sub);
+                        const isSelected = selectedELearningSubject === sub;
                         return (
-                          <div key={folder} className={`bg-white border ${folderColor.border} rounded-3xl overflow-hidden shadow-sm transition-all hover:shadow-md`}>
-                            {/* Accordion Header - Image 1 style */}
-                            <button 
-                              onClick={() => setExpandedFolders(prev => ({ ...prev, [folder]: !prev[folder] }))}
-                              className={`w-full flex items-center justify-between p-6 sm:p-7 hover:bg-white/50 transition-colors group ${folderColor.bg}`}
-                            >
+                          <button
+                            key={sub}
+                            onClick={() => {
+                              setSelectedELearningSubject(sub);
+                              setSelectedMaterialSubject(sub);
+                            }}
+                            className={`p-3 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
+                              isSelected
+                                ? "border-indigo-600 bg-indigo-600 text-white shadow-md font-bold ring-2 ring-indigo-500/30"
+                                : `${color.bg} ${color.border} ${color.text} hover:shadow-sm`
+                            }`}
+                          >
+                            <div>
+                              <span className={`inline-block w-2 h-2 rounded-full ${isSelected ? "bg-white" : color.dot} mr-1.5`}></span>
+                              <span className="text-xs font-black leading-snug line-clamp-2">{sub}</span>
+                            </div>
+                            <span className={`text-[10px] mt-2 font-semibold ${isSelected ? "text-indigo-100" : "opacity-75"}`}>
+                              {isSelected ? "Selected ✓" : "Click to view"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Active Selection Badge */}
+                  <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded-xl border border-indigo-100 text-xs font-bold text-slate-700 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">Selected Subject:</span>
+                      <span className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-lg font-black flex items-center gap-1.5">
+                        <CheckCircle2 size={14} className="text-indigo-600" />
+                        {selectedELearningSubject === "All" ? "அனைத்துப் பாடங்களும் (All Subjects)" : selectedELearningSubject}
+                      </span>
+                    </div>
+                    {selectedELearningSubject !== "All" && (
+                      <button 
+                        onClick={() => setSelectedELearningSubject("All")}
+                        className="text-xs font-bold text-indigo-600 hover:underline"
+                      >
+                        Show All
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                {eLearningType === 'videos' ? (
+                  <div className="space-y-4 pt-2">
+                    {filteredYoutubeLinks.length === 0 ? (
+                      <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
+                        <Youtube className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+                        <p className="font-bold">No videos found for this subject selection.</p>
+                        <p className="text-xs text-slate-400 mt-1">Try selecting a different subject or "All Subjects".</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {Object.entries(filteredYoutubeLinks.reduce((acc: any, link: any) => {
+                          const folder = link.folder || "இன்னும் வகைப்படுத்தப்படவில்லை (Uncategorized)";
+                          if (!acc[folder]) acc[folder] = [];
+                          acc[folder].push(link);
+                          return acc;
+                        }, {})).sort(([folderA, linksA]: any, [folderB, linksB]: any) => {
+                          return getMaxElementTime(linksB) - getMaxElementTime(linksA);
+                        }).map(([folder, folderLinks]: [string, any]) => {
+                          const isExpanded = expandedFolders[folder] !== false; // Default expanded for clear visibility
+                          const folderColor = getFolderColor(folder);
+                          return (
+                            <div key={folder} className={`bg-white border ${folderColor.border} rounded-3xl overflow-hidden shadow-sm transition-all hover:shadow-md`}>
+                              {/* Accordion Header */}
+                              <button 
+                                onClick={() => setExpandedFolders(prev => ({ ...prev, [folder]: !isExpanded }))}
+                                className={`w-full flex items-center justify-between p-6 sm:p-7 hover:bg-white/50 transition-colors group ${folderColor.bg}`}
+                              >
                               <div className="flex items-center gap-5 text-left">
                                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 ${isExpanded ? `${folderColor.icon} text-white shadow-lg ${folderColor.shadow} rotate-6` : `${folderColor.bg} ${folderColor.text} group-hover:scale-110 border ${folderColor.border}`}`}>
                                   <Megaphone size={28} className={isExpanded ? "animate-pulse" : ""} />
@@ -2513,14 +2649,15 @@ export default function StudentDashboard() {
                 </div>
               ) : (
                 <div className="space-y-12">
-                  {webPosts.length === 0 ? (
+                  {filteredWebPosts.length === 0 ? (
                     <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
                       <FileText className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-                      <p>No web posts found.</p>
+                      <p className="font-bold">No web posts found for this subject selection.</p>
+                      <p className="text-xs text-slate-400 mt-1">Try selecting a different subject or "All Subjects".</p>
                     </div>
                   ) : (
                     <div className="space-y-12">
-                      {Object.entries(webPosts.reduce((acc: any, post: any) => {
+                      {Object.entries(filteredWebPosts.reduce((acc: any, post: any) => {
                         const folder = post.folder || "General Materials";
                         if (!acc[folder]) acc[folder] = [];
                         acc[folder].push(post);
@@ -2632,7 +2769,8 @@ export default function StudentDashboard() {
 
             </div>
           </div>
-        )}
+        );
+      })()}
         {activeTab === "homework" && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
