@@ -24,9 +24,15 @@ export default function SubjectsGrades() {
     e.preventDefault();
     if (!newSubject.trim()) return;
     
+    const cleanNewName = newSubject.trim().toLowerCase();
+    if (subjects.some(s => String(s?.name || "").trim().toLowerCase() === cleanNewName)) {
+      alert("இந்த பாடம் ஏற்கனவே சேர்க்கப்பட்டுள்ளது! / This subject already exists!");
+      return;
+    }
+
     const updated = [...subjects, { 
       id: Date.now().toString(), 
-      name: newSubject,
+      name: newSubject.trim(),
       category: newCategory,
       fee: newFee || "0"
     }];
@@ -47,7 +53,7 @@ export default function SubjectsGrades() {
   const handleUpdateSubject = async () => {
     if (!editingName.trim() || !editingId) return;
     
-    const updated = subjects.map(s => s.id === editingId ? { ...s, name: editingName, fee: editingFee, category: editingCategory } : s);
+    const updated = subjects.map(s => s.id === editingId ? { ...s, name: editingName.trim(), fee: editingFee, category: editingCategory } : s);
     setSubjects(updated);
     await saveSubjects(updated);
     setEditingId(null);
@@ -58,7 +64,8 @@ export default function SubjectsGrades() {
   const handleDeleteSubject = async (id: string, name: string) => {
     if (window.confirm(`Are you sure you want to delete "${name}"?`)) {
       try {
-        const updated = subjects.filter(s => s.id !== id);
+        const cleanName = String(name || "").trim().toLowerCase();
+        const updated = subjects.filter(s => s.id !== id && String(s?.name || "").trim().toLowerCase() !== cleanName);
         setSubjects(updated);
         await saveSubjects(updated);
       } catch (error) {

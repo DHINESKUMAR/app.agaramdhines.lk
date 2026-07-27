@@ -163,17 +163,15 @@ const getData = async (key: string, defaultValue: any) => {
           const cand2 = Array.isArray(colData) ? colData : [];
           const cand3 = Array.isArray(localData) ? localData : [];
 
-          // Compare candidates and pick the one with most data or non-empty
           if (cand1.length > 0 || cand2.length > 0 || cand3.length > 0) {
-            if (cand1.length >= cand2.length && cand1.length >= cand3.length && cand1.length > 0) {
-              return cand1;
-            }
-            if (cand2.length >= cand1.length && cand2.length >= cand3.length && cand2.length > 0) {
-              return cand2;
-            }
-            if (cand3.length > 0) {
-              return cand3;
-            }
+            const itemMap = new Map<string, any>();
+            [...cand3, ...cand2, ...cand1].forEach((item: any) => {
+              if (item) {
+                const k = String(item.id || item.username || item.rollNo || item.studentCode || Math.random()).trim().toLowerCase();
+                itemMap.set(k, { ...(itemMap.get(k) || {}), ...item });
+              }
+            });
+            return Array.from(itemMap.values());
           }
           return [];
         }
@@ -504,23 +502,46 @@ export const saveStaffAttendance = (attendance: any) => saveData('staffAttendanc
 
 export const getSubjects = async () => {
   const list = await getData('subjects', []);
+  const listArray = Array.isArray(list) ? list : [];
+
+  const map = new Map<string, any>();
+
+  for (const item of listArray) {
+    if (!item) continue;
+    const nameKey = String(item.name || "").trim().toLowerCase();
+    if (!nameKey) continue;
+
+    if (!map.has(nameKey)) {
+      map.set(nameKey, item);
+    } else {
+      const existing = map.get(nameKey);
+      // Keep item with fee or category if existing lacks it
+      if ((!existing.fee || existing.fee === "0") && item.fee && item.fee !== "0") {
+        map.set(nameKey, item);
+      }
+    }
+  }
+
   const defaults = [
     { id: "seed_tamil_quiz", name: "தமிழ் வினா விடை", category: "Sub", fee: "500" },
     { id: "seed_30day_tamil", name: "30 நாள் தமிழ் பாடநெறி (தரம் 11)", category: "Sub", fee: "6000" },
     { id: "seed_tamil_main", name: "tamil", category: "Main", fee: "0" }
   ];
-  let changed = false;
-  const listArray = Array.isArray(list) ? list : [];
+
   defaults.forEach(def => {
-    if (!listArray.some((s: any) => s && s.name && s.name.toLowerCase().trim() === def.name.toLowerCase().trim())) {
-      listArray.push(def);
-      changed = true;
+    const nameKey = def.name.trim().toLowerCase();
+    if (!map.has(nameKey)) {
+      map.set(nameKey, def);
     }
   });
-  if (changed) {
-    saveData('subjects', listArray);
+
+  const deduplicated = Array.from(map.values());
+
+  if (deduplicated.length !== listArray.length) {
+    saveData('subjects', deduplicated);
   }
-  return listArray;
+
+  return deduplicated;
 };
 export const saveSubjects = (subjects: any) => saveData('subjects', subjects);
 
