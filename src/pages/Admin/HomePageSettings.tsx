@@ -104,9 +104,11 @@ export default function HomePageSettings() {
   const handleSaveAll = async () => {
     await saveHomePageContent(content);
     await addNotification({
+      grade: "all",
       title: "Home Page Updated",
       message: "The Home page content has been saved successfully.",
-      type: "announcement"
+      type: "announcement",
+      createdAt: new Date().toISOString()
     });
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);

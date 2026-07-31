@@ -16,6 +16,7 @@ export default function Students() {
   const [classes, setClasses] = useState<any[]>([]);
   const [allSubjects, setAllSubjects] = useState<any[]>([]);
   const [filterClass, setFilterClass] = useState<string>("");
+  const [filterSubject, setFilterSubject] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [importing, setImporting] = useState(false);
   const [bulkImportGrade, setBulkImportGrade] = useState("");
@@ -436,6 +437,12 @@ export default function Students() {
       const matchesClass = filterClass === "unassigned" 
         ? (!s.grade || s.grade === "")
         : (filterClass ? s.grade === filterClass : true);
+
+      const studentSubs = (s.subjects || s.enrolledClasses || []).map((sub: any) => sub?.toString().trim().toLowerCase());
+      const matchesSubject = !filterSubject
+        ? true
+        : studentSubs.some((sub: string) => sub === filterSubject.toLowerCase());
+
       const searchLow = searchQuery.toLowerCase().trim();
       const isNumericSearch = /^\d+$/.test(searchLow);
 
@@ -448,7 +455,7 @@ export default function Students() {
           s.username?.toString().toLowerCase().includes(searchLow) ||
           s.phone?.toString().includes(searchLow)
         : true;
-      return matchesClass && matchesSearch;
+      return matchesClass && matchesSubject && matchesSearch;
     });
 
     const dataToExport = filteredStudents.map(s => ({
@@ -482,6 +489,12 @@ export default function Students() {
       const matchesClass = filterClass === "unassigned" 
         ? (!s.grade || s.grade === "")
         : (filterClass ? s.grade === filterClass : true);
+
+      const studentSubs = (s.subjects || s.enrolledClasses || []).map((sub: any) => sub?.toString().trim().toLowerCase());
+      const matchesSubject = !filterSubject
+        ? true
+        : studentSubs.some((sub: string) => sub === filterSubject.toLowerCase());
+
       const searchLow = searchQuery.toLowerCase().trim();
       const isNumericSearch = /^\d+$/.test(searchLow);
 
@@ -494,7 +507,7 @@ export default function Students() {
           s.username?.toString().toLowerCase().includes(searchLow) ||
           s.phone?.toString().includes(searchLow)
         : true;
-      return matchesClass && matchesSearch;
+      return matchesClass && matchesSubject && matchesSearch;
     });
 
     const doc = new jsPDF();
@@ -1047,10 +1060,56 @@ export default function Students() {
   }
 
   if (view === "view") {
+    // Determine students matching class/grade first (for subject count calculations)
+    const targetStudentsForClass = filterClass === "unassigned" 
+      ? students.filter(s => !s.grade || s.grade === "")
+      : (filterClass ? students.filter(s => s.grade === filterClass) : students);
+
+    // Compute list of available subjects for the Subject Filter dropdown
+    const availableSubjectsList = (() => {
+      const subjectsSet = new Set<string>();
+      targetStudentsForClass.forEach(s => {
+        const subs = s.subjects || s.enrolledClasses || [];
+        if (Array.isArray(subs)) {
+          subs.forEach((sub: any) => {
+            const clean = sub?.toString().trim();
+            if (clean) subjectsSet.add(clean);
+          });
+        }
+      });
+
+      classes.forEach(c => {
+        if (!filterClass || c.name === filterClass) {
+          if (Array.isArray(c.subjects)) {
+            c.subjects.forEach((sub: any) => {
+              const clean = sub?.toString().trim();
+              if (clean) subjectsSet.add(clean);
+            });
+          }
+        }
+      });
+
+      if (!filterClass || subjectsSet.size === 0) {
+        allSubjects.forEach(s => {
+          const name = typeof s === 'string' ? s : s?.name;
+          const clean = name?.toString().trim();
+          if (clean) subjectsSet.add(clean);
+        });
+      }
+
+      return Array.from(subjectsSet).sort((a, b) => a.localeCompare(b));
+    })();
+
     const filteredStudents = students.filter(s => {
       const matchesClass = filterClass === "unassigned" 
         ? (!s.grade || s.grade === "")
         : (filterClass ? s.grade === filterClass : true);
+
+      const studentSubs = (s.subjects || s.enrolledClasses || []).map((sub: any) => sub?.toString().trim().toLowerCase());
+      const matchesSubject = !filterSubject
+        ? true
+        : studentSubs.some((sub: string) => sub === filterSubject.toLowerCase());
+
       const searchLow = searchQuery.toLowerCase().trim();
       const isNumericSearch = /^\d+$/.test(searchLow);
 
@@ -1063,7 +1122,7 @@ export default function Students() {
           s.username?.toString().toLowerCase().includes(searchLow) ||
           s.phone?.toString().includes(searchLow)
         : true;
-      return matchesClass && matchesSearch;
+      return matchesClass && matchesSubject && matchesSearch;
     });
 
     const studentCountByClass = students.reduce((acc, s) => {
@@ -1114,7 +1173,10 @@ export default function Students() {
               {/* Class Filter */}
               <select
                 value={filterClass}
-                onChange={(e) => setFilterClass(e.target.value)}
+                onChange={(e) => {
+                  setFilterClass(e.target.value);
+                  setFilterSubject("");
+                }}
                 className="py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 font-medium"
               >
                 <option value="">All Classes ({students.length})</option>
@@ -1129,6 +1191,29 @@ export default function Students() {
                     {grade} ({studentCountByClass[grade] || 0})
                   </option>
                 ))}
+              </select>
+
+              {/* Subject Filter */}
+              <select
+                value={filterSubject}
+                onChange={(e) => setFilterSubject(e.target.value)}
+                className={`py-2 px-3 border rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium transition-all ${
+                  filterSubject 
+                    ? "bg-indigo-600 text-white border-indigo-600 font-bold shadow-sm shadow-indigo-200" 
+                    : "bg-slate-50 border-slate-200 text-slate-700"
+                }`}
+              >
+                <option value="" className="bg-white text-slate-800">All Subjects / பாடங்கள் ({availableSubjectsList.length})</option>
+                {availableSubjectsList.map((subj) => {
+                  const count = targetStudentsForClass.filter(s =>
+                    (s.subjects || s.enrolledClasses || []).some((sub: any) => sub?.toString().trim().toLowerCase() === subj.toLowerCase())
+                  ).length;
+                  return (
+                    <option key={subj} value={subj} className="bg-white text-slate-800">
+                      {subj} ({count})
+                    </option>
+                  );
+                })}
               </select>
 
               {/* Bulk Assign Subjects Button */}
@@ -1977,6 +2062,31 @@ export default function Students() {
   }
 
   if (view === "view-id-pin") {
+    const filteredStudents = students.filter(s => {
+      const matchesClass = filterClass === "unassigned" 
+        ? (!s.grade || s.grade === "")
+        : (filterClass ? s.grade === filterClass : true);
+
+      const studentSubs = (s.subjects || s.enrolledClasses || []).map((sub: any) => sub?.toString().trim().toLowerCase());
+      const matchesSubject = !filterSubject
+        ? true
+        : studentSubs.some((sub: string) => sub === filterSubject.toLowerCase());
+
+      const searchLow = searchQuery.toLowerCase().trim();
+      const isNumericSearch = /^\d+$/.test(searchLow);
+
+      const matchesSearch = searchQuery 
+        ? s.name?.toLowerCase().includes(searchLow) || 
+          s.id?.toString().toLowerCase().includes(searchLow) ||
+          s.rollNo?.toString().toLowerCase().includes(searchLow) ||
+          (isNumericSearch && s.rollNo?.toString().endsWith(searchLow)) ||
+          (isNumericSearch && s.id?.toString().endsWith(searchLow)) ||
+          s.username?.toString().toLowerCase().includes(searchLow) ||
+          s.phone?.toString().includes(searchLow)
+        : true;
+      return matchesClass && matchesSubject && matchesSearch;
+    });
+
     return (
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
@@ -2022,7 +2132,7 @@ export default function Students() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {students.map((student) => (
+                {filteredStudents.map((student) => (
                   <tr key={student.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div id={`qr-${student.id}`} className="bg-white p-1 inline-block">
