@@ -633,13 +633,16 @@ export const getSubjects = async () => {
   }
 
   const defaults = [
-    { id: "sub_1", name: "தமிழ் வினா விடை", category: "Sub", fee: "500" },
-    { id: "sub_2", name: "30 நாள் தமிழ் பாடநெறி (தரம் 11)", category: "Sub", fee: "6000" },
-    { id: "sub_3", name: "தமிழ் மொழி இலக்கியம்", category: "Main", fee: "0" },
+    { id: "sub_1", name: "தமிழ் வினா விடை", category: "Sub", fee: "500", grade: "தரம் 11" },
+    { id: "sub_2", name: "30 நாள் தமிழ் பாடநெறி (தரம் 11)", category: "Sub", fee: "6000", grade: "தரம் 11" },
+    { id: "sub_3", name: "தமிழ் மொழி இலக்கியம்", category: "Main", fee: "0", grade: "தரம் 11" },
     { id: "sub_4", name: "தமிழ் மொழி வளம் (GAME)", category: "Main", fee: "0" },
-    { id: "sub_5", name: "30 நாள் (15 - 30) வது நாள்", category: "Sub", fee: "3000" },
-    { id: "sub_6", name: "தமிழ் இலக்கிய நயம்", category: "Sub", fee: "4000" },
-    { id: "sub_7", name: "TAMIL", category: "Main", fee: "0" }
+    { id: "sub_5", name: "30 நாள் (15 - 30) வது நாள்", category: "Sub", fee: "3000", grade: "தரம் 11" },
+    { id: "sub_6", name: "தமிழ் இலக்கிய நயம்", category: "Sub", fee: "4000", grade: "தரம் 11" },
+    { id: "sub_7", name: "TAMIL", category: "Main", fee: "0" },
+    { id: "sub_8", name: "இலக்கிய நயம்", category: "Sub", fee: "4000", grade: "தரம் 11" },
+    { id: "sub_9", name: "இலக்கிய நயம் (தரம் 11)", category: "Sub", fee: "4000", grade: "தரம் 11" },
+    { id: "sub_10", name: "தமிழ் இலக்கிய நயம் (தரம் 11)", category: "Sub", fee: "4000", grade: "தரம் 11" }
   ];
 
   defaults.forEach(def => {

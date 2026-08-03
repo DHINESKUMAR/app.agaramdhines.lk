@@ -154,10 +154,12 @@ export default function Youtube() {
 
   // Get unique subjects registered specifically for the selected grade
   const getGradeSubjectOptions = () => {
+    const allDbSubjects = dbSubjects
+      .map(s => s && s.name && String(s.name).trim())
+      .filter((s): s is string => !!s);
+
     if (!selectedGrade || selectedGrade === "Public (All Students)") {
-      return Array.from(new Set(
-        dbSubjects.map(s => s && s.name).filter((s): s is string => !!s)
-      )).sort();
+      return Array.from(new Set(allDbSubjects)).sort();
     }
 
     // 1. Get subjects from registered classes matching selectedGrade
@@ -195,16 +197,16 @@ export default function Youtube() {
       .map(s => String(s.name).trim())
       .filter(Boolean);
 
-    const combined = Array.from(new Set([...classSubjects, ...linkSubjects, ...postSubjects, ...dbGradeSubjects])).sort();
+    // Always merge allDbSubjects so any created or default subject (e.g. இலக்கிய நயம்) is available
+    const combined = Array.from(new Set([
+      ...classSubjects,
+      ...linkSubjects,
+      ...postSubjects,
+      ...dbGradeSubjects,
+      ...allDbSubjects
+    ])).sort();
 
-    if (combined.length > 0) {
-      return combined;
-    }
-
-    // Fallback if no specific subjects found for this grade
-    return Array.from(new Set(
-      dbSubjects.map(s => s && s.name).filter((s): s is string => !!s)
-    )).sort();
+    return combined;
   };
 
   const subjectOptions = getGradeSubjectOptions();
