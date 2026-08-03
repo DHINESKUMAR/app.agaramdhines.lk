@@ -1059,6 +1059,7 @@ export default function Home() {
               <li><a href="https://www.agaramdhines.lk/courses/" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">Courses</a></li>
               <li><a href="https://www.agaramdhines.lk/category/%e0%ae%a4%e0%ae%ae%e0%ae%bf%e0%ae%b4%e0%af%8d-zoom-class-06-to-11/" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">Zoom Class</a></li>
               <li><a href="https://www.agaramdhines.lk/lp-profile/" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">Registration</a></li>
+              <li><a href="https://www.agaramdhines.lk/privacy-policy-for-agaram-dhines-online-academy/" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">Privacy Policy</a></li>
               <li><a href="#" className="hover:text-white transition-colors">Contact Us</a></li>
             </ul>
           </div>
