@@ -60,6 +60,31 @@ export default function CollectFee() {
   const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
   const [isUnpaidReceipt, setIsUnpaidReceipt] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [logoDataUrl, setLogoDataUrl] = useState<string>('/logo.png');
+
+  useEffect(() => {
+    let isMounted = true;
+    const logoSrc = settings?.profileImage && settings.profileImage !== '/logo.png' 
+      ? settings.profileImage 
+      : '/logo.png';
+      
+    fetch(logoSrc)
+      .then(res => res.blob())
+      .then(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (isMounted && typeof reader.result === 'string') {
+            setLogoDataUrl(reader.result);
+          }
+        };
+        reader.readAsDataURL(blob);
+      })
+      .catch(() => {
+        if (isMounted) setLogoDataUrl('/logo.png');
+      });
+
+    return () => { isMounted = false; };
+  }, [settings]);
 
   const handleDeleteFee = async (fee: any) => {
     if (!window.confirm("இந்த கட்டண விபரத்தை நிச்சயமாக நீக்க வேண்டுமா?")) return;
@@ -517,24 +542,31 @@ export default function CollectFee() {
     const node = document.getElementById('receipt-download-version');
     if (!node) return;
     try {
-      const blob = await toBlob(node, { pixelRatio: 2, backgroundColor: '#ffffff', cacheBust: true });
-      if (blob && navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+      const blob = await toBlob(node, { pixelRatio: 2, backgroundColor: '#ffffff' });
+      if (!blob) throw new Error("Could not generate image blob");
+
+      let copied = false;
+      if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
         try {
           await navigator.clipboard.write([
-            new ClipboardItem({ [blob.type]: blob })
+            new ClipboardItem({ [blob.type || 'image/png']: blob })
           ]);
-          alert("Receipt image copied to clipboard!");
+          copied = true;
+          alert("Receipt image copied to clipboard successfully!");
           return;
         } catch (clipErr) {
-          console.warn('Clipboard API write failed:', clipErr);
+          console.warn('Clipboard write restricted:', clipErr);
         }
       }
-      // Fallback if browser clipboard image copy is blocked
-      const link = document.createElement('a');
-      link.download = `Receipt-${receiptData.studentName}-${Date.now()}.png`;
-      link.href = URL.createObjectURL(blob || new Blob());
-      link.click();
-      alert("Clipboard copy is restricted by browser security. Receipt image has been downloaded instead!");
+
+      // If browser security restricted direct clipboard copy, download image automatically
+      if (!copied) {
+        const link = document.createElement('a');
+        link.download = `Receipt-${receiptData?.studentName || 'Student'}-${Date.now()}.png`;
+        link.href = URL.createObjectURL(blob);
+        link.click();
+        alert("Direct clipboard copy was restricted by your browser. The receipt image has been downloaded to your device instead!");
+      }
     } catch (err) {
       console.error('Copy failed', err);
       downloadAsImage();
@@ -1053,9 +1085,12 @@ export default function CollectFee() {
 
                   <div className="text-center mb-6 pt-4">
                     <img 
-                      src="/logo.png" 
+                      src={logoDataUrl || "/logo.png"} 
                       alt="Logo" 
                       className="w-16 h-16 mx-auto mb-2 object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "/logo.png";
+                      }}
                     />
                     <h2 className="text-sm font-black text-gray-800 uppercase tracking-tight">AGARAM DHINES ONLINE ACADEMY</h2>
                     <p className="text-[9px] font-bold text-pink-600 uppercase tracking-[3px] mt-1 italic">excellence in digital learning</p>
