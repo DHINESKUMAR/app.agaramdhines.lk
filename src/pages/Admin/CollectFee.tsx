@@ -517,16 +517,27 @@ export default function CollectFee() {
     const node = document.getElementById('receipt-download-version');
     if (!node) return;
     try {
-      const blob = await toBlob(node, { pixelRatio: 2, backgroundColor: '#ffffff' });
-      if (blob) {
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'image/png': blob })
-        ]);
-        alert("Image copied to clipboard!");
+      const blob = await toBlob(node, { pixelRatio: 2, backgroundColor: '#ffffff', cacheBust: true });
+      if (blob && navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ [blob.type]: blob })
+          ]);
+          alert("Receipt image copied to clipboard!");
+          return;
+        } catch (clipErr) {
+          console.warn('Clipboard API write failed:', clipErr);
+        }
       }
+      // Fallback if browser clipboard image copy is blocked
+      const link = document.createElement('a');
+      link.download = `Receipt-${receiptData.studentName}-${Date.now()}.png`;
+      link.href = URL.createObjectURL(blob || new Blob());
+      link.click();
+      alert("Clipboard copy is restricted by browser security. Receipt image has been downloaded instead!");
     } catch (err) {
       console.error('Copy failed', err);
-      alert("Failed to copy image to clipboard. Try downloading instead.");
+      downloadAsImage();
     }
   };
 
