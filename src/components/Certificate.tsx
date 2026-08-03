@@ -40,7 +40,7 @@ export const Certificate: React.FC<CertificateProps> = ({
 }) => {
   const logoUrl =
     adminSettings?.profileImage ||
-    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s";
+    "/logo.png";
   const instituteName =
     adminSettings?.instituteName || "AGARAM DHINES ONLINE ACADEMY";
   const formattedDate = data.issueDate || new Date().toLocaleDateString();
@@ -76,7 +76,7 @@ export const Certificate: React.FC<CertificateProps> = ({
                 crossOrigin="anonymous"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src =
-                    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s";
+                    "/logo.png";
                 }}
                 className="w-full h-full object-cover rounded-full"
               />
@@ -238,7 +238,7 @@ export const Certificate: React.FC<CertificateProps> = ({
               crossOrigin="anonymous"
               onError={(e) => {
                 (e.target as HTMLImageElement).src =
-                  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s";
+                  "/logo.png";
               }}
               className="w-full h-full object-cover rounded-full"
             />

@@ -734,7 +734,7 @@ export default function FeeDefaulters() {
 
                   {/* Header */}
                   <div className="flex flex-col items-center text-center mb-6 pt-4">
-                    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s" alt="Academy Logo" className="w-16 h-16 object-contain mb-3" />
+                    <img src="/logo.png" alt="Academy Logo" className="w-16 h-16 object-contain mb-3" />
                     <h1 className="text-sm font-black text-gray-800 tracking-tight leading-none uppercase">
                       {adminSettings?.instituteName || "AGARAM DHINES ONLINE ACADEMY"}
                     </h1>

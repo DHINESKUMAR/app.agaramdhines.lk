@@ -473,11 +473,11 @@ function ProfileView({ staff, adminSettings }: { staff: any, adminSettings: any 
             <div className="flex flex-col items-center">
               <div className="w-20 h-20 bg-white rounded-full p-1 shadow-lg border-2 border-amber-400 mb-2 overflow-hidden flex items-center justify-center">
                 <img 
-                  src={adminSettings?.profileImage || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s"} 
+                  src={adminSettings?.profileImage || "/logo.png"} 
                   alt="AGARAM DHINES ONLINE ACADEMY" 
                   crossOrigin="anonymous"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s";
+                    (e.target as HTMLImageElement).src = "/logo.png";
                   }}
                   className="w-full h-full object-cover rounded-full" 
                 />

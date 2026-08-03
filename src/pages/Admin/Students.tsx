@@ -1556,11 +1556,11 @@ export default function Students() {
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-12 h-12 bg-white rounded-full p-0.5 shadow-md border border-amber-300 shrink-0 flex items-center justify-center overflow-hidden">
                             <img 
-                              src={adminSettings?.profileImage || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s"} 
+                              src={adminSettings?.profileImage || "/logo.png"} 
                               alt="AGARAM DHINES ONLINE ACADEMY" 
                               crossOrigin="anonymous"
                               onError={(e) => {
-                                (e.target as HTMLImageElement).src = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s";
+                                (e.target as HTMLImageElement).src = "/logo.png";
                               }}
                               className="w-full h-full object-cover rounded-full" 
                             />
@@ -1669,11 +1669,11 @@ export default function Students() {
                         <div className="flex flex-col items-center">
                           <div className="w-14 h-14 bg-white rounded-full p-0.5 shadow-md border-2 border-amber-400 mb-1 overflow-hidden flex items-center justify-center">
                             <img 
-                              src={adminSettings?.profileImage || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s"} 
+                              src={adminSettings?.profileImage || "/logo.png"} 
                               alt="AGARAM DHINES ONLINE ACADEMY" 
                               crossOrigin="anonymous"
                               onError={(e) => {
-                                (e.target as HTMLImageElement).src = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s";
+                                (e.target as HTMLImageElement).src = "/logo.png";
                               }}
                               className="w-full h-full object-cover rounded-full" 
                             />

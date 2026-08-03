@@ -3609,11 +3609,11 @@ export default function StudentDashboard() {
             <div className="flex items-center gap-1.5 min-w-0">
               <div className="w-9 h-9 bg-white rounded-full p-0.5 shadow-md border border-amber-300 shrink-0 flex items-center justify-center overflow-hidden">
                 <img 
-                  src={adminSettings?.profileImage || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s"} 
+                  src={adminSettings?.profileImage || "/logo.png"} 
                   alt="AGARAM DHINES ONLINE ACADEMY" 
                   crossOrigin="anonymous"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s";
+                    (e.target as HTMLImageElement).src = "/logo.png";
                   }}
                   className="w-full h-full object-cover rounded-full" 
                 />
@@ -3731,11 +3731,11 @@ export default function StudentDashboard() {
             <div className="flex flex-col items-center">
               <div className="w-20 h-20 bg-white rounded-full p-1 shadow-lg border-2 border-amber-400 mb-2 overflow-hidden flex items-center justify-center">
                 <img 
-                  src={adminSettings?.profileImage || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s"} 
+                  src={adminSettings?.profileImage || "/logo.png"} 
                   alt="AGARAM DHINES ONLINE ACADEMY" 
                   crossOrigin="anonymous"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s";
+                    (e.target as HTMLImageElement).src = "/logo.png";
                   }}
                   className="w-full h-full object-cover rounded-full" 
                 />
@@ -3985,7 +3985,7 @@ export default function StudentDashboard() {
 
                 <div className="text-center mb-6">
                   <img 
-                    src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s" 
+                    src="/logo.png" 
                     alt="Logo" 
                     className="w-12 h-12 mx-auto mb-1.5 object-contain"
                   />
@@ -4104,7 +4104,7 @@ export default function StudentDashboard() {
                         <div class="receipt">
                           <div style="absolute; top: 12px; right: 12px; transform: rotate(45deg); background: #10b981; color: white; font-weight: 900; font-size: 9px; padding: 3px 12px; border-radius: 4px;">PAID</div>
                           <div class="header">
-                            <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s" class="logo" />
+                            <img src="/logo.png" class="logo" />
                             <div class="title">AGARAM DHINES ONLINE ACADEMY</div>
                             <div class="subtitle">excellence in digital learning</div>
                           </div>

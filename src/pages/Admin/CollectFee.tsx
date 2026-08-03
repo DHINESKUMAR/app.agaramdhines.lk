@@ -1042,7 +1042,7 @@ export default function CollectFee() {
 
                   <div className="text-center mb-6 pt-4">
                     <img 
-                      src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSUXk2g5YJOQDHiOYn-CwQrBzvNqPuok_bdUA&s" 
+                      src="/logo.png" 
                       alt="Logo" 
                       className="w-16 h-16 mx-auto mb-2 object-contain"
                     />
