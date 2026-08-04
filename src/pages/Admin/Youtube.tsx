@@ -98,15 +98,21 @@ export default function Youtube() {
     if (!window.confirm(`இந்த பாடத்தை ("${subjectName}") மற்றும் அதிலுள்ள அனைத்து விபரங்களையும் நிச்சயமாக நீக்க வேண்டுமா?`)) return;
 
     if (activeTab === 'youtube') {
-      const updatedLinks = links.filter(l => l.subject !== subjectName);
+      const updatedLinks = links.filter(l => l.subject !== subjectName && (!Array.isArray(l.subjects) || !l.subjects.includes(subjectName)));
       setLinks(updatedLinks);
       await saveYoutubeLinks(updatedLinks);
     } else {
-      const updatedPosts = webPosts.filter(p => p.subject !== subjectName);
+      const updatedPosts = webPosts.filter(p => p.subject !== subjectName && (!Array.isArray(p.subjects) || !p.subjects.includes(subjectName)));
       setWebPosts(updatedPosts);
       await saveWebPosts(updatedPosts);
     }
-    setFormData(prev => ({ ...prev, subject: '' }));
+
+    const cleanSubName = String(subjectName || "").trim().toLowerCase();
+    const updatedDbSubjects = dbSubjects.filter(s => String(s?.name || "").trim().toLowerCase() !== cleanSubName);
+    setDbSubjects(updatedDbSubjects);
+    await saveSubjects(updatedDbSubjects);
+
+    setFormData(prev => ({ ...prev, subject: '', subjects: [] }));
     alert("பாடம் நீக்கப்பட்டது.");
   };
 

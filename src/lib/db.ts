@@ -612,15 +612,48 @@ export const getStaffAttendance = () => getData('staffAttendance', []);
 export const saveStaffAttendance = (attendance: any) => saveData('staffAttendance', attendance);
 
 export const getSubjects = async () => {
-  const list = await getData('subjects', []);
-  const listArray = Array.isArray(list) ? list : [];
+  const rawList = await getData('subjects', null);
+  
+  const defaultSubjects = [
+    { id: "sub_1", name: "தமிழ் வினா விடை", category: "Sub", fee: "500", grade: "தரம் 11" },
+    { id: "sub_2", name: "30 நாள் தமிழ் பாடநெறி (தரம் 11)", category: "Sub", fee: "6000", grade: "தரம் 11" },
+    { id: "sub_3", name: "தமிழ் மொழி இலக்கியம்", category: "Main", fee: "0", grade: "தரம் 11" },
+    { id: "sub_4", name: "தமிழ் மொழி வளம் (GAME)", category: "Main", fee: "0" },
+    { id: "sub_5", name: "30 நாள் (15 - 30) வது நாள்", category: "Sub", fee: "3000", grade: "தரம் 11" },
+    { id: "sub_6", name: "தமிழ் இலக்கிய நயம்", category: "Sub", fee: "4000", grade: "தரம் 11" },
+    { id: "sub_7", name: "TAMIL", category: "Main", fee: "0" }
+  ];
 
+  // If subjects database key has never been initialized at all
+  if (rawList === null || rawList === undefined) {
+    await saveData('subjects', defaultSubjects);
+    return defaultSubjects;
+  }
+
+  const listArray = Array.isArray(rawList) ? rawList : [];
+
+  // Deduplicate and sanitize list array
   const map = new Map<string, any>();
+  
+  // Known variants of "இலக்கிய நயம்" to consolidate into a single "தமிழ் இலக்கிய நயம்"
+  const redundantIlakkiaNayamVariants = new Set([
+    "இலக்கிய நயம்",
+    "இலக்கிய நயம் (தரம் 11)",
+    "தமிழ் இலக்கிய நயம் (தரம் 11)"
+  ]);
 
   for (const item of listArray) {
     if (!item || !item.name) continue;
-    const nameKey = String(item.name).replace(/\s+/g, ' ').trim().toLowerCase();
-    if (!nameKey) continue;
+    let rawName = String(item.name).replace(/\s+/g, ' ').trim();
+    if (!rawName) continue;
+
+    // Consolidate redundant variants into single "தமிழ் இலக்கிய நயம்"
+    if (redundantIlakkiaNayamVariants.has(rawName)) {
+      rawName = "தமிழ் இலக்கிய நயம்";
+      item.name = "தமிழ் இலக்கிய நயம்";
+    }
+
+    const nameKey = rawName.toLowerCase();
 
     if (!map.has(nameKey)) {
       map.set(nameKey, item);
@@ -632,28 +665,9 @@ export const getSubjects = async () => {
     }
   }
 
-  const defaults = [
-    { id: "sub_1", name: "தமிழ் வினா விடை", category: "Sub", fee: "500", grade: "தரம் 11" },
-    { id: "sub_2", name: "30 நாள் தமிழ் பாடநெறி (தரம் 11)", category: "Sub", fee: "6000", grade: "தரம் 11" },
-    { id: "sub_3", name: "தமிழ் மொழி இலக்கியம்", category: "Main", fee: "0", grade: "தரம் 11" },
-    { id: "sub_4", name: "தமிழ் மொழி வளம் (GAME)", category: "Main", fee: "0" },
-    { id: "sub_5", name: "30 நாள் (15 - 30) வது நாள்", category: "Sub", fee: "3000", grade: "தரம் 11" },
-    { id: "sub_6", name: "தமிழ் இலக்கிய நயம்", category: "Sub", fee: "4000", grade: "தரம் 11" },
-    { id: "sub_7", name: "TAMIL", category: "Main", fee: "0" },
-    { id: "sub_8", name: "இலக்கிய நயம்", category: "Sub", fee: "4000", grade: "தரம் 11" },
-    { id: "sub_9", name: "இலக்கிய நயம் (தரம் 11)", category: "Sub", fee: "4000", grade: "தரம் 11" },
-    { id: "sub_10", name: "தமிழ் இலக்கிய நயம் (தரம் 11)", category: "Sub", fee: "4000", grade: "தரம் 11" }
-  ];
-
-  defaults.forEach(def => {
-    const nameKey = def.name.replace(/\s+/g, ' ').trim().toLowerCase();
-    if (!map.has(nameKey)) {
-      map.set(nameKey, def);
-    }
-  });
-
   const deduplicated = Array.from(map.values());
 
+  // If cleanup changed the stored list, persist the cleaned list
   if (deduplicated.length !== listArray.length) {
     saveData('subjects', deduplicated);
   }
