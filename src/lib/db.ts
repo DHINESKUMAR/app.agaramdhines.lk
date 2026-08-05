@@ -531,47 +531,12 @@ export const saveChatbotSettings = (settings: any) => saveData('chatbotSettings'
 export const getPasswordRequests = () => getData('passwordRequests', []);
 export const savePasswordRequests = (requests: any) => saveData('passwordRequests', requests);
 
-export const normalizeSubjectName = (sub: any): string => {
-  if (!sub) return "";
-  const s = String(sub).trim();
-  if (s.toLowerCase() === "tamil") return "தமிழ்";
-  return s;
-};
-
-export const getStudents = async () => {
-  const list = await getData('students', []);
-  if (!Array.isArray(list)) return [];
-
-  let changed = false;
-  const sanitized = list.map((student: any) => {
-    if (student && Array.isArray(student.subjects)) {
-      const normSubs = Array.from(new Set(student.subjects.map((sub: any) => normalizeSubjectName(sub)).filter(Boolean)));
-      if (JSON.stringify(normSubs) !== JSON.stringify(student.subjects)) {
-        changed = true;
-        return { ...student, subjects: normSubs };
-      }
-    }
-    return student;
-  });
-
-  if (changed) {
-    saveData('students', sanitized);
-  }
-
-  return sanitized;
-};
-
+export const getStudents = () => getData('students', []);
 export const saveStudents = async (students: any) => {
-  const sanitized = (Array.isArray(students) ? students : []).map((student: any) => {
-    const subjects = Array.isArray(student.subjects)
-      ? Array.from(new Set(student.subjects.map((sub: any) => normalizeSubjectName(sub)).filter(Boolean)))
-      : [];
-    return {
-      ...student,
-      id: String(student.id || "STU" + Math.floor(100000 + Math.random() * 900000)),
-      subjects
-    };
-  });
+  const sanitized = (Array.isArray(students) ? students : []).map((student: any) => ({
+    ...student,
+    id: String(student.id || "STU" + Math.floor(100000 + Math.random() * 900000))
+  }));
   return saveData('students', sanitized);
 };
 

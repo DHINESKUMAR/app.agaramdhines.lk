@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { getStudents, saveStudents, getClasses, getAdminSettings, normalizeSubjectName } from "../../lib/db";
+import { getStudents, saveStudents, getClasses, getAdminSettings } from "../../lib/db";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { secondaryAuth } from "../../lib/firebase";
 import * as XLSX from "xlsx";
@@ -201,20 +201,13 @@ export default function Students() {
 
   const sortedClasses = [...classes].sort((a, b) => getGradeSortValue(a.name) - getGradeSortValue(b.name));
 
-  const availableSubjects = Array.from(new Set(
-    allSubjects.map(s => {
-      const name = typeof s === 'string' ? s : s?.name;
-      return normalizeSubjectName(name);
-    }).filter(Boolean)
-  ));
+  const availableSubjects = allSubjects.map(s => s.name);
 
   const handleSubjectToggle = (subject: string) => {
-    const normSubject = normalizeSubjectName(subject);
     setFormData(prev => {
-      const exists = prev.subjects.some(s => normalizeSubjectName(s).toLowerCase() === normSubject.toLowerCase());
-      const subjects = exists
-        ? prev.subjects.filter(s => normalizeSubjectName(s).toLowerCase() !== normSubject.toLowerCase())
-        : [...prev.subjects, normSubject];
+      const subjects = prev.subjects.includes(subject)
+        ? prev.subjects.filter(s => s !== subject)
+        : [...prev.subjects, subject];
       return { ...prev, subjects };
     });
   };
@@ -359,14 +352,13 @@ export default function Students() {
   };
 
   const handleEditClick = (student: any) => {
-    const normSubs = Array.from(new Set((student.subjects || []).map((s: any) => normalizeSubjectName(s)).filter(Boolean)));
     setFormData({
       grade: student.grade || "",
       name: student.name || "",
       username: student.username || "",
       password: student.password || "",
       rollNo: student.rollNo || "",
-      subjects: normSubs,
+      subjects: student.subjects || [],
       zoomBlocked: student.zoomBlocked || false,
       dob: student.dob || "",
       gender: student.gender || "",
@@ -1009,7 +1001,7 @@ export default function Students() {
                   <label key={subject} className="flex items-center space-x-2 text-sm">
                     <input 
                       type="checkbox" 
-                      checked={formData.subjects.some(s => normalizeSubjectName(s).toLowerCase() === normalizeSubjectName(subject).toLowerCase())}
+                      checked={formData.subjects.includes(subject)}
                       onChange={() => handleSubjectToggle(subject)}
                       className="rounded text-blue-600 focus:ring-blue-500"
                     />
