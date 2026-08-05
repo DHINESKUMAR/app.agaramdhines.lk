@@ -43,7 +43,7 @@ export default function Courses() {
   const availableSubjectsList = Array.from(new Set([
     "30 நாள் தமிழ் பாடநெறி (தரம் 11)",
     "தமிழ் வினா விடை",
-    "Tamil",
+    "தமிழ்",
     ...classes.flatMap(c => c.subjects || []),
     ...staffs.flatMap(s => s.assignedClasses?.map((c: any) => c.subject) || []),
     ...allSubjects.map(s => s.name)

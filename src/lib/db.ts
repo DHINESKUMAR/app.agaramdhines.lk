@@ -621,9 +621,7 @@ export const getSubjects = async () => {
     { id: "sub_4", name: "தமிழ் மொழி வளம் (GAME)", category: "Main", fee: "0" },
     { id: "sub_5", name: "30 நாள் (15 - 30) வது நாள்", category: "Sub", fee: "3000", grade: "தரம் 11" },
     { id: "sub_6", name: "தமிழ் இலக்கிய நயம்", category: "Sub", fee: "4000", grade: "தரம் 11" },
-    { id: "sub_7", name: "TAMIL", category: "Main", fee: "0" },
-    { id: "sub_8", name: "tamil", category: "Main", fee: "0" },
-    { id: "sub_9", name: "தமிழ்", category: "Main", fee: "0" }
+    { id: "sub_7", name: "தமிழ்", category: "Main", fee: "0" }
   ];
 
   if (rawList === null || rawList === undefined) {
@@ -652,6 +650,12 @@ export const getSubjects = async () => {
     if (redundantIlakkiaNayamVariants.has(rawName)) {
       rawName = "தமிழ் இலக்கிய நயம்";
       item.name = "தமிழ் இலக்கிய நயம்";
+    }
+
+    // Convert English "tamil" variants to Tamil script "தமிழ்"
+    if (rawName.toLowerCase() === "tamil") {
+      rawName = "தமிழ்";
+      item.name = "தமிழ்";
     }
 
     const nameKey = rawName.toLowerCase();
