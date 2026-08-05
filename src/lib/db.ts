@@ -621,10 +621,11 @@ export const getSubjects = async () => {
     { id: "sub_4", name: "தமிழ் மொழி வளம் (GAME)", category: "Main", fee: "0" },
     { id: "sub_5", name: "30 நாள் (15 - 30) வது நாள்", category: "Sub", fee: "3000", grade: "தரம் 11" },
     { id: "sub_6", name: "தமிழ் இலக்கிய நயம்", category: "Sub", fee: "4000", grade: "தரம் 11" },
-    { id: "sub_7", name: "TAMIL", category: "Main", fee: "0" }
+    { id: "sub_7", name: "TAMIL", category: "Main", fee: "0" },
+    { id: "sub_8", name: "tamil", category: "Main", fee: "0" },
+    { id: "sub_9", name: "தமிழ்", category: "Main", fee: "0" }
   ];
 
-  // If subjects database key has never been initialized at all
   if (rawList === null || rawList === undefined) {
     await saveData('subjects', defaultSubjects);
     return defaultSubjects;
@@ -665,9 +666,17 @@ export const getSubjects = async () => {
     }
   }
 
+  // Ensure default main subjects exist
+  defaultSubjects.forEach(def => {
+    const key = def.name.toLowerCase();
+    if (!map.has(key)) {
+      map.set(key, def);
+    }
+  });
+
   const deduplicated = Array.from(map.values());
 
-  // If cleanup changed the stored list, persist the cleaned list
+  // If cleanup or addition changed the stored list, persist the cleaned list
   if (deduplicated.length !== listArray.length) {
     saveData('subjects', deduplicated);
   }
