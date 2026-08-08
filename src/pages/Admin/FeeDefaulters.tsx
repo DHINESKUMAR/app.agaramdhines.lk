@@ -60,6 +60,7 @@ export default function FeeDefaulters() {
   const [currentWhatsAppIndex, setCurrentWhatsAppIndex] = useState(0);
   const [sentStatus, setSentStatus] = useState<Record<string, boolean>>({});
   const [customMonthsText, setCustomMonthsText] = useState<string>("");
+  const [customAmountText, setCustomAmountText] = useState<string>("");
 
   const getFormattedMonths = (student: any) => {
     if (customMonthsText) return customMonthsText;
@@ -87,11 +88,31 @@ export default function FeeDefaulters() {
     }
   };
 
+  const getCalculatedAmount = (student: any) => {
+    if (customAmountText !== "") {
+      return customAmountText;
+    }
+    if (customMonthsText !== "") {
+      const parts = customMonthsText.split(/[,&]|\bமற்றும்\b/).map(s => s.trim()).filter(Boolean);
+      if (parts.length > 0 && student?.totalFee) {
+        const monthCount = parts.length;
+        const subFee = student.unpaidSubjects ? student.unpaidSubjects.reduce((sum: number, s: any) => sum + (Number(s.fee) || 0), 0) : 0;
+        return (monthCount * student.totalFee) + subFee;
+      }
+    }
+
+    if (student?.dueAmount !== undefined && student?.dueAmount !== null) {
+      return student.dueAmount;
+    }
+    
+    return student?.totalFee || 0;
+  };
+
   const getWhatsAppMessageText = (student: any) => {
     const monthsStr = getFormattedMonths(student);
     const studentName = student?.name || "மாணவர்";
     const studentGrade = student?.grade || selectedClass || "";
-    const amount = student?.dueAmount !== undefined ? student.dueAmount : (student?.totalFee || 0);
+    const amount = getCalculatedAmount(student);
 
     return `📢 ”${monthsStr}” மாத வகுப்புக் கட்டணம் – அறிவிப்பு
 
@@ -272,6 +293,7 @@ export default function FeeDefaulters() {
     }
     
     setCustomMonthsText("");
+    setCustomAmountText("");
     setCurrentWhatsAppIndex(0);
     setShowWhatsAppModal(true);
   };
@@ -641,21 +663,36 @@ export default function FeeDefaulters() {
                     </div>
                   </div>
 
-                  <div className="mb-4">
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                      மாதம் (Month Name / Selection):
-                    </label>
-                    <input
-                      type="text"
-                      value={customMonthsText !== "" ? customMonthsText : getFormattedMonths(currentStudent)}
-                      onChange={(e) => setCustomMonthsText(e.target.value)}
-                      placeholder="e.g. June & July அல்லது June"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-emerald-800 bg-emerald-50/50 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                    />
-                    <p className="text-[11px] text-gray-500 mt-1">
-                      * இந்த பெட்டியில் மாற்றும் போது மேலுள்ள அறிவிப்பில் மாதம் தானாக மாறும்.
-                    </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                        மாதம் (Selected Month):
+                      </label>
+                      <input
+                        type="text"
+                        value={customMonthsText !== "" ? customMonthsText : getFormattedMonths(currentStudent)}
+                        onChange={(e) => setCustomMonthsText(e.target.value)}
+                        placeholder="e.g. June & July"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-emerald-800 bg-emerald-50/50 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                        மொத்தத் தொகை (Total Fee - LKR):
+                      </label>
+                      <input
+                        type="text"
+                        value={getCalculatedAmount(currentStudent)}
+                        onChange={(e) => setCustomAmountText(e.target.value)}
+                        placeholder="e.g. 2600"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-red-700 bg-red-50/50 focus:ring-2 focus:ring-red-500 focus:outline-none"
+                      />
+                    </div>
                   </div>
+                  <p className="text-[11px] text-gray-500 mb-4">
+                    * தேர்ந்தெடுக்கப்பட்ட மாதங்கள் மற்றும் தொகையை இங்கு மாற்றினால் மேலுள்ள WhatsApp செய்தியில் தானாக மாறும்.
+                  </p>
 
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-2">Message Preview (அனுப்பப்படும் செய்தி)</p>
