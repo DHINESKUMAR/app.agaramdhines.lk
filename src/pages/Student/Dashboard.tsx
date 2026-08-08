@@ -89,6 +89,16 @@ export default function StudentDashboard() {
   const [copiedId, setCopiedId] = useState(false);
   const [selectedMaterialSubject, setSelectedMaterialSubject] = useState<string | null>(null);
   const [selectedELearningSubject, setSelectedELearningSubject] = useState<string>("All");
+  const [showAccessBlockedModal, setShowAccessBlockedModal] = useState(false);
+
+  const handleTabSelect = (tabId: string) => {
+    const restrictedTabs = ["youtube", "course_materials", "courses", "subjects"];
+    if (currentStudentData?.zoomBlocked && restrictedTabs.includes(tabId)) {
+      setShowAccessBlockedModal(true);
+      return;
+    }
+    setActiveTab(tabId);
+  };
 
   // Helper to get a color based on subject name
   const getSubjectColorClasses = (subjectName: string) => {
@@ -955,7 +965,7 @@ export default function StudentDashboard() {
   const handleJoinClass = async (linkUrl: string | null) => {
     // Check if zoom is blocked due to unpaid fees
     if (currentStudentData?.zoomBlocked) {
-      alert("கட்டணம் செலுத்திய பின் தொடரவும் (Please pay the fee to continue)");
+      setShowAccessBlockedModal(true);
       return;
     }
 
@@ -1469,7 +1479,7 @@ export default function StudentDashboard() {
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
               <div
-                onClick={() => setActiveTab("subjects")}
+                onClick={() => handleTabSelect("subjects")}
                 className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"
               >
                 <div className="w-14 h-14 bg-pink-50 text-pink-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-pink-100 transition-colors">
@@ -1479,7 +1489,7 @@ export default function StudentDashboard() {
               </div>
 
               <div
-                onClick={() => setActiveTab("courses")}
+                onClick={() => handleTabSelect("courses")}
                 className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"
               >
                 <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-indigo-100 transition-colors">
@@ -1489,7 +1499,7 @@ export default function StudentDashboard() {
               </div>
 
               <div
-                onClick={() => setActiveTab("homework")}
+                onClick={() => handleTabSelect("homework")}
                 className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"
               >
                 <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-blue-100 transition-colors">
@@ -1499,7 +1509,7 @@ export default function StudentDashboard() {
               </div>
 
               <div
-                onClick={() => setActiveTab("attendance")}
+                onClick={() => handleTabSelect("attendance")}
                 className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"
               >
                 <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-emerald-100 transition-colors">
@@ -1509,7 +1519,7 @@ export default function StudentDashboard() {
               </div>
 
               <div
-                onClick={() => setActiveTab("youtube")}
+                onClick={() => handleTabSelect("youtube")}
                 className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"
               >
                 <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-rose-100 transition-colors">
@@ -1519,7 +1529,7 @@ export default function StudentDashboard() {
               </div>
 
               <div
-                onClick={() => setActiveTab("marks")}
+                onClick={() => handleTabSelect("marks")}
                 className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"
               >
                 <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-emerald-100 transition-colors">
@@ -1529,7 +1539,7 @@ export default function StudentDashboard() {
               </div>
 
               <div
-                onClick={() => setActiveTab("course_materials")}
+                onClick={() => handleTabSelect("course_materials")}
                 className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"
               >
                 <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-red-100 transition-colors">
@@ -3541,6 +3551,59 @@ export default function StudentDashboard() {
         )}
       </main>
 
+      {/* Access Blocked / Fee Pending Modal */}
+      {showAccessBlockedModal && (
+        <div className="fixed inset-0 z-[9999] bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl text-center space-y-5 border border-rose-100 relative animate-scale-up">
+            <button
+              onClick={() => setShowAccessBlockedModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100 transition-colors"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner border border-rose-200">
+              <ShieldAlert size={36} />
+            </div>
+
+            <div>
+              <span className="inline-block px-3 py-1 bg-rose-100 text-rose-800 text-[11px] font-black uppercase tracking-wider rounded-full mb-3 border border-rose-200">
+                📢 அணுகல் தவிர்க்கப்பட்டுள்ளது
+              </span>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-800 leading-snug">
+                கட்டணம் செலுத்தாத மாணவர்களுக்கான அணுகல் தவிர்க்கப்பட்டுள்ளது
+              </h3>
+              <p className="text-slate-600 text-xs sm:text-sm mt-3 leading-relaxed">
+                உங்கள் வகுப்புக் கட்டணம் செலுத்தப்படாததால் e-Learning, YouTube பாடங்கள், Course Materials மற்றும் நேரலை Zoom வகுப்புகளுக்கான அணுகல் தவிர்க்கப்பட்டுள்ளது. தயவுசெய்து நிலுவைக் கட்டணத்தை செலுத்தவும்.
+              </p>
+            </div>
+
+            <div className="space-y-2.5 pt-2">
+              <button
+                onClick={() => {
+                  setShowAccessBlockedModal(false);
+                  setActiveTab("fees");
+                }}
+                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/20 transition-all text-sm flex items-center justify-center gap-2"
+              >
+                <DollarSign size={18} />
+                கட்டணம் செலுத்துக (Pay Fees)
+              </button>
+
+              <a
+                href={`https://wa.me/94778054232?text=${encodeURIComponent(`வணக்கம், எனது பெயர்: ${studentData?.name || ''}, தரம்: ${studentData?.grade || ''}. எனது கணக்கு அணுகல் தவிர்க்கப்பட்டுள்ளது. கட்டணம் செலுத்திய விவரத்தை அனுப்ப விரும்புகிறேன்.`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold rounded-xl border border-emerald-200 transition-all text-xs flex items-center justify-center gap-2"
+              >
+                <WhatsAppIcon size={16} />
+                WhatsApp மூலம் தொடர்பு கொள்க
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bottom Navigation */}
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[96%] max-w-lg">
         <div className="bg-[#1e1e24] rounded-full flex justify-between items-center px-3 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative">
@@ -3553,7 +3616,7 @@ export default function StudentDashboard() {
                   if (item.id === "website") {
                     window.open("https://agaramdhines.lk", "_blank");
                   } else {
-                    setActiveTab(item.id);
+                    handleTabSelect(item.id);
                   }
                 }}
                 className="relative flex flex-col items-center justify-center w-10 h-10 sm:w-12 sm:h-12 z-10"

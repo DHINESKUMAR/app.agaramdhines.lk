@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { getStudents, getFees, getClasses, getAdminSettings, getSubjects } from "../../lib/db";
-import { Search, X, ExternalLink, CheckCircle, FileText, Download, Printer, Trash2, Copy, Image as ImageIcon, Share2, Plus } from "lucide-react";
+import { getStudents, saveStudents, getFees, getClasses, getAdminSettings, getSubjects } from "../../lib/db";
+import { Search, X, ExternalLink, CheckCircle, FileText, Download, Printer, Trash2, Copy, Image as ImageIcon, Share2, Plus, ShieldCheck, ShieldAlert, Lock, Unlock } from "lucide-react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
 import { toPng, toBlob } from 'html-to-image';
 import { jsPDF } from 'jspdf';
@@ -298,6 +298,61 @@ export default function FeeDefaulters() {
     setShowWhatsAppModal(true);
   };
 
+  const handleBulkActivateZoom = async () => {
+    if (selectedIds.length === 0) {
+      alert("தயவுசெய்து குறைந்தது ஒரு மாணவரைத் தேர்ந்தெடுக்கவும்.");
+      return;
+    }
+    if (!confirm(`தேர்ந்தெடுக்கப்பட்ட ${selectedIds.length} மாணவர்களின் Zoom / E-Learning அணுகலை செயல்படுத்த (Activate) விரும்புகிறீர்களா?`)) {
+      return;
+    }
+    try {
+      const allStudents = await getStudents();
+      const updated = allStudents.map((s: any) => 
+        selectedIds.includes(s.id) ? { ...s, zoomBlocked: false } : s
+      );
+      await saveStudents(updated);
+      setDefaulters(prev => prev.map(s => selectedIds.includes(s.id) ? { ...s, zoomBlocked: false } : s));
+      alert(`தேர்ந்தெடுக்கப்பட்ட ${selectedIds.length} மாணவர்களின் அணுகல் வெற்றிகரமாக செயல்படுத்தப்பட்டது (Zoom / E-Learning Activated)!`);
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    }
+  };
+
+  const handleBulkBlockZoom = async () => {
+    if (selectedIds.length === 0) {
+      alert("தயவுசெய்து குறைந்தது ஒரு மாணவரைத் தேர்ந்தெடுக்கவும்.");
+      return;
+    }
+    if (!confirm(`தேர்ந்தெடுக்கப்பட்ட ${selectedIds.length} மாணவர்களின் அணுகலைத் தடை செய்ய (Block) விரும்புகிறீர்களா?`)) {
+      return;
+    }
+    try {
+      const allStudents = await getStudents();
+      const updated = allStudents.map((s: any) => 
+        selectedIds.includes(s.id) ? { ...s, zoomBlocked: true } : s
+      );
+      await saveStudents(updated);
+      setDefaulters(prev => prev.map(s => selectedIds.includes(s.id) ? { ...s, zoomBlocked: true } : s));
+      alert(`தேர்ந்தெடுக்கப்பட்ட ${selectedIds.length} மாணவர்களின் அணுகல் தடை செய்யப்பட்டது (Blocked)!`);
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    }
+  };
+
+  const handleToggleSingleZoom = async (studentId: string, currentBlocked: boolean) => {
+    try {
+      const allStudents = await getStudents();
+      const updated = allStudents.map((s: any) => 
+        s.id === studentId ? { ...s, zoomBlocked: !currentBlocked } : s
+      );
+      await saveStudents(updated);
+      setDefaulters(prev => prev.map(s => s.id === studentId ? { ...s, zoomBlocked: !currentBlocked } : s));
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    }
+  };
+
   const selectedStudentsData = defaulters.filter(d => selectedIds.includes(d.id));
   const currentStudent = selectedStudentsData[currentWhatsAppIndex];
 
@@ -473,7 +528,7 @@ export default function FeeDefaulters() {
       </div>
 
       {/* Action Bar */}
-      <div className="mb-6 flex flex-col sm:flex-row justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-100 gap-4">
+      <div className="mb-6 flex flex-col lg:flex-row justify-between items-stretch lg:items-center bg-gray-50 p-4 rounded-xl border border-gray-100 gap-4">
         <div className="flex items-center gap-4">
           <button 
             onClick={() => {
@@ -498,18 +553,48 @@ export default function FeeDefaulters() {
           </span>
         </div>
 
-        <button 
-          onClick={handleBulkWhatsApp}
-          disabled={selectedIds.length === 0}
-          className={`flex items-center gap-2 font-black uppercase text-xs tracking-widest py-3 px-8 rounded-lg shadow-lg transition-all group ${
-            selectedIds.length > 0 
-              ? 'bg-[#25D366] hover:bg-[#128C7E] text-white shadow-[#25D366]/20' 
-              : 'bg-gray-200 text-gray-500 cursor-not-allowed shadow-none'
-          }`}
-        >
-          <WhatsAppIcon size={18} className="group-hover:scale-110 transition-transform" />
-          Send Bulk Reminders
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button 
+            onClick={handleBulkActivateZoom}
+            disabled={selectedIds.length === 0}
+            className={`flex items-center gap-1.5 font-bold text-xs py-2.5 px-4 rounded-lg shadow transition-all ${
+              selectedIds.length > 0 
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20' 
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+            }`}
+            title="Bulk Activate Zoom, E-Learning & Material Access"
+          >
+            <ShieldCheck size={16} />
+            Zoom Activate (அணுகல் அனுமதி)
+          </button>
+
+          <button 
+            onClick={handleBulkBlockZoom}
+            disabled={selectedIds.length === 0}
+            className={`flex items-center gap-1.5 font-bold text-xs py-2.5 px-4 rounded-lg shadow transition-all ${
+              selectedIds.length > 0 
+                ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-500/20' 
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+            }`}
+            title="Bulk Block Access for Unpaid Students"
+          >
+            <ShieldAlert size={16} />
+            Block Access (கட்டணத் தடை)
+          </button>
+
+          <button 
+            onClick={handleBulkWhatsApp}
+            disabled={selectedIds.length === 0}
+            className={`flex items-center gap-1.5 font-black uppercase text-xs tracking-wider py-2.5 px-5 rounded-lg shadow-lg transition-all group ${
+              selectedIds.length > 0 
+                ? 'bg-[#25D366] hover:bg-[#128C7E] text-white shadow-[#25D366]/20' 
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+            }`}
+          >
+            <WhatsAppIcon size={16} className="group-hover:scale-110 transition-transform" />
+            Send Reminders
+          </button>
+        </div>
       </div>
 
       {/* Main Section: Data Table */}
@@ -530,65 +615,87 @@ export default function FeeDefaulters() {
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Name</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Total Fee</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Due Amount</th>
-                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Payments</th>
-                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Unpaid Receipt</th>
+                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Access Status</th>
+                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Payments</th>
+                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Unpaid Receipt</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {!hasSearched ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                    Please select a class and month to view defaulters.
+                  </td>
+                </tr>
+              ) : defaulters.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center text-green-600 font-medium">
+                    No defaulters found! All students in this class have paid for the selected month.
+                  </td>
+                </tr>
+              ) : (
+                defaulters.map((student) => (
+                  <tr key={student.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedIds.includes(student.id)}
+                        onChange={() => handleSelect(student.id)}
+                        className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-bold">{student.rollNo || "N/A"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{student.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">LKR {student.totalFee}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-red-600">LKR {student.dueAmount}</span>
+                        <span className="text-[10px] text-gray-500 uppercase font-black tracking-tighter">
+                          {student.unpaidMonths?.length} Month{student.unpaidMonths?.length > 1 ? 's' : ''} Pending
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                      <button
+                        onClick={() => handleToggleSingleZoom(student.id, !!student.zoomBlocked)}
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          student.zoomBlocked
+                            ? "bg-rose-100 text-rose-700 hover:bg-rose-200 border border-rose-200"
+                            : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-200"
+                        }`}
+                        title={student.zoomBlocked ? "Click to Activate Access" : "Click to Block Access"}
+                      >
+                        {student.zoomBlocked ? (
+                          <>
+                            <ShieldAlert size={14} /> Blocked
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck size={14} /> Active
+                          </>
+                        )}
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                      <a href={`/admin/collect-fee?student=${student.id}`} className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded transition-colors">
+                        View / Pay
+                      </a>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                      <button 
+                        onClick={() => { 
+                          setSelectedStudentForReceipt(student); 
+                          setShowReceiptModal(true); 
+                        }}
+                        className="text-pink-600 hover:text-pink-900 bg-pink-50 hover:bg-pink-100 px-3 py-1.5 rounded transition-colors flex items-center gap-1 mx-auto"
+                      >
+                        <FileText size={16} /> Receipt
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {!hasSearched ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                        Please select a class and month to view defaulters.
-                      </td>
-                    </tr>
-                  ) : defaulters.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-green-600 font-medium">
-                        No defaulters found! All students in this class have paid for the selected month.
-                      </td>
-                    </tr>
-                  ) : (
-                    defaulters.map((student) => (
-                      <tr key={student.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <input 
-                            type="checkbox" 
-                            checked={selectedIds.includes(student.id)}
-                            onChange={() => handleSelect(student.id)}
-                            className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                          />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-bold">{student.rollNo || "N/A"}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{student.name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">LKR {student.totalFee}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-red-600">LKR {student.dueAmount}</span>
-                            <span className="text-[10px] text-gray-500 uppercase font-black uppercase tracking-tighter">
-                              {student.unpaidMonths?.length} Month{student.unpaidMonths?.length > 1 ? 's' : ''} Pending
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                          <a href={`/admin/collect-fee?student=${student.id}`} className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded transition-colors">
-                            View / Pay
-                          </a>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                          <button 
-                            onClick={() => { 
-                              setSelectedStudentForReceipt(student); 
-                              setShowReceiptModal(true); 
-                            }}
-                            className="text-pink-600 hover:text-pink-900 bg-pink-50 hover:bg-pink-100 px-3 py-1.5 rounded transition-colors flex items-center gap-1 mx-auto"
-                          >
-                            <FileText size={16} /> Receipt
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
+                ))
+              )}
+            </tbody>
           </table>
         </div>
         

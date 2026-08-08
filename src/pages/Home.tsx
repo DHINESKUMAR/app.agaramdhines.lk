@@ -189,7 +189,7 @@ export default function Home() {
 
       if (student) {
         if (student.zoomBlocked) {
-          alert("zoom வகுப்பிற்கான கட்டணம் செலுத்தியப் பின் இணைக்கப்படுவீர்கள்");
+          alert("கட்டணம் செலுத்தாத மாணவர்களுக்கான அணுகல் தவிர்க்கப்பட்டுள்ளது.");
           return;
         }
 
@@ -308,7 +308,7 @@ export default function Home() {
 
         if (student) {
           if (student.zoomBlocked) {
-            alert("zoom வகுப்பிற்கான கட்டணம் செலுத்தியப் பின் இணைக்கப்படுவீர்கள்");
+            alert("கட்டணம் செலுத்தாத மாணவர்களுக்கான அணுகல் தவிர்க்கப்பட்டுள்ளது.");
             return;
           }
           const studentData = {
