@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
-import { getAdminSettings, saveAdminSettings } from "../../lib/db";
+import { 
+  getAdminSettings, 
+  saveAdminSettings, 
+  exportFullSystemBackup, 
+  restoreFullSystemBackup,
+  getSystemBackups,
+  saveSystemBackupSnapshot,
+  deleteSystemBackupSnapshot
+} from "../../lib/db";
 import { QRCodeSVG } from "qrcode.react";
-import { Download, QrCode } from "lucide-react";
+import { Download, QrCode, Database, UploadCloud, DownloadCloud, CheckCircle2, History, RotateCcw, Trash2, Calendar } from "lucide-react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
 
@@ -16,13 +24,134 @@ export default function Settings() {
   const [showPassword, setShowPassword] = useState(false);
   const [successMessage, setSuccessMessage] = useState(false);
   const [showQr, setShowQr] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupMsg, setBackupMsg] = useState("");
+  const [savedBackups, setSavedBackups] = useState<any[]>([]);
   const qrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getAdminSettings().then(data => {
       if (data) setSettings(data);
     });
+    fetchBackups();
   }, []);
+
+  const fetchBackups = async () => {
+    try {
+      const list = await getSystemBackups();
+      if (Array.isArray(list)) {
+        setSavedBackups(list);
+      }
+    } catch (e) {
+      console.error("Error fetching backups:", e);
+    }
+  };
+
+  const handleDownloadBackup = async () => {
+    try {
+      setBackupLoading(true);
+      // Save snapshot to date history in database
+      const now = new Date();
+      const dateFormatted = now.toLocaleDateString("en-GB").replace(/\//g, "-") + "_" + now.toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit', hour12: false }).replace(/:/g, "-");
+      
+      const newSnapshot = await saveSystemBackupSnapshot(`Manual Backup ${now.toLocaleDateString("en-GB")}`);
+      await fetchBackups();
+
+      const backupObj = await exportFullSystemBackup();
+      const jsonStr = JSON.stringify(backupObj, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Agaram_Academy_Backup_${dateFormatted}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setBackupMsg(`காப்புப்பிரதி வெற்றியடைந்தது! திகதி அடிப்படையிலான backup சேமிக்கப்பட்டது (${newSnapshot.formattedDate})`);
+      setTimeout(() => setBackupMsg(""), 5000);
+    } catch (err: any) {
+      alert("Backup Error: " + err.message);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleRestoreBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setBackupLoading(true);
+      const text = await file.text();
+      const json = JSON.parse(text);
+
+      const fileDate = json.exportDateFormatted || (json.exportDate ? new Date(json.exportDate).toLocaleString("en-GB") : "Unknown Date");
+
+      if (!confirm(`கோப்பு உருவாக்கபட்ட திகதி: ${fileDate}\n\nஇந்த திகதியின் காப்புப்பிரதியை (Backup) கணினியில் மீட்டமைக்க (Restore) உறுதியாக விரும்புகிறீர்களா?\n(தற்போதைய தரவுகள் இந்த திகதியின் தரவுகளாக மாற்றப்படும்)`)) {
+        e.target.value = "";
+        setBackupLoading(false);
+        return;
+      }
+
+      await restoreFullSystemBackup(json);
+      setBackupMsg(`திகதி (${fileDate}) தரவுகள் வெற்றிகரமாக மீட்டமைக்கப்பட்டன!`);
+      setTimeout(() => {
+        setBackupMsg("");
+        window.location.reload();
+      }, 2000);
+    } catch (err: any) {
+      alert("Restore Error: " + err.message);
+    } finally {
+      setBackupLoading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleRestoreFromSnapshot = async (snapshot: any) => {
+    if (!confirm(`திகதி: ${snapshot.formattedDate || snapshot.dateStr}\n\nஇந்த திகதியில் எடுக்கப்பட்ட காப்புப்பிரதியை மீட்டமைக்க (Restore) விரும்புகிறீர்களா?\n(தற்போதைய தரவுகள் இந்த திகதி நிலைக்கு மாற்றப்படும்)`)) {
+      return;
+    }
+
+    try {
+      setBackupLoading(true);
+      await restoreFullSystemBackup({ data: snapshot.data });
+      setBackupMsg(`திகதி (${snapshot.formattedDate || snapshot.dateStr}) தரவுகள் வெற்றிகரமாக மீட்டமைக்கப்பட்டன!`);
+      setTimeout(() => {
+        setBackupMsg("");
+        window.location.reload();
+      }, 2000);
+    } catch (err: any) {
+      alert("Restore Error: " + err.message);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleDeleteSnapshot = async (id: string) => {
+    if (confirm("இந்த திகதி காப்புப்பிரதி பதிவை நீக்க விரும்புகிறீர்களா?")) {
+      await deleteSystemBackupSnapshot(id);
+      await fetchBackups();
+    }
+  };
+
+  const handleDownloadSnapshotJSON = (snapshot: any) => {
+    const backupObj = {
+      system: "Agaram Dhines Online Academy",
+      version: "1.0",
+      exportDate: snapshot.dateStr,
+      exportDateFormatted: snapshot.formattedDate,
+      data: snapshot.data
+    };
+    const jsonStr = JSON.stringify(backupObj, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const formattedFileDate = (snapshot.formattedDate || snapshot.id).replace(/[^a-zA-Z0-9]/g, "_");
+    link.href = url;
+    link.download = `Agaram_Backup_${formattedFileDate}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,6 +339,127 @@ export default function Settings() {
           </button>
         </div>
       </form>
+
+      {/* System Data Backup & Restore Section */}
+      <div className="mt-8 pt-6 border-t border-gray-200">
+        <div className="flex items-center gap-2 mb-2">
+          <Database className="w-5 h-5 text-indigo-600" />
+          <h3 className="text-lg font-bold text-gray-800">
+            திகதி அடிப்படையிலான தரவு காப்புப்பிரதி & மீட்டமைத்தல் (Date-wise Data Backup & Restore)
+          </h3>
+        </div>
+        <p className="text-xs text-gray-600 mb-4">
+          மாணவர்கள், வகுப்புகள், கட்டணங்கள் மற்றும் அமைப்புகளின் தரவை திகதி வாரியாக (Date-wise) காப்புப்பிரதி (Backup) பெறலாம் மற்றும் ஏதேனும் திகதி நிலைக்கு மீட்டமைக்கலாம் (Restore).
+        </p>
+
+        {backupMsg && (
+          <div className="mb-4 text-emerald-700 font-medium text-xs bg-emerald-50 p-2.5 rounded-lg border border-emerald-200 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            {backupMsg}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+          <button
+            type="button"
+            onClick={handleDownloadBackup}
+            disabled={backupLoading}
+            className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2.5 rounded-lg text-sm transition-colors shadow-sm disabled:opacity-50"
+          >
+            <DownloadCloud className="w-4 h-4" />
+            {backupLoading ? "காத்திருக்கவும்..." : "திகதியுடன் Backup சேமி & பதிவிறக்கு"}
+          </button>
+
+          <label className="flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-800 text-white font-medium px-4 py-2.5 rounded-lg text-sm transition-colors shadow-sm cursor-pointer text-center">
+            <UploadCloud className="w-4 h-4" />
+            JSON கோப்பிலிருந்து Restore (திகதியுடன்)
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleRestoreBackup}
+              disabled={backupLoading}
+              className="hidden"
+            />
+          </label>
+        </div>
+
+        {/* Date-wise Saved Backups List */}
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <History className="w-4 h-4 text-indigo-600" />
+              <h4 className="text-sm font-bold text-gray-800">
+                சேமிக்கப்பட்ட திகதி வாரியான காப்புப்பிரதிகள் (Saved Date Backups)
+              </h4>
+            </div>
+            <span className="text-xs bg-indigo-100 text-indigo-800 font-medium px-2 py-0.5 rounded-full">
+              {savedBackups.length} Backups
+            </span>
+          </div>
+
+          {savedBackups.length === 0 ? (
+            <div className="text-center py-6 text-gray-500 text-xs">
+              இன்னும் திகதி வாரியான காப்புப்பிரதிகள் சேமிக்கப்படவில்லை. மேலேயுள்ள "Backup சேமி" பொத்தானை அழுத்தவும்.
+            </div>
+          ) : (
+            <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+              {savedBackups.map((b) => (
+                <div 
+                  key={b.id} 
+                  className="bg-white border border-gray-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:border-indigo-300 transition-colors shadow-2xs"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <div className="bg-indigo-50 p-2 rounded-md text-indigo-600 mt-0.5">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                        <span>{b.formattedDate || b.dateStr}</span>
+                      </div>
+                      <div className="text-[11px] text-gray-500 mt-0.5">
+                        {b.note || "System Backup"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 self-end sm:self-center">
+                    <button
+                      type="button"
+                      onClick={() => handleRestoreFromSnapshot(b)}
+                      disabled={backupLoading}
+                      title="இந்த திகதியின் நிலைக்கு தரவுகளை மீட்டமைக்க (Restore)"
+                      className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Restore
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadSnapshotJSON(b)}
+                      title="JSON கோப்பாக பதிவிறக்குக"
+                      className="p-1 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSnapshot(b.id)}
+                      title="நீக்குக"
+                      className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+
 
       {showQr && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">

@@ -804,3 +804,74 @@ export const getStudentPayments = async (studentId: string) => {
   }
   return [];
 };
+
+const ALL_BACKUP_COLLECTIONS = [
+  'adminSettings', 'homePageContent', 'chatbotSettings', 'passwordRequests',
+  'students', 'zoomLinks', 'courses', 'courseMaterials', 'youtubeLinks',
+  'fees', 'attendance', 'schedule', 'classLinks', 'courseWebsiteLinks',
+  'classes', 'homework', 'staffs', 'staffAttendance', 'subjects',
+  'incomeExpense', 'grades', 'timetable', 'examMarks', 'webPosts',
+  'examSettings', 'announcements', 'behaviourRecords', 'questionPapers',
+  'chatMessages'
+];
+
+export const exportFullSystemBackup = async () => {
+  const backupData: Record<string, any> = {};
+  for (const key of ALL_BACKUP_COLLECTIONS) {
+    try {
+      backupData[key] = await getData(key, null);
+    } catch (e) {
+      console.error(`Error backing up collection ${key}:`, e);
+    }
+  }
+  const now = new Date();
+  const dateFormatted = now.toLocaleDateString("en-GB") + " " + now.toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit', hour12: true });
+  return {
+    system: "Agaram Dhines Online Academy",
+    version: "1.0",
+    exportDate: now.toISOString(),
+    exportDateFormatted: dateFormatted,
+    data: backupData
+  };
+};
+
+export const restoreFullSystemBackup = async (backupPayload: any) => {
+  if (!backupPayload || typeof backupPayload !== 'object' || !backupPayload.data) {
+    throw new Error('செல்லுபடியற்ற காப்புப்பிரதி கோப்பு (Invalid backup file format)');
+  }
+  const dataMap = backupPayload.data;
+  for (const key of Object.keys(dataMap)) {
+    if (ALL_BACKUP_COLLECTIONS.includes(key) && dataMap[key] !== null && dataMap[key] !== undefined) {
+      await saveData(key, dataMap[key]);
+    }
+  }
+  return true;
+};
+
+export const getSystemBackups = async () => {
+  return getData('systemBackups', []);
+};
+
+export const saveSystemBackupSnapshot = async (note: string = "Manual Backup") => {
+  const fullBackup = await exportFullSystemBackup();
+  const existingBackups = await getData('systemBackups', []);
+  const newSnapshot = {
+    id: "backup_" + Date.now(),
+    dateStr: fullBackup.exportDate,
+    formattedDate: fullBackup.exportDateFormatted,
+    note,
+    data: fullBackup.data
+  };
+  const updatedList = [newSnapshot, ...(Array.isArray(existingBackups) ? existingBackups : [])].slice(0, 20); // keep last 20 date backups
+  await saveData('systemBackups', updatedList);
+  return newSnapshot;
+};
+
+export const deleteSystemBackupSnapshot = async (id: string) => {
+  const existingBackups = await getData('systemBackups', []);
+  if (Array.isArray(existingBackups)) {
+    const updated = existingBackups.filter((b: any) => b.id !== id);
+    await saveData('systemBackups', updated);
+  }
+};
+
