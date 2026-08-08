@@ -219,28 +219,34 @@ export default function Students() {
       return;
     }
     
-    // Check for duplicate roll number
-    if (formData.rollNo) {
-      const isDuplicateRoll = students.some(s => s.rollNo && s.rollNo.toString().trim() === formData.rollNo.toString().trim());
-      if (isDuplicateRoll) {
-        alert("ஏற்கனவே இந்த roll number save ஆகி உள்ளது / This roll number is already in use.");
-        return;
-      }
-    }
-    
-    setUpdateProgress(50);
+    setUpdateProgress(30);
     
     try {
+      const currentStudents = await getStudents();
+
+      // Check for duplicate roll number
+      if (formData.rollNo) {
+        const isDuplicateRoll = currentStudents.some((s: any) => s.rollNo && s.rollNo.toString().trim() === formData.rollNo.toString().trim());
+        if (isDuplicateRoll) {
+          alert("ஏற்கனவே இந்த roll number save ஆகி உள்ளது / This roll number is already in use.");
+          setUpdateProgress(-1);
+          return;
+        }
+      }
+
+      const generatedId = (formData as any).id || "STU" + Math.floor(100000 + Math.random() * 900000);
       const newStudent = {
-        id: formData.id || "STU" + Math.floor(10000 + Math.random() * 90000), // preserve ID if one was generated/manual
-        ...formData
+        ...formData,
+        id: String(generatedId)
       };
       
-      const updatedStudents = [...students, newStudent];
-      setStudents(updatedStudents);
+      const updatedStudents = [...currentStudents.filter((s: any) => String(s.id) !== String(newStudent.id)), newStudent];
+      
+      setUpdateProgress(70);
       
       // Save to local storage and Firebase Database simultaneously
       await saveStudents(updatedStudents);
+      setStudents(updatedStudents);
       
       setUpdateProgress(100);
       
@@ -264,27 +270,32 @@ export default function Students() {
       return;
     }
     
-    // Check for duplicate roll number
-    if (formData.rollNo) {
-      const isDuplicateRoll = students.some(s => 
-        s.id !== editingStudentId && 
-        s.rollNo && 
-        s.rollNo.toString().trim() === formData.rollNo.toString().trim()
-      );
-      if (isDuplicateRoll) {
-        alert("ஏற்கனவே இந்த roll number save ஆகி உள்ளது / This roll number is already in use.");
-        return;
-      }
-    }
-    
-    setUpdateProgress(50);
+    setUpdateProgress(30);
     
     try {
-      const updatedStudents = students.map(s => 
-        s.id === editingStudentId ? { ...s, ...formData } : s
+      const currentStudents = await getStudents();
+
+      // Check for duplicate roll number
+      if (formData.rollNo) {
+        const isDuplicateRoll = currentStudents.some((s: any) => 
+          String(s.id) !== String(editingStudentId) && 
+          s.rollNo && 
+          s.rollNo.toString().trim() === formData.rollNo.toString().trim()
+        );
+        if (isDuplicateRoll) {
+          alert("ஏற்கனவே இந்த roll number save ஆகி உள்ளது / This roll number is already in use.");
+          setUpdateProgress(-1);
+          return;
+        }
+      }
+
+      const updatedStudents = currentStudents.map((s: any) => 
+        String(s.id) === String(editingStudentId) ? { ...s, ...formData, id: String(s.id) } : s
       );
-      setStudents(updatedStudents);
+      
+      setUpdateProgress(70);
       await saveStudents(updatedStudents);
+      setStudents(updatedStudents);
       
       setUpdateProgress(100);
 

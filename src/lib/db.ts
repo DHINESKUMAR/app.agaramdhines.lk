@@ -166,22 +166,33 @@ const getData = async (key: string, defaultValue: any) => {
 
           const cand1 = Array.isArray(singData) ? singData : [];
           const cand2 = Array.isArray(colData) ? colData : [];
+          const candLocal = Array.isArray(localData) ? localData : [];
 
-          if (cand1.length > 0 || cand2.length > 0) {
+          if (cand1.length > 0 || cand2.length > 0 || candLocal.length > 0) {
             const itemMap = new Map<string, any>();
-            [...cand2, ...cand1].forEach((item: any) => {
+            // Priority/Order: cand2 (collection), cand1 (singleton), then candLocal (latest local changes)
+            [...cand2, ...cand1, ...candLocal].forEach((item: any) => {
               if (item && typeof item === 'object') {
                 const k = String(item.id || item.username || item.rollNo || item.studentCode || Math.random()).trim().toLowerCase();
                 itemMap.set(k, { ...(itemMap.get(k) || {}), ...item });
               }
             });
-            return Array.from(itemMap.values());
+            const mergedResult = Array.from(itemMap.values());
+
+            // If local data had entries not yet synced to remote, schedule background sync
+            if (candLocal.length > 0 && (mergedResult.length > cand1.length || mergedResult.length > cand2.length)) {
+              setTimeout(() => {
+                saveData(key, mergedResult).catch(err => console.warn(`Background sync for ${key} failed:`, err));
+              }, 500);
+            }
+
+            return mergedResult;
           }
 
           return [];
         }
 
-        return singData;
+        return singData ?? localData;
       };
 
       const hasLocalContent = localData && (!Array.isArray(localData) || localData.length > 0);
