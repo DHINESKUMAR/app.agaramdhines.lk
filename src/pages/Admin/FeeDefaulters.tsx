@@ -89,9 +89,17 @@ export default function FeeDefaulters() {
 
   const getWhatsAppMessageText = (student: any) => {
     const monthsStr = getFormattedMonths(student);
+    const studentName = student?.name || "மாணவர்";
+    const studentGrade = student?.grade || selectedClass || "";
+    const amount = student?.dueAmount !== undefined ? student.dueAmount : (student?.totalFee || 0);
+
     return `📢 ”${monthsStr}” மாத வகுப்புக் கட்டணம் – அறிவிப்பு
 
 அன்புள்ள பெற்றோர்களே,
+
+👤 மாணவர் பெயர்: ${studentName}
+📚 தரம்: ${studentGrade}
+💰 செலுத்த வேண்டிய தொகை: LKR ${amount}
 
 உங்கள் மகன் / மகளின் ”${monthsStr}” மாத வகுப்புக் கட்டணம் இன்னும் செலுத்தப்படவில்லை.
 
