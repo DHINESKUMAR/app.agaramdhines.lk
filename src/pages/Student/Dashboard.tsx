@@ -56,6 +56,66 @@ import { useHomeworkNotifications } from "../../hooks/useHomeworkNotifications";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { useTimetableNotifications } from "../../hooks/useTimetableNotifications";
 
+export const normalizeSub = (str: string) => {
+  if (!str) return '';
+  return str.toLowerCase()
+    .replace(/\(தரம்\s*\d+\)/gi, '')
+    .replace(/\(grade\s*\d+\)/gi, '')
+    .replace(/தரம்\s*\d+/gi, '')
+    .replace(/grade\s*\d+/gi, '')
+    .replace(/[\(\)\-\:\,\.]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+export const getCanonicalSubject = (s: string): string => {
+  if (!s) return "";
+  const raw = normalizeSub(s);
+
+  if (raw.includes("நயம்") || raw.includes("nayam") || (raw.includes("இலக்கிய") && raw.includes("நயம்"))) {
+    return "tamil_ilakkia_nayam";
+  }
+  if (raw.includes("மொழி") && raw.includes("இலக்கிய")) {
+    return "tamil_mozhi_ilakkiam";
+  }
+  if (raw.includes("30 நாள்") || raw.includes("30 day")) {
+    if (raw.includes("15") || raw.includes("30 வது")) return "tamil_30_days_part2";
+    return "tamil_30_days";
+  }
+  if (raw.includes("வினா") || raw.includes("vina") || raw.includes("q&a") || raw.includes("question")) {
+    return "tamil_vina_vidai";
+  }
+  if (raw.includes("வளம்") || raw.includes("game")) {
+    return "tamil_mozhi_valam";
+  }
+
+  return raw;
+};
+
+export const areSubjectsMatching = (itemSub: string, studentSub: string): boolean => {
+  if (!itemSub || !studentSub) return false;
+  const rawItem = itemSub.trim().toLowerCase();
+  const rawSt = studentSub.trim().toLowerCase();
+
+  if (rawItem === rawSt) return true;
+
+  const canonItem = getCanonicalSubject(itemSub);
+  const canonSt = getCanonicalSubject(studentSub);
+
+  if (canonItem && canonSt) {
+    if (canonItem === canonSt) return true;
+    if (canonItem !== canonSt && (canonItem.startsWith("tamil_") || canonSt.startsWith("tamil_"))) {
+      return false;
+    }
+  }
+
+  const normItem = normalizeSub(itemSub);
+  const normSt = normalizeSub(studentSub);
+  if (normItem && normSt && normItem === normSt) return true;
+
+  return false;
+};
+
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -554,23 +614,6 @@ export default function StudentDashboard() {
           return true;
         });
 
-      const normalizeSub = (str: string) => {
-        if (!str) return '';
-        return str.toLowerCase()
-          .replace(/\(தரம்\s*\d+\)/gi, '')
-          .replace(/\(grade\s*\d+\)/gi, '')
-          .replace(/தரம்\s*\d+/gi, '')
-          .replace(/grade\s*\d+/gi, '')
-          .replace(/[\(\)\-\:\,\.]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-      };
-
-      const isIlakkiaNayam = (s: string) => {
-        const norm = normalizeSub(s);
-        return norm.includes("இலக்கிய") || norm.includes("ilakkiya");
-      };
-
       const filterItemByGradeAndSubject = (c: any) => {
         if (!c) return false;
 
@@ -619,22 +662,23 @@ export default function StudentDashboard() {
         // 3. Subject check
         const itemSubjectsList: string[] = [];
         if (Array.isArray(c.subjects) && c.subjects.length > 0) {
-          c.subjects.forEach((s: any) => itemSubjectsList.push(s?.toString().trim().toLowerCase() || ""));
+          c.subjects.forEach((s: any) => itemSubjectsList.push(s?.toString().trim() || ""));
         }
         if (c.subject) {
-          itemSubjectsList.push(c.subject?.toString().trim().toLowerCase() || "");
+          itemSubjectsList.push(c.subject?.toString().trim() || "");
         }
 
         const nonGeneralSubjects = itemSubjectsList.filter(
-          s => s && s !== "general" && s !== "e-learning" && s !== "uncategorized" && s !== "public" && s !== "all" && s !== "அனைத்து" && s !== "அனைத்து பாடங்களும்"
+          s => s && s.toLowerCase() !== "general" && s.toLowerCase() !== "e-learning" && s.toLowerCase() !== "uncategorized" && s.toLowerCase() !== "public" && s.toLowerCase() !== "all" && s !== "அனைத்து" && s !== "அனைத்து பாடங்களும்"
         );
 
         if (nonGeneralSubjects.length === 0) {
           return true;
         }
 
+        // Unselected subjects must NOT be shown to other students
         if (studentSubjectsArray.length === 0) {
-          return true;
+          return false;
         }
 
         const studentHasWildcard = studentSubjectsArray.some(stSub => {
@@ -656,19 +700,7 @@ export default function StudentDashboard() {
         }
 
         const hasMatch = nonGeneralSubjects.some(itemSub => {
-          const normItem = normalizeSub(itemSub);
-          return studentSubjectsArray.some(stSub => {
-            const normSt = normalizeSub(stSub);
-            if (!normSt || !normItem) return false;
-            if (stSub.trim().toLowerCase() === itemSub.trim().toLowerCase()) return true;
-            if (normSt === normItem) return true;
-            if (normItem.includes(normSt) || normSt.includes(normItem)) return true;
-            if (isIlakkiaNayam(normItem) && isIlakkiaNayam(normSt)) return true;
-            if ((normItem.includes("தமிழ்") || normItem.includes("tamil")) && (normSt.includes("தமிழ்") || normSt.includes("tamil"))) {
-              if (isIlakkiaNayam(normItem) === isIlakkiaNayam(normSt)) return true;
-            }
-            return false;
-          });
+          return studentSubjectsArray.some(stSub => areSubjectsMatching(itemSub, stSub));
         });
 
         return hasMatch;
@@ -683,10 +715,7 @@ export default function StudentDashboard() {
       setCourses(allCourses.filter(filterBySubjectAndGrade));
       setCourseMaterials(allCourseMaterials.filter(filterBySubjectAndGrade));
       
-      setZoomLinks(allZoomLinks.filter((z: any) => {
-        const itemGrade = z.grade?.toString().trim().toLowerCase() || "";
-        return itemGrade === studentGrade || (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade)) || itemGrade.includes("all") || itemGrade.includes("public");
-      }));
+      setZoomLinks(allZoomLinks.filter(filterBySubjectAndGrade));
       
       setYoutubeLinks(allYoutubeLinks.filter(filterBySubjectAndGrade));
       setWebPosts(allWebPosts.filter(filterBySubjectAndGrade));
@@ -1794,11 +1823,11 @@ export default function StudentDashboard() {
                               )}
                             </div>
 
-                            {courses.filter(c => c.subject === subjectName).length > 0 && (
+                            {courses.filter(c => areSubjectsMatching(c.subject, subjectName)).length > 0 && (
                               <div className="mt-4 pt-4 border-t border-slate-200/60">
                                 <p className="font-bold text-slate-800 mb-3 flex items-center gap-2"><FileText size={16} className="text-blue-500"/> Course Materials</p>
                                 <div className="space-y-2">
-                                  {courses.filter(c => c.subject === subjectName).map(course => (
+                                  {courses.filter(c => areSubjectsMatching(c.subject, subjectName)).map(course => (
                                     <a 
                                       key={course.id} 
                                       href={course.link} 
@@ -2336,13 +2365,13 @@ export default function StudentDashboard() {
                       <h3 className="text-xl font-black text-slate-800 mt-2">Available PDF Documents</h3>
                     </div>
                     <span className="text-sm font-bold text-slate-400">
-                      {courseMaterials.filter((c: any) => c.subject?.toString().trim().toLowerCase() === selectedMaterialSubject.toLowerCase()).length} File(s)
+                      {courseMaterials.filter((c: any) => areSubjectsMatching(c.subject, selectedMaterialSubject)).length} File(s)
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {courseMaterials
-                      .filter((c: any) => c.subject?.toString().trim().toLowerCase() === selectedMaterialSubject.toLowerCase())
+                      .filter((c: any) => areSubjectsMatching(c.subject, selectedMaterialSubject))
                       .map((course: any) => (
                         <div 
                           key={course.id}
@@ -2399,22 +2428,13 @@ export default function StudentDashboard() {
 
           const isELearningSubjectMatch = (itemSubject: string | undefined, itemSubjects: string[] | undefined, target: string) => {
             if (target === "All") return true;
-            const normTarget = normalizeSub(target);
-            const targetIsIlakkia = isIlakkiaNayam(target);
 
             const allSubs = [
               itemSubject,
               ...(Array.isArray(itemSubjects) ? itemSubjects : [])
             ].filter((s): s is string => !!s);
 
-            return allSubs.some(s => {
-              if (s === target) return true;
-              const normS = normalizeSub(s);
-              if (normS === normTarget) return true;
-              if (normS.includes(normTarget) || normTarget.includes(normS)) return true;
-              if (targetIsIlakkia && isIlakkiaNayam(s)) return true;
-              return false;
-            });
+            return allSubs.some(s => areSubjectsMatching(s, target));
           };
 
           const filteredYoutubeLinks = selectedELearningSubject === "All"
