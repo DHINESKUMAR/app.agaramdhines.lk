@@ -573,10 +573,16 @@ export default function StudentDashboard() {
       ) || data;
       
       if (freshStudentData) {
+        setStudentData(freshStudentData);
         setCurrentStudentData(freshStudentData);
         setDisplayName(freshStudentData.name);
         setProfileImage(freshStudentData.image || null);
         setEnrolledClasses(freshStudentData.subjects || freshStudentData.enrolledClasses || []);
+        try {
+          localStorage.setItem('userSession', JSON.stringify({ ...data, ...freshStudentData, role: 'Student' }));
+        } catch (e) {
+          console.error("Failed to update userSession in localStorage:", e);
+        }
       }
 
       const allCourses = await getCourses();
