@@ -535,12 +535,10 @@ export default function StudentDashboard() {
       const studentGrade = freshStudentData.grade?.toString().trim().toLowerCase() || "";
       const normalizedStudentGrade = studentGrade.replace(/[^0-9]/g, '');
 
-      let rawStudentSubs: any[] = [];
-      if (Array.isArray(freshStudentData.subjects) && freshStudentData.subjects.length > 0) {
-        rawStudentSubs = freshStudentData.subjects;
-      } else if (Array.isArray(freshStudentData.enrolledClasses) && freshStudentData.enrolledClasses.length > 0) {
-        rawStudentSubs = freshStudentData.enrolledClasses;
-      }
+      const rawStudentSubs: any[] = [
+        ...(Array.isArray(freshStudentData.subjects) ? freshStudentData.subjects : []),
+        ...(Array.isArray(freshStudentData.enrolledClasses) ? freshStudentData.enrolledClasses : [])
+      ];
 
       const studentGradeStr = (freshStudentData.grade || "").toString().trim().toLowerCase();
       const studentGradeNum = studentGradeStr.replace(/[^0-9]/g, '');
@@ -555,6 +553,23 @@ export default function StudentDashboard() {
           if (studentGradeNum && cleanS === studentGradeNum && (s.startsWith("தரம்") || s.startsWith("grade"))) return false;
           return true;
         });
+
+      const normalizeSub = (str: string) => {
+        if (!str) return '';
+        return str.toLowerCase()
+          .replace(/\(தரம்\s*\d+\)/gi, '')
+          .replace(/\(grade\s*\d+\)/gi, '')
+          .replace(/தரம்\s*\d+/gi, '')
+          .replace(/grade\s*\d+/gi, '')
+          .replace(/[\(\)\-\:\,\.]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      };
+
+      const isIlakkiaNayam = (s: string) => {
+        const norm = normalizeSub(s);
+        return norm.includes("இலக்கிய") || norm.includes("ilakkiya");
+      };
 
       const filterItemByGradeAndSubject = (c: any) => {
         if (!c) return false;
@@ -640,17 +655,6 @@ export default function StudentDashboard() {
           return true;
         }
 
-        const normalizeSub = (str: string) => {
-          return str.toLowerCase()
-            .replace(/\(தரம்\s*\d+\)/gi, '')
-            .replace(/\(grade\s*\d+\)/gi, '')
-            .replace(/தரம்\s*\d+/gi, '')
-            .replace(/grade\s*\d+/gi, '')
-            .replace(/[\(\)\-\:\,\.]/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-        };
-
         const hasMatch = nonGeneralSubjects.some(itemSub => {
           const normItem = normalizeSub(itemSub);
           return studentSubjectsArray.some(stSub => {
@@ -658,6 +662,11 @@ export default function StudentDashboard() {
             if (!normSt || !normItem) return false;
             if (stSub.trim().toLowerCase() === itemSub.trim().toLowerCase()) return true;
             if (normSt === normItem) return true;
+            if (normItem.includes(normSt) || normSt.includes(normItem)) return true;
+            if (isIlakkiaNayam(normItem) && isIlakkiaNayam(normSt)) return true;
+            if ((normItem.includes("தமிழ்") || normItem.includes("tamil")) && (normSt.includes("தமிழ்") || normSt.includes("tamil"))) {
+              if (isIlakkiaNayam(normItem) === isIlakkiaNayam(normSt)) return true;
+            }
             return false;
           });
         });
@@ -2388,21 +2397,33 @@ export default function StudentDashboard() {
             ])
           ).filter((s): s is string => !!s && s.toLowerCase() !== 'general' && s.toLowerCase() !== 'uncategorized' && s.toLowerCase() !== 'e-learning' && s.toLowerCase() !== 'public' && s.toLowerCase() !== 'all').sort();
 
+          const isELearningSubjectMatch = (itemSubject: string | undefined, itemSubjects: string[] | undefined, target: string) => {
+            if (target === "All") return true;
+            const normTarget = normalizeSub(target);
+            const targetIsIlakkia = isIlakkiaNayam(target);
+
+            const allSubs = [
+              itemSubject,
+              ...(Array.isArray(itemSubjects) ? itemSubjects : [])
+            ].filter((s): s is string => !!s);
+
+            return allSubs.some(s => {
+              if (s === target) return true;
+              const normS = normalizeSub(s);
+              if (normS === normTarget) return true;
+              if (normS.includes(normTarget) || normTarget.includes(normS)) return true;
+              if (targetIsIlakkia && isIlakkiaNayam(s)) return true;
+              return false;
+            });
+          };
+
           const filteredYoutubeLinks = selectedELearningSubject === "All"
             ? youtubeLinks
-            : youtubeLinks.filter((link: any) => {
-                const sub = link.subject?.toString().trim();
-                const subs = Array.isArray(link.subjects) ? link.subjects.map((s: any) => s?.toString().trim()) : [];
-                return sub === selectedELearningSubject || subs.includes(selectedELearningSubject);
-              });
+            : youtubeLinks.filter((link: any) => isELearningSubjectMatch(link.subject, link.subjects, selectedELearningSubject));
 
           const filteredWebPosts = selectedELearningSubject === "All"
             ? webPosts
-            : webPosts.filter((post: any) => {
-                const sub = post.subject?.toString().trim();
-                const subs = Array.isArray(post.subjects) ? post.subjects.map((s: any) => s?.toString().trim()) : [];
-                return sub === selectedELearningSubject || subs.includes(selectedELearningSubject);
-              });
+            : webPosts.filter((post: any) => isELearningSubjectMatch(post.subject, post.subjects, selectedELearningSubject));
 
           return (
             <div className="space-y-6">
