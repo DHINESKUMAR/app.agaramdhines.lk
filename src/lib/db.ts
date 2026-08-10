@@ -111,15 +111,11 @@ export const resetDbHealthMetrics = () => {
 
 // Helper to get data from Firebase with localStorage fallback and memory caching
 const getData = async (key: string, defaultValue: any) => {
-  // Check memory cache first - only return if cached data is valid and non-empty for arrays
+  // Check memory cache first - return cached data if valid
   const cached = memoryCache[key];
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
-    const isArrayDefault = Array.isArray(defaultValue);
-    if (!isArrayDefault || (Array.isArray(cached.data) && cached.data.length > 0)) {
-      const itemCount = Array.isArray(cached.data) ? Math.max(1, cached.data.length) : 1;
-      recordReadOperation(itemCount, true);
-      return cached.data;
-    }
+    recordReadOperation(1, true);
+    return cached.data;
   }
 
   // Read local storage data first for immediate system availability
@@ -128,7 +124,7 @@ const getData = async (key: string, defaultValue: any) => {
     const rawValue = localStorage.getItem(key);
     if (rawValue && rawValue !== 'undefined') {
       localData = JSON.parse(rawValue);
-      if (!Array.isArray(localData) || localData.length > 0) {
+      if (localData !== null && (!Array.isArray(localData) || localData.length > 0)) {
         memoryCache[key] = { data: localData, timestamp: Date.now() };
       }
     }
@@ -139,81 +135,50 @@ const getData = async (key: string, defaultValue: any) => {
   if (isFirebaseConfigured) {
     try {
       const fetchFirebase = async () => {
-        let singData: any = null;
-        let colData: any = null;
-
-        // 1. Try singletons document
+        // 1. Try singletons document FIRST (uses exactly 1 Firestore read)
         try {
           const singletonRef = doc(db, 'singletons', key);
           const singletonSnap = await getDoc(singletonRef);
           if (singletonSnap.exists() && singletonSnap.data()?.data !== undefined) {
-            singData = singletonSnap.data().data;
+            return singletonSnap.data().data;
           }
         } catch (singErr) {
           console.warn(`Error fetching singleton ${key}:`, singErr);
         }
 
-        // 2. For array collections, check collection query as well and merge candidates
+        // 2. Legacy fallback: if singleton doc doesn't exist yet for an array collection, query collection ONCE
         if (Array.isArray(defaultValue)) {
           try {
             const querySnapshot = await getDocs(collection(db, key));
             if (!querySnapshot.empty) {
-              colData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+              const colData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+              if (colData.length > 0) {
+                // Store in singleton doc so future reads only cost 1 read
+                setDoc(doc(db, 'singletons', key), { data: colData, updatedAt: Date.now() }).catch(() => {});
+                return colData;
+              }
             }
           } catch (colErr) {
             console.warn(`Error fetching collection ${key}:`, colErr);
           }
-
-          const cand1 = Array.isArray(singData) ? singData : [];
-          const cand2 = Array.isArray(colData) ? colData : [];
-          const candLocal = Array.isArray(localData) ? localData : [];
-
-          if (cand1.length > 0 || cand2.length > 0 || candLocal.length > 0) {
-            const itemMap = new Map<string, any>();
-            // Priority/Order: cand2 (collection), cand1 (singleton), then candLocal (latest local changes)
-            [...cand2, ...cand1, ...candLocal].forEach((item: any) => {
-              if (item && typeof item === 'object') {
-                const k = String(item.id || item.username || item.rollNo || item.studentCode || Math.random()).trim().toLowerCase();
-                itemMap.set(k, { ...(itemMap.get(k) || {}), ...item });
-              }
-            });
-            const mergedResult = Array.from(itemMap.values());
-
-            // If local data had entries not yet synced to remote, schedule background sync
-            if (candLocal.length > 0 && (mergedResult.length > cand1.length || mergedResult.length > cand2.length)) {
-              setTimeout(() => {
-                saveData(key, mergedResult).catch(err => console.warn(`Background sync for ${key} failed:`, err));
-              }, 500);
-            }
-
-            return mergedResult;
-          }
-
-          return [];
         }
 
-        return singData ?? localData;
+        return localData;
       };
 
       const hasLocalContent = localData && (!Array.isArray(localData) || localData.length > 0);
-      const timeoutMs = hasLocalContent ? 3000 : 10000;
+      const timeoutMs = hasLocalContent ? 2000 : 6000;
       const fbData = await Promise.race([
         fetchFirebase(),
         new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs))
       ]);
 
       if (fbData !== null && fbData !== undefined) {
-        if (Array.isArray(fbData) && fbData.length === 0 && Array.isArray(localData) && localData.length > 0) {
-          memoryCache[key] = { data: localData, timestamp: Date.now() };
-          return localData;
-        }
-
         memoryCache[key] = { data: fbData, timestamp: Date.now() };
         try {
           localStorage.setItem(key, JSON.stringify(fbData));
         } catch (e) {}
-        const itemCount = Array.isArray(fbData) ? Math.max(1, fbData.length) : 1;
-        recordReadOperation(itemCount, false);
+        recordReadOperation(1, false);
         return fbData;
       }
     } catch (error: any) {
@@ -222,11 +187,8 @@ const getData = async (key: string, defaultValue: any) => {
   }
 
   if (localData !== null && localData !== undefined) {
-    if (!Array.isArray(localData) || localData.length > 0) {
-      memoryCache[key] = { data: localData, timestamp: Date.now() };
-    }
-    const itemCount = Array.isArray(localData) ? Math.max(1, localData.length) : 1;
-    recordReadOperation(itemCount, true);
+    memoryCache[key] = { data: localData, timestamp: Date.now() };
+    recordReadOperation(1, true);
     return localData;
   }
 
@@ -235,14 +197,13 @@ const getData = async (key: string, defaultValue: any) => {
   return defaultValue;
 };
 
-// Helper to save data to Firebase and localStorage simultaneously
+// Helper to save data to Firebase and localStorage simultaneously with minimal Firestore cost (1 write)
 const saveData = async (key: string, data: any) => {
   // Deep clean to remove any undefined fields or functions that break Firestore SDK
   const cleanData = JSON.parse(JSON.stringify(data ?? null));
 
-  // Record write metric
-  const writeCount = Array.isArray(cleanData) ? Math.max(1, cleanData.length) : 1;
-  recordWriteOperation(writeCount);
+  // Record 1 write metric
+  recordWriteOperation(1);
 
   // 1. Save to local system storage & memory cache immediately
   memoryCache[key] = { data: cleanData, timestamp: Date.now() };
@@ -250,7 +211,7 @@ const saveData = async (key: string, data: any) => {
   try {
     localStorage.setItem(key, JSON.stringify(cleanData));
   } catch (e) {
-    console.warn(`Failed to save ${key} to localStorage. It might be full.`, e);
+    console.warn(`Failed to save ${key} to localStorage.`, e);
     if (key === 'chatMessages' && Array.isArray(cleanData) && cleanData.length > 100) {
       try {
         const reducedData = cleanData.slice(-100);
@@ -261,63 +222,13 @@ const saveData = async (key: string, data: any) => {
     }
   }
 
-  // 2. Save to Firebase Firestore simultaneously
+  // 2. Save to Firebase Firestore as 1 singleton document (1 write cost)
   if (isFirebaseConfigured) {
-    const firebaseSaveTask = async () => {
-      // 1. Always write as a single document under 'singletons' first
-      try {
-        const singletonRef = doc(db, 'singletons', key);
-        await setDoc(singletonRef, { data: cleanData, updatedAt: Date.now() });
-      } catch (singErr) {
-        console.warn(`Singleton write for ${key} failed:`, singErr);
-      }
-
-      // 2. If data is an array, sync items to individual collection docs in Firestore
-      if (Array.isArray(cleanData)) {
-        try {
-          const newDocIds = new Set(cleanData.map((item: any, idx: number) => String(item.id || item.code || item.rollNo || `item_${idx}`)));
-
-          // Delete stale documents from collection if any exist
-          try {
-            const existingSnapshot = await getDocs(collection(db, key));
-            const deleteBatch = writeBatch(db);
-            let hasDeletions = false;
-            existingSnapshot.docs.forEach((docSnap) => {
-              if (!newDocIds.has(docSnap.id)) {
-                deleteBatch.delete(docSnap.ref);
-                hasDeletions = true;
-              }
-            });
-            if (hasDeletions) {
-              await deleteBatch.commit();
-            }
-          } catch (delErr) {
-            console.warn(`Collection stale cleanup for ${key} failed:`, delErr);
-          }
-
-          const CHUNK_SIZE = 400;
-          for (let i = 0; i < cleanData.length; i += CHUNK_SIZE) {
-            const chunk = cleanData.slice(i, i + CHUNK_SIZE);
-            const batch = writeBatch(db);
-            chunk.forEach((item: any, idx: number) => {
-              const docId = String(item.id || item.code || item.rollNo || `item_${idx}`);
-              const itemRef = doc(db, key, docId);
-              batch.set(itemRef, item);
-            });
-            await batch.commit();
-          }
-        } catch (colErr) {
-          console.warn(`Collection write for ${key} failed:`, colErr);
-        }
-      }
-
-      memoryCache[key] = { data: cleanData, timestamp: Date.now() };
-    };
-
     try {
+      const singletonRef = doc(db, 'singletons', key);
       await Promise.race([
-        firebaseSaveTask(),
-        new Promise(resolve => setTimeout(resolve, 6000))
+        setDoc(singletonRef, { data: cleanData, updatedAt: Date.now() }),
+        new Promise(resolve => setTimeout(resolve, 5000))
       ]);
     } catch (error: any) {
       console.error(`Firebase error saving ${key}:`, error);

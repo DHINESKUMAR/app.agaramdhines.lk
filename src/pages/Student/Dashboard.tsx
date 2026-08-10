@@ -99,19 +99,36 @@ export const areSubjectsMatching = (itemSub: string, studentSub: string): boolea
 
   if (rawItem === rawSt) return true;
 
+  const normItem = normalizeSub(itemSub);
+  const normSt = normalizeSub(studentSub);
+
+  if (normItem && normSt && normItem === normSt) return true;
+
+  const wildcards = ["all", "general", "public", "e-learning", "uncategorized", "அனைத்து", "அனைத்து பாடங்களும்", "all subjects"];
+  if (wildcards.includes(normItem) || wildcards.includes(normSt)) return true;
+
   const canonItem = getCanonicalSubject(itemSub);
   const canonSt = getCanonicalSubject(studentSub);
 
   if (canonItem && canonSt) {
     if (canonItem === canonSt) return true;
+
+    // General "தமிழ்" or "tamil" matches any specific Tamil sub-course
+    if ((canonItem === "தமிழ்" || canonItem === "tamil") && (canonSt.startsWith("tamil_") || normSt.includes("தமிழ்") || normSt.includes("tamil"))) {
+      return true;
+    }
+    if ((canonSt === "தமிழ்" || canonSt === "tamil") && (canonItem.startsWith("tamil_") || normItem.includes("தமிழ்") || normItem.includes("tamil"))) {
+      return true;
+    }
+
     if (canonItem !== canonSt && (canonItem.startsWith("tamil_") || canonSt.startsWith("tamil_"))) {
       return false;
     }
   }
 
-  const normItem = normalizeSub(itemSub);
-  const normSt = normalizeSub(studentSub);
-  if (normItem && normSt && normItem === normSt) return true;
+  if (normItem && normSt) {
+    if (normItem.includes(normSt) || normSt.includes(normItem)) return true;
+  }
 
   return false;
 };
@@ -682,9 +699,9 @@ export default function StudentDashboard() {
           return true;
         }
 
-        // Unselected subjects must NOT be shown to other students
+        // If student has no specific subjects assigned in profile, show all grade materials
         if (studentSubjectsArray.length === 0) {
-          return false;
+          return true;
         }
 
         const studentHasWildcard = studentSubjectsArray.some(stSub => {
@@ -812,6 +829,9 @@ export default function StudentDashboard() {
       }));
     };
     loadData();
+    const interval = setInterval(() => {
+      loadData();
+    }, 30000);
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -822,9 +842,10 @@ export default function StudentDashboard() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     return () => {
+      clearInterval(interval);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, [navigate, location.state]);
+  }, [navigate, location.state, activeTab]);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
@@ -2326,36 +2347,49 @@ export default function StudentDashboard() {
                   ) : (
                     <div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {Array.from(new Set(courseMaterials.map((c: any) => c.subject?.toString().trim()).filter(Boolean))).map((subjName: any) => {
-                          const subjectCourses = courseMaterials.filter((c: any) => c.subject?.toString().trim().toLowerCase() === subjName.toLowerCase());
-                          const colorClasses = getSubjectColorClasses(subjName);
-                          return (
-                            <div
-                              key={subjName}
-                              onClick={() => setSelectedMaterialSubject(subjName)}
-                              className={`p-6 rounded-3xl border-2 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between h-48 group relative overflow-hidden ${colorClasses.bg} ${colorClasses.border}`}
-                            >
-                              <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-40 rounded-full blur-2xl"></div>
-                              <div>
-                                <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${colorClasses.text} bg-white/60`}>
-                                  Subject Unit
-                                </span>
-                                <h3 className={`text-2xl font-black mt-4 leading-tight group-hover:scale-105 transition-transform duration-300 origin-left`}>
-                                  {subjName}
-                                </h3>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 opacity-80`}>
-                                  <span className={`w-2 h-2 rounded-full ${colorClasses.dot} animate-pulse`}></span>
-                                  {subjectCourses.length} PDF{subjectCourses.length > 1 ? 's' : ''} available
-                                </span>
-                                <div className={`w-10 h-10 rounded-2xl bg-white flex items-center justify-center text-slate-700 shadow-sm border border-slate-100 group-hover:bg-red-600 group-hover:text-white group-hover:border-red-600 transition-all duration-300`}>
-                                  <ChevronRight size={18} />
+                        {(() => {
+                          const studentSubs = (studentData?.subjects || studentData?.enrolledClasses || []).map((s: any) => s?.toString().trim()).filter(Boolean);
+                          const materialSubs = courseMaterials.flatMap((c: any) => [c.subject, ...(c.subjects || [])]).map((s: any) => s?.toString().trim()).filter(Boolean);
+                          const allAvailableSubjectNames = Array.from(new Set([...studentSubs, ...materialSubs])).filter(s => s && s.toLowerCase() !== 'general' && s.toLowerCase() !== 'all');
+
+                          if (allAvailableSubjectNames.length === 0 && courseMaterials.length > 0) {
+                            allAvailableSubjectNames.push("General");
+                          }
+
+                          return allAvailableSubjectNames.map((subjName: any) => {
+                            const subjectCourses = courseMaterials.filter((c: any) => 
+                              areSubjectsMatching(c.subject, subjName) || 
+                              (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, subjName)))
+                            );
+                            const colorClasses = getSubjectColorClasses(subjName);
+                            return (
+                              <div
+                                key={subjName}
+                                onClick={() => setSelectedMaterialSubject(subjName)}
+                                className={`p-6 rounded-3xl border-2 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between h-48 group relative overflow-hidden ${colorClasses.bg} ${colorClasses.border}`}
+                              >
+                                <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-40 rounded-full blur-2xl"></div>
+                                <div>
+                                  <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${colorClasses.text} bg-white/60`}>
+                                    Subject Unit
+                                  </span>
+                                  <h3 className={`text-2xl font-black mt-4 leading-tight group-hover:scale-105 transition-transform duration-300 origin-left`}>
+                                    {subjName}
+                                  </h3>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 opacity-80`}>
+                                    <span className={`w-2 h-2 rounded-full ${colorClasses.dot} animate-pulse`}></span>
+                                    {subjectCourses.length} PDF{subjectCourses.length > 1 ? 's' : ''} available
+                                  </span>
+                                  <div className={`w-10 h-10 rounded-2xl bg-white flex items-center justify-center text-slate-700 shadow-sm border border-slate-100 group-hover:bg-red-600 group-hover:text-white group-hover:border-red-600 transition-all duration-300`}>
+                                    <ChevronRight size={18} />
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          });
+                        })()}
                       </div>
                     </div>
                   )}
@@ -2371,13 +2405,13 @@ export default function StudentDashboard() {
                       <h3 className="text-xl font-black text-slate-800 mt-2">Available PDF Documents</h3>
                     </div>
                     <span className="text-sm font-bold text-slate-400">
-                      {courseMaterials.filter((c: any) => areSubjectsMatching(c.subject, selectedMaterialSubject)).length} File(s)
+                      {courseMaterials.filter((c: any) => areSubjectsMatching(c.subject, selectedMaterialSubject) || (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, selectedMaterialSubject)))).length} File(s)
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {courseMaterials
-                      .filter((c: any) => areSubjectsMatching(c.subject, selectedMaterialSubject))
+                      .filter((c: any) => areSubjectsMatching(c.subject, selectedMaterialSubject) || (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, selectedMaterialSubject))))
                       .map((course: any) => (
                         <div 
                           key={course.id}
