@@ -199,6 +199,65 @@ export default function Students() {
     return match ? parseInt(match[0]) : 999;
   };
 
+  const unifiedGrades = React.useMemo(() => {
+    const map = new Map<string, string>(); // normKey -> displayName
+
+    // 1. Existing classes from DB
+    classes.forEach((c: any) => {
+      if (c?.name) {
+        const name = c.name.toString().trim();
+        if (name) {
+          const digits = name.replace(/[^0-9]/g, '');
+          const key = digits ? `grade_${parseInt(digits, 10)}` : name.toLowerCase();
+          if (!map.has(key)) {
+            map.set(key, name);
+          }
+        }
+      }
+    });
+
+    // 2. Standard GRADES list
+    GRADES.forEach((g) => {
+      const name = g.trim();
+      const digits = name.replace(/[^0-9]/g, '');
+      const key = digits ? `grade_${parseInt(digits, 10)}` : name.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, name);
+      }
+    });
+
+    // 3. Grades present in student records
+    students.forEach((s: any) => {
+      if (s?.grade) {
+        const name = s.grade.toString().trim();
+        if (name) {
+          const digits = name.replace(/[^0-9]/g, '');
+          const key = digits ? `grade_${parseInt(digits, 10)}` : name.toLowerCase();
+          if (!map.has(key)) {
+            map.set(key, name);
+          }
+        }
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => getGradeSortValue(a) - getGradeSortValue(b));
+  }, [classes, students]);
+
+  const getStudentCountForGrade = (gradeName: string) => {
+    if (!gradeName) return 0;
+    const targetNorm = gradeName.toString().trim();
+    const targetDigits = targetNorm.replace(/[^0-9]/g, '');
+
+    return students.filter(s => {
+      if (!s.grade) return false;
+      const sNorm = s.grade.toString().trim();
+      if (sNorm === targetNorm || sNorm.toLowerCase() === targetNorm.toLowerCase()) return true;
+      const sDigits = sNorm.replace(/[^0-9]/g, '');
+      if (targetDigits !== '' && sDigits !== '' && parseInt(targetDigits, 10) === parseInt(sDigits, 10)) return true;
+      return false;
+    }).length;
+  };
+
   const sortedClasses = [...classes].sort((a, b) => getGradeSortValue(a.name) - getGradeSortValue(b.name));
 
   const availableSubjects = allSubjects.map(s => s.name);
@@ -765,8 +824,8 @@ export default function Students() {
                 className="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">-- Select Class --</option>
-                {sortedClasses.map(c => (
-                  <option key={c.id} value={c.name}>{c.name}</option>
+                {unifiedGrades.map(g => (
+                  <option key={g} value={g}>{g}</option>
                 ))}
               </select>
           </div>
@@ -822,17 +881,12 @@ export default function Students() {
               className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
             >
               <option value="">Select Class</option>
-              {sortedClasses.map((cls) => (
-                <option key={cls.id} value={cls.name}>
-                  {cls.name}
-                </option>
-              ))}
-              {GRADES.filter(g => !classes.some(c => c.name === g)).sort((a,b) => getGradeSortValue(a) - getGradeSortValue(b)).map((grade) => (
+              {unifiedGrades.map((grade) => (
                 <option key={grade} value={grade}>
                   {grade}
                 </option>
               ))}
-              {formData.grade && !classes.some(c => c.name === formData.grade) && !GRADES.includes(formData.grade) && (
+              {formData.grade && !unifiedGrades.includes(formData.grade) && (
                 <option key={formData.grade} value={formData.grade}>
                   {formData.grade}
                 </option>
@@ -1192,14 +1246,9 @@ export default function Students() {
               >
                 <option value="">All Classes ({students.length})</option>
                 <option value="unassigned" className="text-red-600 font-bold">Unassigned ({unassignedCount})</option>
-                {sortedClasses.map((cls) => (
-                  <option key={cls.id} value={cls.name}>
-                    {cls.name} ({studentCountByClass[cls.name] || 0})
-                  </option>
-                ))}
-                {GRADES.filter(g => !classes.some(c => c.name === g)).sort((a,b) => getGradeSortValue(a) - getGradeSortValue(b)).map((grade) => (
+                {unifiedGrades.map((grade) => (
                   <option key={grade} value={grade}>
-                    {grade} ({studentCountByClass[grade] || 0})
+                    {grade} ({getStudentCountForGrade(grade)})
                   </option>
                 ))}
               </select>
@@ -1859,10 +1908,7 @@ export default function Students() {
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Select Grade</option>
-                    {sortedClasses.map((cls) => (
-                      <option key={cls.id} value={cls.name}>{cls.name}</option>
-                    ))}
-                    {GRADES.filter(g => !classes.some(c => c.name === g)).sort((a,b) => getGradeSortValue(a) - getGradeSortValue(b)).map((grade) => (
+                    {unifiedGrades.map((grade) => (
                       <option key={grade} value={grade}>{grade}</option>
                     ))}
                   </select>
