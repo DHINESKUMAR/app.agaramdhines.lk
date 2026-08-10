@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { getStudents, saveStudents, getClasses, getAdminSettings } from "../../lib/db";
+import { getStudents, saveStudents, getClasses, getAdminSettings, sanitizeSubjectList, areSubjectsMatching } from "../../lib/db";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { secondaryAuth } from "../../lib/firebase";
 import * as XLSX from "xlsx";
@@ -260,14 +260,22 @@ export default function Students() {
 
   const sortedClasses = [...classes].sort((a, b) => getGradeSortValue(a.name) - getGradeSortValue(b.name));
 
-  const availableSubjects = allSubjects.map(s => s.name);
+  const availableSubjects = Array.from(new Set([
+    ...allSubjects.map(s => s.name),
+    ...(formData.subjects || []),
+    ...students.flatMap(s => s.subjects || s.enrolledClasses || [])
+  ])).filter(s => s && typeof s === 'string' && s.trim().length > 0);
 
   const handleSubjectToggle = (subject: string) => {
     setFormData(prev => {
-      const subjects = prev.subjects.includes(subject)
-        ? prev.subjects.filter(s => s !== subject)
-        : [...prev.subjects, subject];
-      return { ...prev, subjects };
+      const isChecked = prev.subjects.some(s => s.trim().toLowerCase() === subject.trim().toLowerCase());
+      let updatedSubjects: string[];
+      if (isChecked) {
+        updatedSubjects = prev.subjects.filter(s => s.trim().toLowerCase() !== subject.trim().toLowerCase());
+      } else {
+        updatedSubjects = [...prev.subjects, subject];
+      }
+      return { ...prev, subjects: sanitizeSubjectList(updatedSubjects) };
     });
   };
 
@@ -428,7 +436,7 @@ export default function Students() {
       username: student.username || "",
       password: student.password || "",
       rollNo: student.rollNo || "",
-      subjects: student.subjects || [],
+      subjects: sanitizeSubjectList(student.subjects || student.enrolledClasses || []),
       zoomBlocked: student.zoomBlocked || false,
       dob: student.dob || "",
       gender: student.gender || "",
@@ -1066,7 +1074,7 @@ export default function Students() {
                   <label key={subject} className="flex items-center space-x-2 text-sm">
                     <input 
                       type="checkbox" 
-                      checked={formData.subjects.includes(subject)}
+                      checked={formData.subjects.some((s: string) => s.trim().toLowerCase() === subject.trim().toLowerCase())}
                       onChange={() => handleSubjectToggle(subject)}
                       className="rounded text-blue-600 focus:ring-blue-500"
                     />
@@ -1375,9 +1383,9 @@ export default function Students() {
                     )}
 
                     {/* Subjects Badge */}
-                    {student.subjects && student.subjects.length > 0 && (
-                      <div className="mt-2 text-[11px] font-medium text-slate-600 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 w-full truncate" title={student.subjects.join(", ")}>
-                        📚 <span className="font-bold text-indigo-600">{student.subjects.length}</span> Subjects
+                    {student.subjects && sanitizeSubjectList(student.subjects).length > 0 && (
+                      <div className="mt-2 text-[11px] font-medium text-slate-600 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 w-full truncate" title={sanitizeSubjectList(student.subjects).join(", ")}>
+                        📚 <span className="font-bold text-indigo-600">{sanitizeSubjectList(student.subjects).length}</span> Subjects
                       </div>
                     )}
                   </div>
@@ -1490,10 +1498,10 @@ export default function Students() {
                       <td className="px-4 py-3 text-slate-600 text-xs whitespace-nowrap">
                         {student.phone || `@${student.username}` || "-"}
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-600 max-w-[200px] truncate" title={student.subjects?.join(", ")}>
-                        {student.subjects && student.subjects.length > 0 ? (
+                      <td className="px-4 py-3 text-xs text-slate-600 max-w-[200px] truncate" title={sanitizeSubjectList(student.subjects)?.join(", ")}>
+                        {student.subjects && sanitizeSubjectList(student.subjects).length > 0 ? (
                           <span className="bg-slate-100 text-slate-700 font-medium px-2 py-0.5 rounded border border-slate-200">
-                            {student.subjects.length} subjects
+                            {sanitizeSubjectList(student.subjects).length} subjects
                           </span>
                         ) : (
                           <span className="text-slate-400">None</span>

@@ -58,6 +58,8 @@ import { useTimetableNotifications } from "../../hooks/useTimetableNotifications
 
 export const normalizeSub = (str: string) => {
   if (!str) return '';
+  const trimmed = str.trim();
+  if (trimmed.toLowerCase() === 'tamil') return 'தமிழ்';
   return str.toLowerCase()
     .replace(/\(தரம்\s*\d+\)/gi, '')
     .replace(/\(grade\s*\d+\)/gi, '')
@@ -71,6 +73,10 @@ export const normalizeSub = (str: string) => {
 export const getCanonicalSubject = (s: string): string => {
   if (!s) return "";
   const raw = normalizeSub(s);
+
+  if (raw === "tamil" || raw === "தமிழ்") {
+    return "தமிழ்";
+  }
 
   if (raw.includes("நயம்") || raw.includes("nayam") || (raw.includes("இலக்கிய") && raw.includes("நயம்"))) {
     return "tamil_ilakkia_nayam";
@@ -2348,9 +2354,10 @@ export default function StudentDashboard() {
                           const subjectMap = new Map<string, string>();
                           rawSubs.forEach(name => {
                             if (name && name.toLowerCase() !== 'general' && name.toLowerCase() !== 'all') {
-                              const normKey = normalizeSub(name);
-                              if (normKey && !subjectMap.has(normKey)) {
-                                subjectMap.set(normKey, name);
+                              const displayName = name.trim();
+                              const key = displayName.toLowerCase();
+                              if (key && !subjectMap.has(key)) {
+                                subjectMap.set(key, displayName);
                               }
                             }
                           });
@@ -2479,9 +2486,9 @@ export default function StudentDashboard() {
           const activeELearningSubjectsMap = new Map<string, string>();
           rawELearningSubjects.forEach(s => {
             if (s) {
-              const key = normalizeSub(s) || s.toLowerCase();
+              const key = s.trim().toLowerCase();
               if (!activeELearningSubjectsMap.has(key)) {
-                activeELearningSubjectsMap.set(key, s);
+                activeELearningSubjectsMap.set(key, s.trim());
               }
             }
           });

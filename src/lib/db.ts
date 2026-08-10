@@ -453,10 +453,100 @@ export const saveChatbotSettings = (settings: any) => saveData('chatbotSettings'
 export const getPasswordRequests = () => getData('passwordRequests', []);
 export const savePasswordRequests = (requests: any) => saveData('passwordRequests', requests);
 
-export const getStudents = () => getData('students', []);
+export const normalizeSub = (str: string) => {
+  if (!str) return '';
+  return str.toLowerCase()
+    .replace(/\(தரம்\s*\d+\)/gi, '')
+    .replace(/\(grade\s*\d+\)/gi, '')
+    .replace(/தரம்\s*\d+/gi, '')
+    .replace(/grade\s*\d+/gi, '')
+    .replace(/[\(\)\-\:\,\.]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+export const getCanonicalSubject = (s: string): string => {
+  if (!s) return "";
+  const raw = normalizeSub(s);
+
+  if (raw === "tamil" || raw === "தமிழ்") {
+    return "tamil";
+  }
+  if (raw.includes("நயம்") || raw.includes("nayam") || (raw.includes("இலக்கிய") && raw.includes("நயம்"))) {
+    return "tamil_ilakkia_nayam";
+  }
+  if (raw.includes("மொழி") && raw.includes("இலக்கிய")) {
+    return "tamil_mozhi_ilakkiam";
+  }
+  if (raw.includes("30 நாள்") || raw.includes("30 day")) {
+    if (raw.includes("15") || raw.includes("30 வது")) return "tamil_30_days_part2";
+    return "tamil_30_days";
+  }
+  if (raw.includes("வினா") || raw.includes("vina") || raw.includes("q&a") || raw.includes("question")) {
+    return "tamil_vina_vidai";
+  }
+  if (raw.includes("வளம்") || raw.includes("game")) {
+    return "tamil_mozhi_valam";
+  }
+
+  return raw;
+};
+
+export const areSubjectsMatching = (itemSub: string, studentSub: string): boolean => {
+  if (!itemSub || !studentSub) return false;
+  const rawItem = itemSub.trim().toLowerCase();
+  const rawSt = studentSub.trim().toLowerCase();
+
+  if (rawItem === rawSt) return true;
+
+  const wildcards = ["all", "general", "public", "e-learning", "uncategorized", "அனைத்து", "அனைத்து பாடங்களும்", "all subjects"];
+  if (wildcards.includes(rawItem) || wildcards.includes(rawSt)) return true;
+
+  const normItem = normalizeSub(itemSub);
+  const normSt = normalizeSub(studentSub);
+
+  if (normItem && normSt && normItem === normSt) return true;
+
+  const canonItem = getCanonicalSubject(itemSub);
+  const canonSt = getCanonicalSubject(studentSub);
+
+  if (canonItem && canonSt && canonItem === canonSt) return true;
+
+  return false;
+};
+
+export const sanitizeSubjectList = (subs: any[]): string[] => {
+  if (!Array.isArray(subs)) return [];
+  const map = new Map<string, string>();
+  subs.forEach((s: any) => {
+    if (!s) return;
+    const name = String(s).trim();
+    if (!name) return;
+    const lowerKey = name.toLowerCase();
+    if (!map.has(lowerKey)) {
+      map.set(lowerKey, name);
+    }
+  });
+  return Array.from(map.values());
+};
+
+export const getStudents = async () => {
+  const raw = await getData('students', []);
+  if (!Array.isArray(raw)) return [];
+  return raw.map((student: any) => {
+    if (!student) return student;
+    const subjects = sanitizeSubjectList(student.subjects || student.enrolledClasses || []);
+    return {
+      ...student,
+      subjects
+    };
+  });
+};
+
 export const saveStudents = async (students: any) => {
   const sanitized = (Array.isArray(students) ? students : []).map((student: any) => ({
     ...student,
+    subjects: sanitizeSubjectList(student.subjects || student.enrolledClasses || []),
     id: String(student.id || "STU" + Math.floor(100000 + Math.random() * 900000))
   }));
   return saveData('students', sanitized);
@@ -484,7 +574,10 @@ export const saveZoomLinks = (links: any) => saveData('zoomLinks', links);
 export const getCourses = () => getData('courses', []);
 export const saveCourses = (courses: any) => saveData('courses', courses);
 
-export const getCourseMaterials = () => getData('courseMaterials', []);
+export const getCourseMaterials = async () => {
+  const raw = await getData('courseMaterials', []);
+  return Array.isArray(raw) ? raw : [];
+};
 export const saveCourseMaterials = (materials: any) => saveData('courseMaterials', materials);
 
 export const getYoutubeLinks = () => getData('youtubeLinks', []);
@@ -594,12 +687,6 @@ export const getSubjects = async () => {
     if (redundantIlakkiaNayamVariants.has(rawName)) {
       rawName = "தமிழ் இலக்கிய நயம்";
       item.name = "தமிழ் இலக்கிய நயம்";
-    }
-
-    // Convert English "tamil" variants to Tamil script "தமிழ்"
-    if (rawName.toLowerCase() === "tamil") {
-      rawName = "தமிழ்";
-      item.name = "தமிழ்";
     }
 
     const nameKey = rawName.toLowerCase();
