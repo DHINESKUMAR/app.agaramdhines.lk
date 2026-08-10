@@ -521,7 +521,29 @@ export const getCourseWebsiteLinks = async () => {
 };
 export const saveCourseWebsiteLinks = (links: any) => saveData('courseWebsiteLinks', links);
 
-export const getClasses = () => getData('classes', []);
+export const getClasses = async () => {
+  const rawClasses = await getData('classes', []);
+  if (!Array.isArray(rawClasses)) return [];
+  const classMap = new Map<string, any>();
+  let hasDuplicates = false;
+  rawClasses.forEach((item: any) => {
+    if (!item) return;
+    const key = (item.name || item.id || '').toString().trim().toLowerCase();
+    if (!key) return;
+    if (classMap.has(key)) {
+      hasDuplicates = true;
+      const existing = classMap.get(key);
+      classMap.set(key, { ...existing, ...item, id: existing.id || item.id });
+    } else {
+      classMap.set(key, item);
+    }
+  });
+  const deduped = Array.from(classMap.values());
+  if (hasDuplicates) {
+    saveData('classes', deduped).catch(() => {});
+  }
+  return deduped;
+};
 export const saveClasses = (classes: any) => saveData('classes', classes);
 
 export const getHomework = () => getData('homework', []);

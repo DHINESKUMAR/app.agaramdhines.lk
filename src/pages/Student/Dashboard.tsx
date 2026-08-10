@@ -97,38 +97,24 @@ export const areSubjectsMatching = (itemSub: string, studentSub: string): boolea
   const rawItem = itemSub.trim().toLowerCase();
   const rawSt = studentSub.trim().toLowerCase();
 
+  // 1. Direct exact match
   if (rawItem === rawSt) return true;
 
+  // 2. Wildcards (e.g., item or target is 'All' or 'General')
+  const wildcards = ["all", "general", "public", "e-learning", "uncategorized", "அனைத்து", "அனைத்து பாடங்களும்", "all subjects"];
+  if (wildcards.includes(rawItem) || wildcards.includes(rawSt)) return true;
+
+  // 3. Normalized string match (strips grade tags like '(தரம் 11)', punctuation, extra spaces)
   const normItem = normalizeSub(itemSub);
   const normSt = normalizeSub(studentSub);
 
   if (normItem && normSt && normItem === normSt) return true;
 
-  const wildcards = ["all", "general", "public", "e-learning", "uncategorized", "அனைத்து", "அனைத்து பாடங்களும்", "all subjects"];
-  if (wildcards.includes(normItem) || wildcards.includes(normSt)) return true;
-
+  // 4. Canonical match for identical subject/lesson aliases
   const canonItem = getCanonicalSubject(itemSub);
   const canonSt = getCanonicalSubject(studentSub);
 
-  if (canonItem && canonSt) {
-    if (canonItem === canonSt) return true;
-
-    // General "தமிழ்" or "tamil" matches any specific Tamil sub-course
-    if ((canonItem === "தமிழ்" || canonItem === "tamil") && (canonSt.startsWith("tamil_") || normSt.includes("தமிழ்") || normSt.includes("tamil"))) {
-      return true;
-    }
-    if ((canonSt === "தமிழ்" || canonSt === "tamil") && (canonItem.startsWith("tamil_") || normItem.includes("தமிழ்") || normItem.includes("tamil"))) {
-      return true;
-    }
-
-    if (canonItem !== canonSt && (canonItem.startsWith("tamil_") || canonSt.startsWith("tamil_"))) {
-      return false;
-    }
-  }
-
-  if (normItem && normSt) {
-    if (normItem.includes(normSt) || normSt.includes(normItem)) return true;
-  }
+  if (canonItem && canonSt && canonItem === canonSt) return true;
 
   return false;
 };
@@ -2350,7 +2336,17 @@ export default function StudentDashboard() {
                         {(() => {
                           const studentSubs = (studentData?.subjects || studentData?.enrolledClasses || []).map((s: any) => s?.toString().trim()).filter(Boolean);
                           const materialSubs = courseMaterials.flatMap((c: any) => [c.subject, ...(c.subjects || [])]).map((s: any) => s?.toString().trim()).filter(Boolean);
-                          const allAvailableSubjectNames = Array.from(new Set([...studentSubs, ...materialSubs])).filter(s => s && s.toLowerCase() !== 'general' && s.toLowerCase() !== 'all');
+                          const rawSubs = [...studentSubs, ...materialSubs].filter(s => s && s.toLowerCase() !== 'general' && s.toLowerCase() !== 'all');
+
+                          const subjectMap = new Map<string, string>();
+                          rawSubs.forEach(name => {
+                            const normKey = normalizeSub(name);
+                            if (normKey && !subjectMap.has(normKey)) {
+                              subjectMap.set(normKey, name);
+                            }
+                          });
+
+                          const allAvailableSubjectNames = Array.from(subjectMap.values());
 
                           if (allAvailableSubjectNames.length === 0 && courseMaterials.length > 0) {
                             allAvailableSubjectNames.push("General");
@@ -2456,15 +2452,32 @@ export default function StudentDashboard() {
         )}
 
         {activeTab === "youtube" && (() => {
-          const activeELearningSubjects = Array.from(
-            new Set([
-              ...(studentData?.subjects || studentData?.enrolledClasses || []).map((s: any) => s?.toString().trim()),
-              ...youtubeLinks.map((l: any) => l.subject?.toString().trim()),
-              ...youtubeLinks.flatMap((l: any) => Array.isArray(l.subjects) ? l.subjects.map((s: any) => s?.toString().trim()) : []),
-              ...webPosts.map((p: any) => p.subject?.toString().trim()),
-              ...webPosts.flatMap((p: any) => Array.isArray(p.subjects) ? p.subjects.map((s: any) => s?.toString().trim()) : []),
-            ])
-          ).filter((s): s is string => !!s && s.toLowerCase() !== 'general' && s.toLowerCase() !== 'uncategorized' && s.toLowerCase() !== 'e-learning' && s.toLowerCase() !== 'public' && s.toLowerCase() !== 'all').sort();
+          const rawELearningSubjects = [
+            ...(studentData?.subjects || studentData?.enrolledClasses || []).map((s: any) => s?.toString().trim()),
+            ...youtubeLinks.map((l: any) => l.subject?.toString().trim()),
+            ...youtubeLinks.flatMap((l: any) => Array.isArray(l.subjects) ? l.subjects.map((s: any) => s?.toString().trim()) : []),
+            ...webPosts.map((p: any) => p.subject?.toString().trim()),
+            ...webPosts.flatMap((p: any) => Array.isArray(p.subjects) ? p.subjects.map((s: any) => s?.toString().trim()) : []),
+            ...courseMaterials.map((m: any) => m.subject?.toString().trim()),
+            ...courseMaterials.flatMap((m: any) => Array.isArray(m.subjects) ? m.subjects.map((s: any) => s?.toString().trim()) : []),
+            ...zoomLinks.map((z: any) => z.subject?.toString().trim()),
+            ...zoomLinks.flatMap((z: any) => Array.isArray(z.subjects) ? z.subjects.map((s: any) => s?.toString().trim()) : []),
+            "30 நாள் (15 - 30) வது நாள்",
+            "தமிழ் மொழி",
+            "தமிழ் இலக்கணம்",
+            "30 நாள் தமிழ் பாடநெறி (தரம் 11)",
+            "தமிழ் வினா விடை"
+          ].filter((s): s is string => !!s && s.toLowerCase() !== 'general' && s.toLowerCase() !== 'uncategorized' && s.toLowerCase() !== 'e-learning' && s.toLowerCase() !== 'public' && s.toLowerCase() !== 'all');
+
+          // Deduplicate by normalized key while preserving clean human readable title
+          const activeELearningSubjectsMap = new Map<string, string>();
+          rawELearningSubjects.forEach(s => {
+            const key = normalizeSub(s) || s.toLowerCase();
+            if (!activeELearningSubjectsMap.has(key)) {
+              activeELearningSubjectsMap.set(key, s);
+            }
+          });
+          const activeELearningSubjects = Array.from(activeELearningSubjectsMap.values()).sort();
 
           const isELearningSubjectMatch = (itemSubject: string | undefined, itemSubjects: string[] | undefined, target: string) => {
             if (target === "All") return true;
@@ -2484,6 +2497,14 @@ export default function StudentDashboard() {
           const filteredWebPosts = selectedELearningSubject === "All"
             ? webPosts
             : webPosts.filter((post: any) => isELearningSubjectMatch(post.subject, post.subjects, selectedELearningSubject));
+
+          const filteredSubjectZoomLinks = selectedELearningSubject === "All"
+            ? zoomLinks.filter(z => (studentData?.subjects || studentData?.enrolledClasses || []).some((e: any) => areSubjectsMatching(z.subject, e)))
+            : zoomLinks.filter((z: any) => isELearningSubjectMatch(z.subject, z.subjects, selectedELearningSubject));
+
+          const filteredSubjectMaterials = selectedELearningSubject === "All"
+            ? []
+            : courseMaterials.filter((m: any) => isELearningSubjectMatch(m.subject, m.subjects, selectedELearningSubject));
 
           return (
             <div className="space-y-6">
@@ -2523,7 +2544,7 @@ export default function StudentDashboard() {
                         <h3 className="font-bold text-slate-800 text-base">Select Subject / பாடத்தைத் தெரிவுசெய்க</h3>
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Displaying recordings, materials, and posts for your selected subject.
+                        Displaying recordings, materials, and zoom links for your selected subject.
                       </p>
                     </div>
                     
@@ -2610,6 +2631,89 @@ export default function StudentDashboard() {
                     )}
                   </div>
                 </div>
+
+                {/* Selected Subject Zoom Links & Saved Materials Quick Hub */}
+                {selectedELearningSubject !== "All" && (filteredSubjectZoomLinks.length > 0 || filteredSubjectMaterials.length > 0) && (
+                  <div className="mb-8 space-y-4 bg-gradient-to-br from-indigo-50/70 to-blue-50/70 border-2 border-indigo-100 rounded-3xl p-5 sm:p-6 shadow-sm">
+                    <div className="flex items-center justify-between border-b border-indigo-100/80 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full bg-indigo-600 animate-ping"></span>
+                        <h3 className="font-black text-slate-800 text-base">
+                          {selectedELearningSubject} — Live Zoom & Saved Materials
+                        </h3>
+                      </div>
+                      <span className="text-xs font-bold text-indigo-600 bg-white px-3 py-1 rounded-full border border-indigo-100 shadow-2xs">
+                        Direct Access
+                      </span>
+                    </div>
+
+                    {/* Live Zoom Links for Selected Subject */}
+                    {filteredSubjectZoomLinks.length > 0 && (
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                          <Video size={14} className="text-blue-600" /> Live Zoom Class Links
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {filteredSubjectZoomLinks.map((z: any) => (
+                            <div key={z.id} className="bg-white p-4 rounded-2xl border border-indigo-100 flex flex-col justify-between shadow-xs hover:shadow-md transition-all">
+                              <div>
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                                    {z.subject || selectedELearningSubject}
+                                  </span>
+                                  {z.datetime && (
+                                    <span className="text-[10px] font-semibold text-slate-400">
+                                      {new Date(z.datetime).toLocaleString()}
+                                    </span>
+                                  )}
+                                </div>
+                                <h5 className="font-bold text-slate-800 text-sm">{z.title || `${selectedELearningSubject} Zoom Class`}</h5>
+                              </div>
+                              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                                <span className="text-xs font-medium text-slate-500">Zoom Live Session</span>
+                                <button
+                                  onClick={() => handleJoinClass(z.link || z.zoomLinkUrl)}
+                                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition-all"
+                                >
+                                  <Video size={14} /> Join Class
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Saved PDF Documents for Selected Subject */}
+                    {filteredSubjectMaterials.length > 0 && (
+                      <div className="space-y-3 pt-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                          <FileText size={14} className="text-rose-600" /> Saved Course Materials & Notes
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {filteredSubjectMaterials.map((m: any) => (
+                            <div key={m.id} className="bg-white p-4 rounded-2xl border border-rose-100 flex items-center justify-between shadow-xs hover:shadow-md transition-all gap-3">
+                              <div>
+                                <span className="text-[10px] font-black uppercase text-rose-600 bg-rose-50 px-2 py-0.5 rounded">
+                                  {m.subject || selectedELearningSubject}
+                                </span>
+                                <h5 className="font-bold text-slate-800 text-sm mt-1">{m.title}</h5>
+                              </div>
+                              <a
+                                href={m.link}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1 shrink-0 shadow-sm transition-all"
+                              >
+                                <Download size={14} /> PDF
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 
                 {eLearningType === 'videos' ? (
                   <div className="space-y-4 pt-2">

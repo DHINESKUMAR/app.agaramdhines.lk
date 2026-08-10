@@ -74,17 +74,23 @@ export default function Classes() {
     }
     
     let updatedClasses;
+    const normName = formData.name.trim();
     if (editingClassId) {
       updatedClasses = classes.map(c => 
-        c.id === editingClassId ? { ...c, ...formData } : c
+        (c.id === editingClassId || c.name?.trim() === normName) ? { ...c, ...formData } : c
       );
       setToast({ message: "Class updated successfully!", type: 'success' });
     } else {
-      const newClass = {
-        id: Date.now().toString(),
-        ...formData
-      };
-      updatedClasses = [...classes, newClass];
+      const existingIdx = classes.findIndex(c => c.name?.trim() === normName);
+      if (existingIdx >= 0) {
+        updatedClasses = classes.map((c, idx) => idx === existingIdx ? { ...c, ...formData } : c);
+      } else {
+        const newClass = {
+          id: Date.now().toString(),
+          ...formData
+        };
+        updatedClasses = [...classes, newClass];
+      }
       setToast({ message: "Class added successfully!", type: 'success' });
     }
     
@@ -114,7 +120,15 @@ export default function Classes() {
 
   const confirmDelete = async () => {
     if (deleteConfirm) {
-      const updatedClasses = classes.filter(c => c.id !== deleteConfirm);
+      const targetClass = classes.find(c => c.id === deleteConfirm);
+      const targetName = targetClass?.name?.toString().trim().toLowerCase();
+
+      const updatedClasses = classes.filter(c => {
+        if (c.id === deleteConfirm) return false;
+        if (targetName && c.name && c.name.toString().trim().toLowerCase() === targetName) return false;
+        return true;
+      });
+
       setClasses(updatedClasses);
       await saveClasses(updatedClasses);
       setDeleteConfirm(null);
