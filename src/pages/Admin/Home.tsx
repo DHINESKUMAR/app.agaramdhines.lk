@@ -60,6 +60,18 @@ export default function AdminHome() {
       ]);
     };
     loadData();
+
+    const handleDbUpdate = (e: any) => {
+      const key = e.detail?.key;
+      if (!key || ['students', 'staffs', 'fees', 'incomeExpense', 'timeTable'].includes(key)) {
+        loadData();
+      }
+    };
+
+    window.addEventListener('db_updated', handleDbUpdate);
+    return () => {
+      window.removeEventListener('db_updated', handleDbUpdate);
+    };
   }, []);
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();

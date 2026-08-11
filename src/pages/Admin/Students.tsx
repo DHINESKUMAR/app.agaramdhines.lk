@@ -145,6 +145,24 @@ export default function Students() {
     getClasses().then(setClasses);
     getAdminSettings().then(setAdminSettings);
     import('../../lib/db').then(({ getSubjects }) => getSubjects().then(setAllSubjects));
+
+    const handleDbUpdate = (e: any) => {
+      const key = e.detail?.key;
+      if (!key || key === 'students') {
+        getStudents().then(setStudents);
+      }
+      if (!key || key === 'classes') {
+        getClasses().then(setClasses);
+      }
+      if (!key || key === 'subjects') {
+        import('../../lib/db').then(({ getSubjects }) => getSubjects().then(setAllSubjects));
+      }
+    };
+
+    window.addEventListener('db_updated', handleDbUpdate);
+    return () => {
+      window.removeEventListener('db_updated', handleDbUpdate);
+    };
   }, [view]);
 
   // Form state

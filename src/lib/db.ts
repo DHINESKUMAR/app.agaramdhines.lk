@@ -1,8 +1,56 @@
 import { db, isFirebaseConfigured } from './firebase';
-import { collection, doc, getDocs, getDoc, setDoc, writeBatch, query, where } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, setDoc, writeBatch, query, where, onSnapshot } from 'firebase/firestore';
 
 const memoryCache: Record<string, { data: any; timestamp: number }> = {};
-const CACHE_TTL_MS = 120000; // 2 minutes memory cache for instant performance
+const CACHE_TTL_MS = 2000; // 2 seconds short cache to prevent duplicate calls during single render
+
+// Real-time listener registry for Firebase singletons
+const activeListeners: Record<string, () => void> = {};
+
+const mergeArraysById = (primary: any[], secondary: any[]) => {
+  if (!Array.isArray(primary)) return Array.isArray(secondary) ? secondary : [];
+  if (!Array.isArray(secondary)) return primary;
+
+  const map = new Map<string, any>();
+  primary.forEach(item => {
+    if (!item) return;
+    const key = String(item.id || item.rollNo || item.username || item.phone || JSON.stringify(item)).trim().toLowerCase();
+    if (key) map.set(key, item);
+  });
+
+  secondary.forEach(item => {
+    if (!item) return;
+    const key = String(item.id || item.rollNo || item.username || item.phone || JSON.stringify(item)).trim().toLowerCase();
+    if (key && !map.has(key)) {
+      map.set(key, item);
+    }
+  });
+
+  return Array.from(map.values());
+};
+
+const setupRealtimeListener = (key: string) => {
+  if (!isFirebaseConfigured || activeListeners[key]) return;
+  try {
+    const singletonRef = doc(db, 'singletons', key);
+    const unsub = onSnapshot(singletonRef, (snapshot) => {
+      if (snapshot.exists() && snapshot.data()?.data !== undefined) {
+        const freshData = snapshot.data().data;
+        memoryCache[key] = { data: freshData, timestamp: Date.now() };
+        try {
+          localStorage.setItem(key, JSON.stringify(freshData));
+        } catch (e) {}
+
+        window.dispatchEvent(new CustomEvent('db_updated', { detail: { key, data: freshData } }));
+      }
+    }, (err) => {
+      console.warn(`Realtime snapshot error for ${key}:`, err);
+    });
+    activeListeners[key] = unsub;
+  } catch (e) {
+    console.warn(`Failed to setup realtime listener for ${key}:`, e);
+  }
+};
 
 // --- Database Health & Usage Tracking ---
 export interface DbMetrics {
@@ -111,22 +159,22 @@ export const resetDbHealthMetrics = () => {
 
 // Helper to get data from Firebase with localStorage fallback and memory caching
 const getData = async (key: string, defaultValue: any) => {
-  // Check memory cache first - return cached data if valid
+  // Start realtime listener for instant cloud sync across all devices
+  setupRealtimeListener(key);
+
+  // Check memory cache first
   const cached = memoryCache[key];
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
     recordReadOperation(1, true);
     return cached.data;
   }
 
-  // Read local storage data first for immediate system availability
+  // Read local storage data first
   let localData: any = null;
   try {
     const rawValue = localStorage.getItem(key);
     if (rawValue && rawValue !== 'undefined') {
       localData = JSON.parse(rawValue);
-      if (localData !== null && (!Array.isArray(localData) || localData.length > 0)) {
-        memoryCache[key] = { data: localData, timestamp: Date.now() };
-      }
     }
   } catch (e) {
     console.warn(`Error reading localStorage for ${key}:`, e);
@@ -135,25 +183,34 @@ const getData = async (key: string, defaultValue: any) => {
   if (isFirebaseConfigured) {
     try {
       const fetchFirebase = async () => {
-        // 1. Try singletons document FIRST (uses exactly 1 Firestore read)
+        // 1. Try singletons document FIRST
         try {
           const singletonRef = doc(db, 'singletons', key);
           const singletonSnap = await getDoc(singletonRef);
           if (singletonSnap.exists() && singletonSnap.data()?.data !== undefined) {
-            return singletonSnap.data().data;
+            const fbData = singletonSnap.data().data;
+            
+            // If local storage has more entries than cloud, merge and update cloud
+            if (Array.isArray(fbData) && Array.isArray(localData) && localData.length > fbData.length) {
+              const merged = mergeArraysById(fbData, localData);
+              if (merged.length > fbData.length) {
+                setDoc(singletonRef, { data: merged, updatedAt: Date.now() }).catch(() => {});
+                return merged;
+              }
+            }
+            return fbData;
           }
         } catch (singErr) {
           console.warn(`Error fetching singleton ${key}:`, singErr);
         }
 
-        // 2. Legacy fallback: if singleton doc doesn't exist yet for an array collection, query collection ONCE
+        // 2. Legacy fallback: query collection once
         if (Array.isArray(defaultValue)) {
           try {
             const querySnapshot = await getDocs(collection(db, key));
             if (!querySnapshot.empty) {
               const colData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
               if (colData.length > 0) {
-                // Store in singleton doc so future reads only cost 1 read
                 setDoc(doc(db, 'singletons', key), { data: colData, updatedAt: Date.now() }).catch(() => {});
                 return colData;
               }
@@ -163,11 +220,16 @@ const getData = async (key: string, defaultValue: any) => {
           }
         }
 
+        // Seed Firebase if singleton does not exist yet but local data exists
+        if (localData !== null && localData !== undefined) {
+          setDoc(doc(db, 'singletons', key), { data: localData, updatedAt: Date.now() }).catch(() => {});
+          return localData;
+        }
+
         return localData;
       };
 
-      const hasLocalContent = localData && (!Array.isArray(localData) || localData.length > 0);
-      const timeoutMs = hasLocalContent ? 2000 : 6000;
+      const timeoutMs = 10000; // Allow 10s for mobile networks
       const fbData = await Promise.race([
         fetchFirebase(),
         new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs))
@@ -197,38 +259,29 @@ const getData = async (key: string, defaultValue: any) => {
   return defaultValue;
 };
 
-// Helper to save data to Firebase and localStorage simultaneously with minimal Firestore cost (1 write)
+// Helper to save data to Firebase and localStorage simultaneously
 const saveData = async (key: string, data: any) => {
-  // Deep clean to remove any undefined fields or functions that break Firestore SDK
   const cleanData = JSON.parse(JSON.stringify(data ?? null));
 
-  // Record 1 write metric
   recordWriteOperation(1);
 
-  // 1. Save to local system storage & memory cache immediately
   memoryCache[key] = { data: cleanData, timestamp: Date.now() };
 
   try {
     localStorage.setItem(key, JSON.stringify(cleanData));
   } catch (e) {
     console.warn(`Failed to save ${key} to localStorage.`, e);
-    if (key === 'chatMessages' && Array.isArray(cleanData) && cleanData.length > 100) {
-      try {
-        const reducedData = cleanData.slice(-100);
-        localStorage.setItem(key, JSON.stringify(reducedData));
-      } catch (e2) {
-        console.warn(`Still failed to save reduced ${key} to localStorage.`, e2);
-      }
-    }
   }
 
-  // 2. Save to Firebase Firestore as 1 singleton document (1 write cost)
+  // Dispatch custom event for real-time local updates
+  window.dispatchEvent(new CustomEvent('db_updated', { detail: { key, data: cleanData } }));
+
   if (isFirebaseConfigured) {
     try {
       const singletonRef = doc(db, 'singletons', key);
       await Promise.race([
         setDoc(singletonRef, { data: cleanData, updatedAt: Date.now() }),
-        new Promise(resolve => setTimeout(resolve, 5000))
+        new Promise(resolve => setTimeout(resolve, 8000))
       ]);
     } catch (error: any) {
       console.error(`Firebase error saving ${key}:`, error);
