@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { getCourseMaterials, saveCourseMaterials, getClasses, getStaffs, getSubjects, saveSubjects, mergeArraysById } from '../../lib/db';
+import { 
+  GRADES_LIST, GRADE_COLOR_CONFIG, normalizeGradeString, doesItemMatchGrade 
+} from '../../components/RecordingSection';
 import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, LayoutGrid, Folder, Globe, Save, Edit3, FileText, Download, Check, RefreshCw, Search } from 'lucide-react';
 
 const GRADES = [
@@ -14,6 +17,8 @@ export default function CourseMaterials() {
   const [classes, setClasses] = useState<any[]>([]);
   const [staffs, setStaffs] = useState<any[]>([]);
   const [allSubjects, setAllSubjects] = useState<any[]>([]);
+  const [selectedLibraryGrade, setSelectedLibraryGrade] = useState<string | null>(null);
+  const [librarySearch, setLibrarySearch] = useState<string>('');
   const [filterClass, setFilterClass] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -252,29 +257,66 @@ export default function CourseMaterials() {
     <div className="p-6 max-w-7xl mx-auto min-h-screen">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-            <span className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center shadow-sm">
-              <FileText size={24} />
-            </span>
-            Course Materials (பாடக்குறிப்புகள்)
-          </h1>
-          <p className="text-slate-500 font-medium mt-1">Manage downloadable PDF materials for students by Grade and Subject</p>
+        <div className="flex items-center gap-4">
+          {view !== 'menu' && (
+            <button
+              onClick={() => {
+                if (view === 'view' && selectedLibraryGrade) {
+                  setSelectedLibraryGrade(null);
+                } else {
+                  setView('menu');
+                  setSelectedLibraryGrade(null);
+                  setEditingId(null);
+                  setSelectedGrades([]);
+                  setSelectedSubjects([]);
+                  setFormData({ grade: '', subject: '', title: '', link: '' });
+                }
+              }}
+              className="flex items-center justify-center w-12 h-12 rounded-2xl bg-white border-2 border-slate-100 text-slate-400 hover:text-red-600 transition-all shadow-sm"
+            >
+              <ArrowLeft size={24} />
+            </button>
+          )}
+          <div>
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+              <span className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center shadow-sm">
+                <FileText size={24} />
+              </span>
+              {view === 'view' 
+                ? (selectedLibraryGrade ? `${selectedLibraryGrade} Materials` : 'Manage Course Materials')
+                : 'Course Materials (பாடக்குறிப்புகள்)'}
+            </h1>
+            <p className="text-slate-500 font-medium mt-1">
+              {view === 'view'
+                ? (selectedLibraryGrade ? `Manage all PDF materials for ${selectedLibraryGrade}` : 'GRADES 1 TO 13 COLORFUL GRADE HUBS')
+                : 'Manage downloadable PDF materials for students by Grade and Subject'}
+            </p>
+          </div>
         </div>
 
-        {view !== 'menu' && (
-          <button
-            onClick={() => {
-              setView('menu');
-              setEditingId(null);
-              setSelectedGrades([]);
-              setSelectedSubjects([]);
-              setFormData({ grade: '', subject: '', title: '', link: '' });
-            }}
-            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded-2xl font-bold transition-all text-sm border border-slate-200"
-          >
-            <ArrowLeft size={16} /> Back to Menu
-          </button>
+        {view === 'view' && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadData}
+              title="Refresh from Database"
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all border border-slate-200"
+            >
+              <RefreshCw size={14} /> Refresh
+            </button>
+
+            <button
+              onClick={() => {
+                setEditingId(null);
+                setSelectedGrades(selectedLibraryGrade ? [selectedLibraryGrade] : []);
+                setSelectedSubjects([]);
+                setFormData({ grade: '', subject: '', title: '', link: '' });
+                setView('add');
+              }}
+              className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl flex items-center gap-2 shadow-lg shadow-red-200 transition-all"
+            >
+              <Plus size={16} /> Add Course Material
+            </button>
+          </div>
         )}
       </div>
 
@@ -492,124 +534,235 @@ export default function CourseMaterials() {
       )}
 
       {view === 'view' && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-            <div className="flex items-center gap-3">
-              <h2 className="text-xl font-black text-slate-800">Existing Course Materials</h2>
-              <span className="bg-red-50 text-red-700 font-bold px-3 py-1 rounded-full text-xs border border-red-100">
-                {materials.length} Materials
-              </span>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-              <div className="relative flex-1 sm:w-64">
-                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search title, subject..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs font-bold text-slate-700 focus:bg-white outline-none"
-                />
+        <div className="space-y-6 animate-fade-in">
+          {/* 1. GRADE SQUARES (If no grade selected) */}
+          {!selectedLibraryGrade ? (
+            <div className="space-y-6">
+              <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-800">
+                      Select Grade to View & Manage Materials (தரம் தெரிவு செய்க):
+                    </h3>
+                    <p className="text-xs font-bold text-slate-400 mt-0.5">
+                      Click any grade to view and download PDF course materials
+                    </p>
+                  </div>
+                  <span className="text-xs font-black text-red-700 bg-red-50 px-3.5 py-1.5 rounded-xl border border-red-100 self-start sm:self-auto">
+                    Total: {materials.length} Materials
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
+                  {GRADES_LIST.map((gradeName) => {
+                    const cfg = GRADE_COLOR_CONFIG[gradeName] || GRADE_COLOR_CONFIG["தரம் 10"];
+                    const count = materials.filter(m => doesItemMatchGrade(m, gradeName)).length;
+
+                    return (
+                      <button
+                        key={gradeName}
+                        onClick={() => {
+                          setSelectedLibraryGrade(gradeName);
+                          setLibrarySearch('');
+                        }}
+                        className={`group relative p-5 rounded-3xl border-2 transition-all duration-300 flex flex-col items-center justify-between text-center aspect-square shadow-sm hover:shadow-xl hover:-translate-y-1 cursor-pointer ${cfg.bg} ${cfg.border} ${cfg.shadow}`}
+                      >
+                        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${cfg.bgGradient} text-white font-black text-lg flex items-center justify-center shadow-md group-hover:scale-110 transition-transform`}>
+                          {cfg.gradeNum < 10 ? `0${cfg.gradeNum}` : cfg.gradeNum}
+                        </div>
+
+                        <div>
+                          <h4 className={`font-black text-base ${cfg.text}`}>
+                            {gradeName}
+                          </h4>
+                          <span className={`inline-block text-[11px] font-black px-2.5 py-0.5 rounded-full mt-1 border ${cfg.badge} border-white/60`}>
+                            {count} Materials
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Special / Custom Courses like 30 Day's Tamil Course if present */}
+                {materials.some(m => !GRADES_LIST.some(g => doesItemMatchGrade(m, g))) && (
+                  <div className="pt-4 border-t border-slate-100">
+                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-3">
+                      Special & Other Courses:
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      {Array.from(new Set(materials.map(m => m.grade)))
+                        .filter((g): g is string => Boolean(g) && !GRADES_LIST.some(gl => doesItemMatchGrade({ grade: g } as any, gl)))
+                        .map((customGrade: string) => {
+                          const count = materials.filter(m => m.grade === customGrade).length;
+                          return (
+                            <button
+                              key={customGrade}
+                              onClick={() => {
+                                setSelectedLibraryGrade(customGrade);
+                                setLibrarySearch('');
+                              }}
+                              className="p-5 rounded-3xl border-2 border-red-200 bg-red-50/50 hover:bg-red-50 hover:border-red-400 transition-all flex items-center justify-between text-left group shadow-sm hover:shadow-md cursor-pointer"
+                            >
+                              <div className="flex items-center gap-3.5">
+                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-red-600 to-orange-600 text-white font-black text-sm flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                                  <FileText size={20} />
+                                </div>
+                                <div>
+                                  <h4 className="font-black text-sm text-slate-800 group-hover:text-red-700 transition-colors">
+                                    {customGrade}
+                                  </h4>
+                                  <span className="text-[11px] font-bold text-red-600">
+                                    {count} Materials
+                                  </span>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
               </div>
-
-              <select
-                value={filterClass}
-                onChange={(e) => setFilterClass(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 focus:bg-white outline-none"
-              >
-                <option value="">All Grades</option>
-                <option value="30 DAY'S TAMIL COURSE">30 DAY'S TAMIL COURSE</option>
-                {GRADES.map(g => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
-
-              <button
-                onClick={loadData}
-                title="Refresh from Database"
-                className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors"
-              >
-                <RefreshCw size={16} />
-              </button>
-            </div>
-          </div>
-
-          {materials.length === 0 ? (
-            <div className="text-center py-16 bg-slate-50 rounded-2xl border border-slate-100">
-              <FileText className="mx-auto h-16 w-16 text-slate-300 mb-4" />
-              <h3 className="text-xl font-bold text-slate-700 mb-1">No course materials found</h3>
-              <p className="text-slate-500 text-sm">Add a new material to get started.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-100 text-slate-400 text-xs font-black uppercase tracking-wider">
-                    <th className="py-4 px-4">Grade</th>
-                    <th className="py-4 px-4">Subject</th>
-                    <th className="py-4 px-4">Title</th>
-                    <th className="py-4 px-4">Link</th>
-                    <th className="py-4 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {materials
-                    .filter(m => !filterClass || m.grade === filterClass)
-                    .filter(m => {
-                      if (!searchQuery.trim()) return true;
-                      const q = searchQuery.toLowerCase();
+            /* 2. DEDICATED GRADE MATERIALS HUB */
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedLibraryGrade(null)}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    ← All Grades
+                  </button>
+                  <span className="text-xs font-black text-red-700 bg-red-50 px-3 py-1.5 rounded-xl border border-red-100">
+                    {materials.filter(m => doesItemMatchGrade(m, selectedLibraryGrade)).filter(m => {
+                      if (!librarySearch.trim()) return true;
+                      const q = librarySearch.toLowerCase();
+                      return m.title?.toLowerCase().includes(q) || m.subject?.toLowerCase().includes(q);
+                    }).length} Materials in {selectedLibraryGrade}
+                  </span>
+                </div>
+
+                <div className="relative w-full sm:w-72">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Search materials in this grade..."
+                    value={librarySearch}
+                    onChange={(e) => setLibrarySearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-red-500/20"
+                  />
+                </div>
+              </div>
+
+              {/* Materials list for this Grade */}
+              {(() => {
+                const gradeMaterials = materials
+                  .filter(m => doesItemMatchGrade(m, selectedLibraryGrade))
+                  .filter(m => {
+                    if (!librarySearch.trim()) return true;
+                    const q = librarySearch.toLowerCase();
+                    return m.title?.toLowerCase().includes(q) || m.subject?.toLowerCase().includes(q);
+                  });
+
+                if (gradeMaterials.length === 0) {
+                  return (
+                    <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-sm space-y-3">
+                      <div className="w-16 h-16 rounded-3xl bg-red-50 text-red-500 flex items-center justify-center mx-auto shadow-inner">
+                        <FileText size={28} />
+                      </div>
+                      <h4 className="text-xl font-black text-slate-800">
+                        No Course Materials in {selectedLibraryGrade}
+                      </h4>
+                      <p className="text-xs text-slate-400 max-w-md mx-auto">
+                        There are currently no PDF materials uploaded for {selectedLibraryGrade}. Click below to add the first course material.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setEditingId(null);
+                          setSelectedGrades([selectedLibraryGrade]);
+                          setSelectedSubjects([]);
+                          setFormData({ grade: selectedLibraryGrade, subject: '', title: '', link: '' });
+                          setView('add');
+                        }}
+                        className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-md shadow-red-200 transition-all inline-flex items-center gap-2 cursor-pointer"
+                      >
+                        <Plus size={16} /> Add Material to {selectedLibraryGrade}
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {gradeMaterials.map((material, idx) => {
+                      const badge = getSubjectColorClasses(material.subject || 'General');
                       return (
-                        m.title?.toLowerCase().includes(q) ||
-                        m.subject?.toLowerCase().includes(q) ||
-                        m.grade?.toLowerCase().includes(q)
-                      );
-                    })
-                    .map((material) => {
-                      const badge = getSubjectColorClasses(material.subject);
-                      return (
-                        <tr key={material.id} className="hover:bg-slate-50/50 transition-colors group">
-                          <td className="py-4 px-4 font-black text-slate-800 text-sm">{material.grade}</td>
-                          <td className="py-4 px-4">
-                            <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${badge.bg} ${badge.text} ${badge.border}`}>
-                              {material.subject}
-                            </span>
-                          </td>
-                          <td className="py-4 px-4 font-bold text-slate-700 text-sm">{material.title}</td>
-                          <td className="py-4 px-4">
-                            <a
-                              href={material.link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-red-600 hover:text-red-700 font-bold text-xs inline-flex items-center gap-1 hover:underline"
-                            >
-                              <ExternalLink size={12} />
-                              Open Link
-                            </a>
-                          </td>
-                          <td className="py-4 px-4 text-right">
-                            <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                        <div
+                          key={material.id || idx}
+                          className="p-5 rounded-3xl border-2 border-slate-100 hover:border-red-200 bg-white hover:bg-red-50/20 transition-all duration-300 flex flex-col justify-between shadow-sm hover:shadow-md group relative overflow-hidden"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-2 mb-2.5">
+                              <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${badge.bg} ${badge.text} ${badge.border}`}>
+                                {material.subject || 'Subject Unit'}
+                              </span>
+                              <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
+                                {material.grade || selectedLibraryGrade}
+                              </span>
+                            </div>
+
+                            <h3 className="text-base font-black text-slate-800 group-hover:text-red-700 transition-colors mb-2 leading-snug">
+                              {material.title}
+                            </h3>
+
+                            {/* Saved Link / URL */}
+                            <div className="my-3">
+                              {material.link ? (
+                                <a
+                                  href={material.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-red-50 hover:bg-red-600 text-red-700 hover:text-white font-bold text-xs rounded-xl border border-red-200 hover:border-red-600 transition-all duration-200 shadow-sm group/btn"
+                                >
+                                  <ExternalLink size={13} className="text-red-500 group-hover/btn:text-white transition-colors" />
+                                  <span>Open PDF / Drive Link</span>
+                                </a>
+                              ) : (
+                                <span className="text-xs text-slate-400 italic">No link attached</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-2">
+                            <div className="flex items-center gap-2">
                               <button
                                 onClick={() => handleEdit(material)}
-                                className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Edit"
+                                className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 transition-all cursor-pointer"
                               >
-                                <Edit3 size={16} />
+                                <Edit3 size={13} /> Edit
                               </button>
                               <button
                                 onClick={() => handleDelete(material.id)}
-                                className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
                                 title="Delete"
                               >
                                 <Trash2 size={16} />
                               </button>
                             </div>
-                          </td>
-                        </tr>
+
+                            <span className="text-[10px] font-mono text-slate-400">
+                              ID: {material.id?.slice(-6) || 'Item'}
+                            </span>
+                          </div>
+                        </div>
                       );
                     })}
-                </tbody>
-              </table>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
