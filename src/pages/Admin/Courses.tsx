@@ -3,7 +3,8 @@ import {
   getCourses, saveCourses, getClasses, getStaffs, 
   getSubjects, saveSubjects,
   getStudentMenuLabels, saveStudentMenuLabels,
-  DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels
+  DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels,
+  mergeArraysById
 } from '../../lib/db';
 import { 
   GRADES_LIST, GRADE_COLOR_CONFIG, normalizeGradeString, doesItemMatchGrade,
@@ -64,12 +65,24 @@ export default function Courses() {
     gameType: 'word_quiz' as 'word_quiz' | 'math_game' | 'memory_match' | 'flappy' | 'custom_url'
   });
 
-  useEffect(() => {
+  const loadCoursesData = () => {
     getCourses().then(setCourses);
     getClasses().then(setClasses);
     getStaffs().then(setStaffs);
     getSubjects().then(setAllSubjects);
     getStudentMenuLabels().then(setMenuLabels);
+  };
+
+  useEffect(() => {
+    loadCoursesData();
+
+    const handleDbUpdate = (e: CustomEvent) => {
+      if (e.detail?.key === 'courses' && Array.isArray(e.detail?.data)) {
+        setCourses(e.detail.data);
+      }
+    };
+    window.addEventListener('db_updated', handleDbUpdate as EventListener);
+    return () => window.removeEventListener('db_updated', handleDbUpdate as EventListener);
   }, [view]);
 
   const availableSubjectsList = Array.from(new Set([
@@ -205,7 +218,15 @@ export default function Courses() {
           .filter(Boolean)
       : [];
 
-    let updatedCourses = [...courses];
+    const cleanLink = formData.link.trim()
+      ? (formData.link.trim().startsWith('http://') || formData.link.trim().startsWith('https://')
+          ? formData.link.trim()
+          : `https://${formData.link.trim()}`)
+      : '';
+
+    const freshDbCourses = await getCourses();
+    const baseCourses = mergeArraysById(freshDbCourses, courses);
+    let updatedCourses = [...baseCourses];
 
     if (editingId) {
       updatedCourses = updatedCourses.map(c => {
@@ -218,12 +239,12 @@ export default function Courses() {
             subjects: selectedSubjects,
             subject: selectedSubjects[0] || c.subject,
             title: formData.title,
-            link: formData.link,
+            link: cleanLink,
             folder: formData.folder || 'General',
             content: formData.content,
             code: formData.code,
             codeLanguage: formData.codeLanguage,
-            imageUrl: formData.imageUrl,
+            imageUrl: formData.imageUrl.trim(),
             studentNames: parsedStudents,
             gameType: formData.gameType,
             updatedAt: Date.now()
@@ -238,19 +259,19 @@ export default function Courses() {
       for (const g of selectedGrades) {
         for (const s of selectedSubjects) {
           newItems.push({
-            id: (Date.now() + count++).toString(),
+            id: (Date.now() + count++).toString() + Math.random().toString().slice(2, 5),
             type: itemType,
             grade: g,
-            grades: selectedGrades,
+            grades: [g],
             subject: s,
-            subjects: selectedSubjects,
+            subjects: [s],
             title: formData.title,
-            link: formData.link,
+            link: cleanLink,
             folder: formData.folder || 'General',
             content: formData.content,
             code: formData.code,
             codeLanguage: formData.codeLanguage,
-            imageUrl: formData.imageUrl,
+            imageUrl: formData.imageUrl.trim(),
             studentNames: parsedStudents,
             gameType: formData.gameType,
             createdAt: Date.now()
@@ -290,7 +311,9 @@ export default function Courses() {
 
   const handleDelete = async (id: string) => {
     if (window.confirm("Delete this post item?")) {
-      const updatedCourses = courses.filter(c => c.id !== id);
+      const freshDbCourses = await getCourses();
+      const baseCourses = mergeArraysById(freshDbCourses, courses);
+      const updatedCourses = baseCourses.filter(c => c.id !== id);
       setCourses(updatedCourses);
       await saveCourses(updatedCourses);
     }
@@ -809,12 +832,13 @@ export default function Courses() {
           {(itemType === 'webpost' || itemType === 'image_post') && (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-black text-slate-700 uppercase tracking-widest mb-1.5">
-                  Cover / Post Image URL (Optional)
+                <label className="block text-xs font-black text-slate-700 uppercase tracking-widest mb-1.5 flex items-center justify-between">
+                  <span>Cover / Post Image URL</span>
+                  <span className="text-[10px] font-bold text-slate-400 lowercase tracking-normal bg-slate-100 px-2 py-0.5 rounded-md">optional</span>
                 </label>
                 <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/photo-..."
+                  type="text"
+                  placeholder="https://images.unsplash.com/photo-... (optional)"
                   value={formData.imageUrl}
                   onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:bg-white"
@@ -842,17 +866,25 @@ export default function Courses() {
           )}
 
           {/* Link URL (Optional) */}
-          <div>
-            <label className="block text-xs font-black text-slate-700 uppercase tracking-widest mb-1.5">
-              External Link / URL (Optional)
-            </label>
+          <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-black text-slate-700 uppercase tracking-widest">
+                External Link / URL
+              </label>
+              <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">
+                விருப்பமானது (Optional)
+              </span>
+            </div>
             <input
-              type="url"
-              placeholder="https://..."
+              type="text"
+              placeholder="https://... (Leave blank if you don't have a link)"
               value={formData.link}
               onChange={(e) => setFormData({ ...formData, link: e.target.value })}
-              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
             />
+            <p className="text-[11px] text-slate-400 font-medium mt-1.5">
+              URL தேவையில்லை என்றால் காலியாக விடலாம். URL இல்லாமலும் இடுகையை நேரடியாக வெளியிடலாம் (Publish).
+            </p>
           </div>
 
           <button

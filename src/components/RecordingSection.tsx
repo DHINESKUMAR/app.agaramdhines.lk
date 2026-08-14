@@ -216,20 +216,28 @@ export const normalizeGradeString = (g?: string): string => {
 };
 
 export const doesItemMatchGrade = (item: RecordingItem, targetGrade: string): boolean => {
+  if (!item || !targetGrade) return false;
   const normTarget = normalizeGradeString(targetGrade);
   const targetNum = targetGrade.replace(/[^0-9]/g, '');
 
-  if (item.grade) {
-    const normGrade = normalizeGradeString(item.grade);
-    const itemNum = item.grade.replace(/[^0-9]/g, '');
-    if (normGrade === normTarget || (targetNum && itemNum === targetNum)) return true;
+  // 1. If item has a specific grade assigned (and it's not "All" or "General")
+  if (item.grade && typeof item.grade === 'string' && item.grade.trim()) {
+    const isGeneric = item.grade.toLowerCase().includes('all') || item.grade.toLowerCase().includes('general');
+    if (!isGeneric) {
+      const normGrade = normalizeGradeString(item.grade);
+      const itemNum = item.grade.replace(/[^0-9]/g, '');
+      // When a specific single grade is defined, only match if it matches the target grade
+      return normGrade === normTarget || Boolean(targetNum && itemNum && itemNum === targetNum);
+    }
   }
 
-  if (Array.isArray(item.grades)) {
+  // 2. If item.grade is not set or generic, check the grades array
+  if (Array.isArray(item.grades) && item.grades.length > 0) {
     for (const g of item.grades) {
+      if (!g) continue;
       const normG = normalizeGradeString(g);
-      const gNum = g.replace(/[^0-9]/g, '');
-      if (normG === normTarget || (targetNum && gNum === targetNum)) return true;
+      const gNum = g.toString().replace(/[^0-9]/g, '');
+      if (normG === normTarget || Boolean(targetNum && gNum && gNum === targetNum)) return true;
     }
   }
 

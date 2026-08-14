@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getCourseMaterials, saveCourseMaterials, getClasses, getStaffs, getSubjects, saveSubjects } from '../../lib/db';
-import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, LayoutGrid, Folder, Globe, Save, Edit3, FileText, Download, Check } from 'lucide-react';
+import { getCourseMaterials, saveCourseMaterials, getClasses, getStaffs, getSubjects, saveSubjects, mergeArraysById } from '../../lib/db';
+import { BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, ChevronDown, LayoutGrid, Folder, Globe, Save, Edit3, FileText, Download, Check, RefreshCw, Search } from 'lucide-react';
 
 const GRADES = [
   "தரம் 01", "தரம் 02", "தரம் 03", "தரம் 04", "தரம் 05", 
@@ -15,7 +15,9 @@ export default function CourseMaterials() {
   const [staffs, setStaffs] = useState<any[]>([]);
   const [allSubjects, setAllSubjects] = useState<any[]>([]);
   const [filterClass, setFilterClass] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
@@ -28,11 +30,29 @@ export default function CourseMaterials() {
     link: ''
   });
 
+  const loadData = async () => {
+    const [fetchedMaterials, fetchedClasses, fetchedStaffs, fetchedSubjects] = await Promise.all([
+      getCourseMaterials(),
+      getClasses(),
+      getStaffs(),
+      getSubjects()
+    ]);
+    setMaterials(fetchedMaterials);
+    setClasses(fetchedClasses);
+    setStaffs(fetchedStaffs);
+    setAllSubjects(fetchedSubjects);
+  };
+
   useEffect(() => {
-    getCourseMaterials().then(setMaterials);
-    getClasses().then(setClasses);
-    getStaffs().then(setStaffs);
-    getSubjects().then(setAllSubjects);
+    loadData();
+
+    const handleDbUpdate = (e: CustomEvent) => {
+      if (e.detail?.key === 'courseMaterials' && Array.isArray(e.detail?.data)) {
+        setMaterials(e.detail.data);
+      }
+    };
+    window.addEventListener('db_updated', handleDbUpdate as EventListener);
+    return () => window.removeEventListener('db_updated', handleDbUpdate as EventListener);
   }, [view]);
 
   const ALL_AVAILABLE_GRADES = Array.from(new Set([
@@ -106,81 +126,95 @@ export default function CourseMaterials() {
       return;
     }
 
-    // Save custom subjects to allSubjects if needed
-    const updatedAllSubjects = [...allSubjects];
-    for (const subj of selectedSubjects) {
-      if (!updatedAllSubjects.some(s => s.name.toLowerCase() === subj.toLowerCase())) {
-        const newSub = { id: Date.now().toString() + Math.random().toString().slice(2, 6), name: subj };
-        updatedAllSubjects.push(newSub);
+    setIsSaving(true);
+    try {
+      // Save custom subjects to allSubjects if needed
+      const updatedAllSubjects = [...allSubjects];
+      for (const subj of selectedSubjects) {
+        if (!updatedAllSubjects.some(s => s.name.toLowerCase() === subj.toLowerCase())) {
+          const newSub = { id: Date.now().toString() + Math.random().toString().slice(2, 6), name: subj };
+          updatedAllSubjects.push(newSub);
+        }
       }
-    }
-    if (updatedAllSubjects.length > allSubjects.length) {
-      setAllSubjects(updatedAllSubjects);
-      await saveSubjects(updatedAllSubjects);
-    }
+      if (updatedAllSubjects.length > allSubjects.length) {
+        setAllSubjects(updatedAllSubjects);
+        await saveSubjects(updatedAllSubjects);
+      }
 
-    let updatedMaterials = [...materials];
+      // Fetch freshest materials from DB to ensure no data is lost
+      const freshDbMaterials = await getCourseMaterials();
+      let baseMaterials = mergeArraysById(freshDbMaterials, materials);
+      let updatedMaterials = [...baseMaterials];
 
-    if (editingId) {
-      let isFirst = true;
-      for (const g of selectedGrades) {
-        for (const s of selectedSubjects) {
-          if (isFirst) {
-            updatedMaterials = updatedMaterials.map(m => 
-              m.id === editingId ? { ...m, grade: g, subject: s, title: formData.title, link: formData.link } : m
-            );
-            isFirst = false;
-          } else {
-            updatedMaterials.push({
-              id: Date.now().toString() + Math.random().toString().slice(2, 6),
+      if (editingId) {
+        let isFirst = true;
+        for (const g of selectedGrades) {
+          for (const s of selectedSubjects) {
+            if (isFirst) {
+              updatedMaterials = updatedMaterials.map(m => 
+                m.id === editingId ? { ...m, grade: g, subject: s, title: formData.title, link: formData.link } : m
+              );
+              isFirst = false;
+            } else {
+              updatedMaterials.push({
+                id: Date.now().toString() + Math.random().toString().slice(2, 6),
+                grade: g,
+                subject: s,
+                title: formData.title,
+                link: formData.link,
+                createdAt: Date.now()
+              });
+            }
+          }
+        }
+        setEditingId(null);
+      } else {
+        let count = 0;
+        const newItems: any[] = [];
+        for (const g of selectedGrades) {
+          for (const s of selectedSubjects) {
+            newItems.push({
+              id: (Date.now() + count++).toString() + Math.random().toString().slice(2, 5),
               grade: g,
               subject: s,
               title: formData.title,
-              link: formData.link
+              link: formData.link,
+              createdAt: Date.now()
             });
           }
         }
+        updatedMaterials = [...newItems, ...updatedMaterials];
       }
-      setEditingId(null);
-    } else {
-      let count = 0;
-      const newItems: any[] = [];
-      for (const g of selectedGrades) {
-        for (const s of selectedSubjects) {
-          newItems.push({
-            id: (Date.now() + count++).toString(),
-            grade: g,
-            subject: s,
-            title: formData.title,
-            link: formData.link
-          });
-        }
-      }
-      updatedMaterials = [...updatedMaterials, ...newItems];
+
+      setMaterials(updatedMaterials);
+      await saveCourseMaterials(updatedMaterials);
+
+      const totalCreated = selectedGrades.length * selectedSubjects.length;
+      alert(
+        totalCreated === 1 
+          ? 'Course Material Saved Successfully to Database!' 
+          : `${totalCreated} Course Materials Added Successfully across ${selectedGrades.length} Grades and ${selectedSubjects.length} Subjects!`
+      );
+
+      setSelectedGrades([]);
+      setSelectedSubjects([]);
+      setFormData({ grade: '', subject: '', title: '', link: '' });
+      setView('view');
+    } catch (err: any) {
+      alert("Error saving course material: " + (err?.message || err));
+    } finally {
+      setIsSaving(false);
     }
-
-    setMaterials(updatedMaterials);
-    await saveCourseMaterials(updatedMaterials);
-
-    const totalCreated = selectedGrades.length * selectedSubjects.length;
-    alert(
-      totalCreated === 1 
-        ? 'Course Material Saved Successfully' 
-        : `${totalCreated} Course Materials Added Successfully across ${selectedGrades.length} Grades and ${selectedSubjects.length} Subjects!`
-    );
-
-    setSelectedGrades([]);
-    setSelectedSubjects([]);
-    setFormData({ grade: '', subject: '', title: '', link: '' });
-    setView('view');
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this course material?")) {
-      const updatedMaterials = materials.filter(m => m.id !== id);
+      const freshDbMaterials = await getCourseMaterials();
+      const base = mergeArraysById(freshDbMaterials, materials);
+      const updatedMaterials = base.filter(m => m.id !== id);
       setMaterials(updatedMaterials);
       await saveCourseMaterials(updatedMaterials);
-      alert("Deleted Successfully");
+      alert("Deleted Successfully from Database");
     }
   };
 
@@ -460,13 +494,29 @@ export default function CourseMaterials() {
       {view === 'view' && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-            <h2 className="text-xl font-black text-slate-800">Existing Course Materials</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-black text-slate-800">Existing Course Materials</h2>
+              <span className="bg-red-50 text-red-700 font-bold px-3 py-1 rounded-full text-xs border border-red-100">
+                {materials.length} Materials
+              </span>
+            </div>
             
-            <div className="flex flex-wrap gap-3 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-64">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search title, subject..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs font-bold text-slate-700 focus:bg-white outline-none"
+                />
+              </div>
+
               <select
                 value={filterClass}
                 onChange={(e) => setFilterClass(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 focus:bg-white outline-none"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 focus:bg-white outline-none"
               >
                 <option value="">All Grades</option>
                 <option value="30 DAY'S TAMIL COURSE">30 DAY'S TAMIL COURSE</option>
@@ -474,6 +524,14 @@ export default function CourseMaterials() {
                   <option key={g} value={g}>{g}</option>
                 ))}
               </select>
+
+              <button
+                onClick={loadData}
+                title="Refresh from Database"
+                className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors"
+              >
+                <RefreshCw size={16} />
+              </button>
             </div>
           </div>
 
@@ -498,6 +556,15 @@ export default function CourseMaterials() {
                 <tbody className="divide-y divide-slate-50">
                   {materials
                     .filter(m => !filterClass || m.grade === filterClass)
+                    .filter(m => {
+                      if (!searchQuery.trim()) return true;
+                      const q = searchQuery.toLowerCase();
+                      return (
+                        m.title?.toLowerCase().includes(q) ||
+                        m.subject?.toLowerCase().includes(q) ||
+                        m.grade?.toLowerCase().includes(q)
+                      );
+                    })
                     .map((material) => {
                       const badge = getSubjectColorClasses(material.subject);
                       return (

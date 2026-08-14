@@ -827,6 +827,15 @@ export default function StudentDashboard() {
       }));
     };
     loadData();
+
+    const handleDbUpdate = (e: CustomEvent) => {
+      const key = e.detail?.key;
+      if (['courseMaterials', 'courses', 'zoomLinks', 'youtubeLinks', 'webPosts', 'students', 'classes', 'staffs', 'timetable', 'examMarks', 'homework'].includes(key)) {
+        loadData();
+      }
+    };
+    window.addEventListener('db_updated', handleDbUpdate as EventListener);
+
     const interval = setInterval(() => {
       loadData();
     }, 30000);
@@ -841,6 +850,7 @@ export default function StudentDashboard() {
 
     return () => {
       clearInterval(interval);
+      window.removeEventListener('db_updated', handleDbUpdate as EventListener);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, [navigate, location.state, activeTab]);
@@ -2211,39 +2221,68 @@ export default function StudentDashboard() {
                             allAvailableSubjectNames.push("General");
                           }
 
-                          return allAvailableSubjectNames.map((subjName: any) => {
-                            const subjectCourses = courseMaterials.filter((c: any) => 
-                              areSubjectsMatching(c.subject, subjName) || 
-                              (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, subjName)))
-                            );
-                            const colorClasses = getSubjectColorClasses(subjName);
-                            return (
-                              <div
-                                key={subjName}
-                                onClick={() => setSelectedMaterialSubject(subjName)}
-                                className={`p-6 rounded-3xl border-2 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between h-48 group relative overflow-hidden ${colorClasses.bg} ${colorClasses.border}`}
-                              >
-                                <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-40 rounded-full blur-2xl"></div>
-                                <div>
-                                  <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${colorClasses.text} bg-white/60`}>
-                                    Subject Unit
-                                  </span>
-                                  <h3 className={`text-2xl font-black mt-4 leading-tight group-hover:scale-105 transition-transform duration-300 origin-left`}>
-                                    {subjName}
-                                  </h3>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 opacity-80`}>
-                                    <span className={`w-2 h-2 rounded-full ${colorClasses.dot} animate-pulse`}></span>
-                                    {subjectCourses.length} PDF{subjectCourses.length > 1 ? 's' : ''} available
-                                  </span>
-                                  <div className={`w-10 h-10 rounded-2xl bg-white flex items-center justify-center text-slate-700 shadow-sm border border-slate-100 group-hover:bg-red-600 group-hover:text-white group-hover:border-red-600 transition-all duration-300`}>
-                                    <ChevronRight size={18} />
+                          return (
+                            <>
+                              {courseMaterials.length > 1 && allAvailableSubjectNames.length > 1 && (
+                                <div
+                                  onClick={() => setSelectedMaterialSubject("ALL_MATERIALS")}
+                                  className="p-6 rounded-3xl border-2 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between h-48 group relative overflow-hidden bg-gradient-to-br from-red-50 to-orange-50 border-red-200"
+                                >
+                                  <div>
+                                    <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border text-red-700 bg-white/80 border-red-100">
+                                      All Subjects (அனைத்தும்)
+                                    </span>
+                                    <h3 className="text-2xl font-black mt-4 leading-tight group-hover:scale-105 transition-transform duration-300 origin-left text-slate-800">
+                                      All PDF Materials
+                                    </h3>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-red-600">
+                                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                      {courseMaterials.length} PDFs available
+                                    </span>
+                                    <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center text-slate-700 shadow-sm border border-slate-100 group-hover:bg-red-600 group-hover:text-white group-hover:border-red-600 transition-all duration-300">
+                                      <ChevronRight size={18} />
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            );
-                          });
+                              )}
+
+                              {allAvailableSubjectNames.map((subjName: any) => {
+                                const subjectCourses = courseMaterials.filter((c: any) => 
+                                  areSubjectsMatching(c.subject, subjName) || 
+                                  (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, subjName)))
+                                );
+                                const colorClasses = getSubjectColorClasses(subjName);
+                                return (
+                                  <div
+                                    key={subjName}
+                                    onClick={() => setSelectedMaterialSubject(subjName)}
+                                    className={`p-6 rounded-3xl border-2 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between h-48 group relative overflow-hidden ${colorClasses.bg} ${colorClasses.border}`}
+                                  >
+                                    <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-40 rounded-full blur-2xl"></div>
+                                    <div>
+                                      <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${colorClasses.text} bg-white/60`}>
+                                        Subject Unit
+                                      </span>
+                                      <h3 className={`text-2xl font-black mt-4 leading-tight group-hover:scale-105 transition-transform duration-300 origin-left`}>
+                                        {subjName}
+                                      </h3>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 opacity-80`}>
+                                        <span className={`w-2 h-2 rounded-full ${colorClasses.dot} animate-pulse`}></span>
+                                        {subjectCourses.length} PDF{subjectCourses.length > 1 ? 's' : ''} available
+                                      </span>
+                                      <div className={`w-10 h-10 rounded-2xl bg-white flex items-center justify-center text-slate-700 shadow-sm border border-slate-100 group-hover:bg-red-600 group-hover:text-white group-hover:border-red-600 transition-all duration-300`}>
+                                        <ChevronRight size={18} />
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </>
+                          );
                         })()}
                       </div>
                     </div>
@@ -2255,18 +2294,18 @@ export default function StudentDashboard() {
                   <div className="mb-6 pb-4 border-b border-slate-100 flex items-center justify-between">
                     <div>
                       <span className="text-xs font-bold uppercase tracking-wider text-red-600 bg-red-50 border border-red-100 px-3 py-1 rounded-full">
-                        {selectedMaterialSubject}
+                        {selectedMaterialSubject === "ALL_MATERIALS" ? "All Subjects (அனைத்து பாடங்கள்)" : selectedMaterialSubject}
                       </span>
                       <h3 className="text-xl font-black text-slate-800 mt-2">Available PDF Documents</h3>
                     </div>
                     <span className="text-sm font-bold text-slate-400">
-                      {courseMaterials.filter((c: any) => areSubjectsMatching(c.subject, selectedMaterialSubject) || (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, selectedMaterialSubject)))).length} File(s)
+                      {courseMaterials.filter((c: any) => selectedMaterialSubject === "ALL_MATERIALS" || areSubjectsMatching(c.subject, selectedMaterialSubject) || (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, selectedMaterialSubject)))).length} File(s)
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {courseMaterials
-                      .filter((c: any) => areSubjectsMatching(c.subject, selectedMaterialSubject) || (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, selectedMaterialSubject))))
+                      .filter((c: any) => selectedMaterialSubject === "ALL_MATERIALS" || areSubjectsMatching(c.subject, selectedMaterialSubject) || (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, selectedMaterialSubject))))
                       .map((course: any) => (
                         <div 
                           key={course.id}

@@ -7,23 +7,25 @@ const CACHE_TTL_MS = 2000; // 2 seconds short cache to prevent duplicate calls d
 // Real-time listener registry for Firebase singletons
 const activeListeners: Record<string, () => void> = {};
 
-const mergeArraysById = (primary: any[], secondary: any[]) => {
+export const mergeArraysById = (primary: any[], secondary: any[]) => {
+  if (!Array.isArray(primary) && !Array.isArray(secondary)) return [];
   if (!Array.isArray(primary)) return Array.isArray(secondary) ? secondary : [];
   if (!Array.isArray(secondary)) return primary;
 
   const map = new Map<string, any>();
-  primary.forEach(item => {
+  
+  // Add secondary first
+  secondary.forEach(item => {
     if (!item) return;
-    const key = String(item.id || item.rollNo || item.username || item.phone || JSON.stringify(item)).trim().toLowerCase();
+    const key = String(item.id || item.rollNo || item.username || item.phone || (item.grade && item.subject && item.title ? `${item.grade}_${item.subject}_${item.title}` : JSON.stringify(item))).trim().toLowerCase();
     if (key) map.set(key, item);
   });
 
-  secondary.forEach(item => {
+  // Overwrite with primary (newer/primary source)
+  primary.forEach(item => {
     if (!item) return;
-    const key = String(item.id || item.rollNo || item.username || item.phone || JSON.stringify(item)).trim().toLowerCase();
-    if (key && !map.has(key)) {
-      map.set(key, item);
-    }
+    const key = String(item.id || item.rollNo || item.username || item.phone || (item.grade && item.subject && item.title ? `${item.grade}_${item.subject}_${item.title}` : JSON.stringify(item))).trim().toLowerCase();
+    if (key) map.set(key, item);
   });
 
   return Array.from(map.values());
@@ -35,13 +37,39 @@ const setupRealtimeListener = (key: string) => {
     const singletonRef = doc(db, 'singletons', key);
     const unsub = onSnapshot(singletonRef, (snapshot) => {
       if (snapshot.exists() && snapshot.data()?.data !== undefined) {
-        const freshData = snapshot.data().data;
-        memoryCache[key] = { data: freshData, timestamp: Date.now() };
+        const snapPayload = snapshot.data();
+        const serverData = snapPayload.data;
+        const serverUpdatedAt = Number(snapPayload.updatedAt || 0);
+
+        let localData: any = null;
         try {
-          localStorage.setItem(key, JSON.stringify(freshData));
+          const raw = localStorage.getItem(key);
+          if (raw && raw !== 'undefined') localData = JSON.parse(raw);
+        } catch (_) {}
+
+        const localLastSavedAt = Number(localStorage.getItem(`${key}_lastSavedAt`) || 0);
+
+        // If local data was saved very recently and cloud timestamp is older, protect local data
+        if (localLastSavedAt > 0 && serverUpdatedAt > 0 && serverUpdatedAt < localLastSavedAt && (Date.now() - localLastSavedAt < 10000)) {
+          if (localData !== null && localData !== undefined) {
+            setDoc(singletonRef, { data: localData, updatedAt: localLastSavedAt }, { merge: true }).catch(() => {});
+            return;
+          }
+        }
+
+        // If both are arrays, merge to prevent any missing items
+        let finalData = serverData;
+        if (Array.isArray(serverData) && Array.isArray(localData)) {
+          finalData = mergeArraysById(serverData, localData);
+        }
+
+        memoryCache[key] = { data: finalData, timestamp: Date.now() };
+        try {
+          localStorage.setItem(key, JSON.stringify(finalData));
+          localStorage.setItem(`${key}_backup`, JSON.stringify({ data: finalData, updatedAt: serverUpdatedAt || Date.now() }));
         } catch (e) {}
 
-        window.dispatchEvent(new CustomEvent('db_updated', { detail: { key, data: freshData } }));
+        window.dispatchEvent(new CustomEvent('db_updated', { detail: { key, data: finalData } }));
       }
     }, (err) => {
       console.warn(`Realtime snapshot error for ${key}:`, err);
@@ -169,12 +197,18 @@ const getData = async (key: string, defaultValue: any) => {
     return cached.data;
   }
 
-  // Read local storage data first
+  // Read local storage data first (with backup fallback)
   let localData: any = null;
   try {
     const rawValue = localStorage.getItem(key);
-    if (rawValue && rawValue !== 'undefined') {
+    if (rawValue && rawValue !== 'undefined' && rawValue !== 'null') {
       localData = JSON.parse(rawValue);
+    } else {
+      const backupRaw = localStorage.getItem(`${key}_backup`);
+      if (backupRaw && backupRaw !== 'undefined' && backupRaw !== 'null') {
+        const parsedBackup = JSON.parse(backupRaw);
+        localData = parsedBackup?.data !== undefined ? parsedBackup.data : parsedBackup;
+      }
     }
   } catch (e) {
     console.warn(`Error reading localStorage for ${key}:`, e);
@@ -188,16 +222,26 @@ const getData = async (key: string, defaultValue: any) => {
           const singletonRef = doc(db, 'singletons', key);
           const singletonSnap = await getDoc(singletonRef);
           if (singletonSnap.exists() && singletonSnap.data()?.data !== undefined) {
-            const fbData = singletonSnap.data().data;
-            
-            // If local storage has more entries than cloud, merge and update cloud
-            if (Array.isArray(fbData) && Array.isArray(localData) && localData.length > fbData.length) {
+            const snapData = singletonSnap.data();
+            const fbData = snapData.data;
+            const fbUpdatedAt = Number(snapData.updatedAt || 0);
+            const localLastSavedAt = Number(localStorage.getItem(`${key}_lastSavedAt`) || 0);
+
+            // If local data is newer and has items, merge and sync to Firestore
+            if (Array.isArray(fbData) && Array.isArray(localData)) {
               const merged = mergeArraysById(fbData, localData);
-              if (merged.length > fbData.length) {
-                setDoc(singletonRef, { data: merged, updatedAt: Date.now() }).catch(() => {});
+              if (merged.length >= fbData.length && (merged.length > fbData.length || localLastSavedAt > fbUpdatedAt)) {
+                setDoc(singletonRef, { data: merged, updatedAt: Math.max(localLastSavedAt, fbUpdatedAt, Date.now()) }, { merge: true }).catch(() => {});
                 return merged;
               }
+              return merged;
             }
+
+            if (localLastSavedAt > fbUpdatedAt && localData !== null && localData !== undefined) {
+              setDoc(singletonRef, { data: localData, updatedAt: localLastSavedAt }, { merge: true }).catch(() => {});
+              return localData;
+            }
+
             return fbData;
           }
         } catch (singErr) {
@@ -211,8 +255,9 @@ const getData = async (key: string, defaultValue: any) => {
             if (!querySnapshot.empty) {
               const colData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
               if (colData.length > 0) {
-                setDoc(doc(db, 'singletons', key), { data: colData, updatedAt: Date.now() }).catch(() => {});
-                return colData;
+                const merged = Array.isArray(localData) ? mergeArraysById(colData, localData) : colData;
+                setDoc(doc(db, 'singletons', key), { data: merged, updatedAt: Date.now() }, { merge: true }).catch(() => {});
+                return merged;
               }
             }
           } catch (colErr) {
@@ -222,14 +267,14 @@ const getData = async (key: string, defaultValue: any) => {
 
         // Seed Firebase if singleton does not exist yet but local data exists
         if (localData !== null && localData !== undefined) {
-          setDoc(doc(db, 'singletons', key), { data: localData, updatedAt: Date.now() }).catch(() => {});
+          setDoc(doc(db, 'singletons', key), { data: localData, updatedAt: Date.now() }, { merge: true }).catch(() => {});
           return localData;
         }
 
         return localData;
       };
 
-      const timeoutMs = 10000; // Allow 10s for mobile networks
+      const timeoutMs = 7000;
       const fbData = await Promise.race([
         fetchFirebase(),
         new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs))
@@ -239,6 +284,7 @@ const getData = async (key: string, defaultValue: any) => {
         memoryCache[key] = { data: fbData, timestamp: Date.now() };
         try {
           localStorage.setItem(key, JSON.stringify(fbData));
+          localStorage.setItem(`${key}_backup`, JSON.stringify({ data: fbData, updatedAt: Date.now() }));
         } catch (e) {}
         recordReadOperation(1, false);
         return fbData;
@@ -262,13 +308,16 @@ const getData = async (key: string, defaultValue: any) => {
 // Helper to save data to Firebase and localStorage simultaneously
 const saveData = async (key: string, data: any) => {
   const cleanData = JSON.parse(JSON.stringify(data ?? null));
+  const now = Date.now();
 
   recordWriteOperation(1);
 
-  memoryCache[key] = { data: cleanData, timestamp: Date.now() };
+  memoryCache[key] = { data: cleanData, timestamp: now };
 
   try {
     localStorage.setItem(key, JSON.stringify(cleanData));
+    localStorage.setItem(`${key}_backup`, JSON.stringify({ data: cleanData, updatedAt: now }));
+    localStorage.setItem(`${key}_lastSavedAt`, String(now));
   } catch (e) {
     console.warn(`Failed to save ${key} to localStorage.`, e);
   }
@@ -279,12 +328,9 @@ const saveData = async (key: string, data: any) => {
   if (isFirebaseConfigured) {
     try {
       const singletonRef = doc(db, 'singletons', key);
-      await Promise.race([
-        setDoc(singletonRef, { data: cleanData, updatedAt: Date.now() }),
-        new Promise(resolve => setTimeout(resolve, 8000))
-      ]);
+      await setDoc(singletonRef, { data: cleanData, updatedAt: now }, { merge: true });
     } catch (error: any) {
-      console.error(`Firebase error saving ${key}:`, error);
+      console.warn(`Firebase async sync scheduled for ${key}:`, error?.message || error);
     }
   }
 };
