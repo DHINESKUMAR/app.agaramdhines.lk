@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { initializeFirestore } from "firebase/firestore";
+import { initializeFirestore, getFirestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -18,9 +18,18 @@ export const isFirebaseConfigured = true;
 // ஏற்கனவே App தொடங்கப்பட்டிருந்தால் அதையே பயன்படுத்தவும் 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true
-});
+
+let firestoreDb;
+try {
+  firestoreDb = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+    ignoreUndefinedProperties: true
+  });
+} catch (_) {
+  firestoreDb = getFirestore(app);
+}
+export const db = firestoreDb;
+
 export const googleProvider = new GoogleAuthProvider();
 
 // Secondary app for creating users without signing out the admin
@@ -36,3 +45,4 @@ export const signInWithGoogle = async () => {
     throw error;
   }
 };
+
