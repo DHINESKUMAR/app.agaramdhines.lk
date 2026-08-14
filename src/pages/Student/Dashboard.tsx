@@ -46,8 +46,9 @@ import QrScanner from "../../components/QrScanner";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
+import RecordingSection from "../../components/RecordingSection";
 
-import { getCourses, getCourseMaterials, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts } from "../../lib/db";
+import { getCourses, getCourseMaterials, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts, getStudentMenuLabels, DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels } from "../../lib/db";
 import CountdownTimer from "../../components/CountdownTimer";
 import PopupAnnouncement from "../../components/PopupAnnouncement";
 import LiveChat from "../../components/LiveChat";
@@ -302,6 +303,7 @@ export default function StudentDashboard() {
     return parseInt(localStorage.getItem(`app_badge_count_${studentData?.grade}`) || "0");
   });
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [menuLabels, setMenuLabels] = useState<StudentMenuLabels>(DEFAULT_STUDENT_MENU_LABELS);
 
   useEffect(() => {
     // Initial badge sync on mount/grade change
@@ -606,6 +608,10 @@ export default function StudentDashboard() {
       const settings = await getAdminSettings();
       const allYoutubeLinks = await getYoutubeLinks();
       const allWebPosts = await getWebPosts();
+      const customMenuLabels = await getStudentMenuLabels();
+      if (customMenuLabels) {
+        setMenuLabels(customMenuLabels);
+      }
       
       const studentGrade = freshStudentData.grade?.toString().trim().toLowerCase() || "";
       const normalizedStudentGrade = studentGrade.replace(/[^0-9]/g, '');
@@ -1084,10 +1090,10 @@ export default function StudentDashboard() {
   const navItems = [
     { id: "profile", name: "Profile", icon: <User size={24} /> },
     { id: "home", name: "Home", icon: <Home size={24} /> },
-    { id: "subjects", name: "My Subjects", icon: <Book size={24} /> },
+    { id: "subjects", name: menuLabels.subjects || "My Subjects", icon: <Book size={24} /> },
     { id: "timetable", name: "Timetable", icon: <Calendar size={24} /> },
-    { id: "homework", name: "Homework", icon: <BookOpen size={24} /> },
-    { id: "fees", name: "Fees", icon: <DollarSign size={24} /> },
+    { id: "homework", name: menuLabels.homework || "Homework", icon: <BookOpen size={24} /> },
+    { id: "fees", name: menuLabels.fees || "Fees", icon: <DollarSign size={24} /> },
     { id: "website", name: "Website", icon: <Globe size={24} /> },
   ];
 
@@ -1542,7 +1548,7 @@ export default function StudentDashboard() {
                 <div className="w-14 h-14 bg-pink-50 text-pink-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-pink-100 transition-colors">
                   <Book size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base">My Subjects</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.subjects || "My Subjects"}</span>
               </div>
 
               <div
@@ -1552,7 +1558,7 @@ export default function StudentDashboard() {
                 <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-indigo-100 transition-colors">
                   <Link size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base">Recording</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.recording || "Recording"}</span>
               </div>
 
               <div
@@ -1562,7 +1568,7 @@ export default function StudentDashboard() {
                 <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-blue-100 transition-colors">
                   <BookOpen size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base">Homework</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.homework || "Homework"}</span>
               </div>
 
               <div
@@ -1572,7 +1578,7 @@ export default function StudentDashboard() {
                 <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-emerald-100 transition-colors">
                   <Calendar size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base">Attendance</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.attendance || "Attendance"}</span>
               </div>
 
               <div
@@ -1582,7 +1588,7 @@ export default function StudentDashboard() {
                 <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-rose-100 transition-colors">
                   <Youtube size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base">E-Learning</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.elearning || "E-Learning"}</span>
               </div>
 
               <div
@@ -1592,7 +1598,7 @@ export default function StudentDashboard() {
                 <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-emerald-100 transition-colors">
                   <Award size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base">Marks</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.marks || "Marks"}</span>
               </div>
 
               <div
@@ -1602,7 +1608,7 @@ export default function StudentDashboard() {
                 <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-red-100 transition-colors">
                   <FileText size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base text-center">Course Material</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.course_materials || "Course Material"}</span>
               </div>
 
               <div
@@ -1612,7 +1618,7 @@ export default function StudentDashboard() {
                 <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-rose-100 transition-colors">
                   <ShieldAlert size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">Rules</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.rules || "Rules"}</span>
               </div>
 
               <div
@@ -1622,7 +1628,7 @@ export default function StudentDashboard() {
                 <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-amber-100 transition-colors">
                   <DollarSign size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base">Fees</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.fees || "Fees"}</span>
               </div>
 
               <div
@@ -1640,7 +1646,7 @@ export default function StudentDashboard() {
                 <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-purple-100 transition-colors">
                   <MessageCircle size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base text-center">Live Chat</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.chat || "Live Chat"}</span>
               </div>
 
               <a
@@ -1652,7 +1658,7 @@ export default function StudentDashboard() {
                 <div className="w-14 h-14 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-green-100 transition-colors">
                   <WhatsAppIcon size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base text-center">WhatsApp</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.whatsapp || "WhatsApp"}</span>
               </a>
             </div>
 
@@ -2128,180 +2134,17 @@ export default function StudentDashboard() {
         )}
 
         {activeTab === "courses" && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
-              <div className="mb-8">
-                <h2 className="text-2xl font-bold mb-1 text-slate-800 flex items-center">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3">
-                    <FileText size={20} />
-                  </div>
-                  Recording & Study Materials
-                </h2>
-                <p className="text-slate-500 ml-13">Access all your course recordings and materials.</p>
-              </div>
-
-              {/* Website Links Section - Always visible */}
-              <div className="bg-slate-50/50 p-6 sm:p-8 rounded-[3rem] border-2 border-slate-100 border-dashed mb-8 shadow-inner">
-                <div className="text-center mb-6">
-                  <h3 className="text-xl font-black text-slate-800">நேரடி வகுப்புத் பதிவுகள் (Courses Website)</h3>
-                  <p className="text-slate-400 text-sm font-medium mt-1">கீழேயுள்ள வகுப்பினைத் தெரிவு செய்து எமது இணையதளத்தில் கற்கவும்.</p>
-                </div>
-
-                <div className="flex flex-wrap justify-center gap-3 sm:gap-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                  {Object.keys(courseWebsiteLinks).length > 0 ? (
-                    Object.entries(courseWebsiteLinks).sort((a, b) => a[0].localeCompare(b[0])).map(([grade, link], index) => {
-                      const colors = [
-                        'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-600',
-                        'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-600',
-                        'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-600',
-                        'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-600',
-                        'bg-violet-50 text-violet-700 border-violet-100 hover:bg-violet-600',
-                        'bg-cyan-50 text-cyan-700 border-cyan-100 hover:bg-cyan-600'
-                      ];
-                      const colorClass = colors[index % colors.length];
-                      return (
-                        <button
-                          key={grade}
-                          onClick={() => window.open((link as string) || "https://www.agaramdhines.lk/courses/", "_blank")}
-                          className={`${colorClass} hover:text-white border-2 px-4 py-4 rounded-3xl font-black text-sm transition-all shadow-sm hover:shadow-xl hover:-translate-y-1 flex flex-col items-center justify-center gap-2 aspect-square sm:aspect-auto`}
-                        >
-                          <BookOpen size={20} />
-                          <span className="text-center">{grade}</span>
-                        </button>
-                      );
-                    })
-                  ) : (
-                    ["30 DAY'S TAMIL COURSE", "தரம் 06", "தரம் 07", "தரம் 08", "தரம் 09", "தரம் 10", "தரம் 11"].map((grade, index) => {
-                      const colors = [
-                        'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-600',
-                        'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-600',
-                        'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-600',
-                        'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-600',
-                        'bg-violet-50 text-violet-700 border-violet-100 hover:bg-violet-600',
-                        'bg-cyan-50 text-cyan-700 border-cyan-100 hover:bg-cyan-600'
-                      ];
-                      const colorClass = colors[index % colors.length];
-                      return (
-                        <button
-                          key={grade}
-                          onClick={() => window.open(grade === "30 DAY'S TAMIL COURSE" ? "https://www.agaramdhines.lk/courses/30-%e0%ae%a8%e0%ae%be%e0%ae%9f%e0%af%8d%e0%ae%95%e0%ae%b3%e0%ae%bf%e0%ae%b2%e0%af%8d-o-l-%e0%ae%a4%e0%ae%ae%e0%ae%bf%e0%ae%b4%e0%af%8d-2026-dec/" : "https://www.agaramdhines.lk/courses/", "_blank")}
-                          className={`${colorClass} hover:text-white border-2 px-4 py-4 rounded-3xl font-black text-sm transition-all shadow-sm hover:shadow-xl hover:-translate-y-1 flex flex-col items-center justify-center gap-2 aspect-square sm:aspect-auto`}
-                        >
-                          <BookOpen size={20} />
-                          <span className="text-center">{grade}</span>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {courses.length === 0 ? (
-                  <div className="text-center py-12 px-6">
-                    <Globe className="mx-auto h-16 w-16 text-slate-200 mb-4" />
-                    <h3 className="text-xl font-bold text-slate-800">எந்தப் பதிவுகளும் காணப்படவில்லை (No recordings found)</h3>
-                    <p className="text-slate-400 text-sm">மேலே உள்ள இணையதள இணைப்புகளைப் பயன்படுத்தவும்.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {Object.entries(courses.reduce((acc: any, course: any) => {
-                      const folder = course.folder || `${studentData.grade} பாட அலகுகள் மற்றும் RECORDING`;
-                      if (!acc[folder]) acc[folder] = [];
-                      acc[folder].push(course);
-                      return acc;
-                    }, {})).map(([folder, folderCourses]: [string, any]) => {
-                      const isExpanded = expandedFolders[`course-${folder}`];
-                      const folderColor = getFolderColor(folder);
-                      return (
-                        <div key={folder} className={`bg-white border-2 ${folderColor.border} rounded-[2rem] overflow-hidden shadow-sm hover:shadow-md transition-all`}>
-                          <button 
-                            onClick={() => setExpandedFolders(prev => ({ ...prev, [`course-${folder}`]: !prev[`course-${folder}`] }))}
-                            className={`w-full flex items-center justify-between p-7 hover:bg-white/50 transition-colors group ${folderColor.bg}`}
-                          >
-                            <div className="flex items-center gap-6 text-left">
-                              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-500 ${isExpanded ? `${folderColor.icon} text-white shadow-xl ${folderColor.shadow} -rotate-3 scale-110` : `${folderColor.bg} ${folderColor.text} border ${folderColor.border}`}`}>
-                                <BookOpen size={32} />
-                              </div>
-                              <div>
-                                <h3 className={`text-xl font-black ${folderColor.text} leading-tight`}>
-                                  {folder}
-                                </h3>
-                                <p className="text-slate-400 text-sm font-bold uppercase tracking-wider mt-1 opacity-70">
-                                  {folderCourses.length} அலகுகள் மற்றும் விளக்கம்
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-4">
-                              <div className={`hidden sm:flex items-center justify-center w-12 h-12 rounded-full border-2 ${folderColor.border} ${folderColor.text} font-black text-sm`}>
-                                {folderCourses.length}
-                              </div>
-                              <div className={`w-10 h-10 rounded-full border-2 ${folderColor.border} flex items-center justify-center transition-all duration-500 ${isExpanded ? `rotate-180 ${folderColor.bg} ${folderColor.border} ${folderColor.text}` : `${folderColor.text} opacity-30`}`}>
-                                <ChevronDown size={24} />
-                              </div>
-                            </div>
-                          </button>
-
-                          <AnimatePresence>
-                            {isExpanded && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="bg-slate-50/50"
-                              >
-                                <div className="p-6 sm:p-8 pt-0 space-y-3">
-                                  {folderCourses.map((course: any, index: number) => (
-                                    <motion.a
-                                      initial={{ x: -20, opacity: 0 }}
-                                      animate={{ x: 0, opacity: 1 }}
-                                      transition={{ delay: index * 0.05 }}
-                                      key={course.id}
-                                      href={course.link}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="flex items-center justify-between bg-white p-5 rounded-2xl border-2 border-slate-100 hover:border-indigo-500 hover:shadow-xl hover:shadow-indigo-500/10 transition-all group"
-                                    >
-                                      <div className="flex items-center gap-5">
-                                        <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
-                                          <FileText size={24} />
-                                        </div>
-                                        <div>
-                                          <p className="font-black text-slate-700 text-lg group-hover:text-indigo-600 transition-colors">
-                                            {String(index + 1).padStart(2, '0')}. {course.title}
-                                          </p>
-                                          <div className="flex items-center gap-4 mt-1">
-                                            <span className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
-                                              <Clock size={10} /> 8 Days
-                                            </span>
-                                            <span className="text-[10px] font-black uppercase text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-md">
-                                              {course.subject || "RECORDING"}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full border-2 border-slate-50 flex items-center justify-center text-slate-200 group-hover:text-indigo-400 transition-colors">
-                                          <CheckCircle size={20} />
-                                        </div>
-                                        <div className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                                          <ExternalLink size={18} />
-                                        </div>
-                                      </div>
-                                    </motion.a>
-                                  ))}
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <RecordingSection
+            courses={courses}
+            webPosts={webPosts}
+            courseWebsiteLinks={courseWebsiteLinks}
+            studentGrade={studentData?.grade || "தரம் 10"}
+            studentSubjects={studentData?.subjects || studentData?.enrolledClasses || []}
+            onOpenWebsite={(url) => window.open(url, "_blank")}
+            expandedFolders={expandedFolders}
+            setExpandedFolders={setExpandedFolders}
+            getFolderColor={getFolderColor}
+          />
         )}
 
         {activeTab === "course_materials" && (

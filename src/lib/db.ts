@@ -639,6 +639,43 @@ export const saveYoutubeLinks = (links: any) => saveData('youtubeLinks', links);
 export const getFees = () => getData('fees', []);
 export const saveFees = (fees: any) => saveData('fees', fees);
 
+export interface StudentMenuLabels {
+  subjects: string;
+  recording: string;
+  homework: string;
+  attendance: string;
+  elearning: string;
+  marks: string;
+  course_materials: string;
+  rules: string;
+  fees: string;
+  chat: string;
+  whatsapp: string;
+}
+
+export const DEFAULT_STUDENT_MENU_LABELS: StudentMenuLabels = {
+  subjects: "My Subjects",
+  recording: "Recording",
+  homework: "Homework",
+  attendance: "Attendance",
+  elearning: "E-Learning",
+  marks: "Marks",
+  course_materials: "Course Material",
+  rules: "Rules",
+  fees: "Fees",
+  chat: "Live Chat",
+  whatsapp: "WhatsApp"
+};
+
+export const getStudentMenuLabels = async (): Promise<StudentMenuLabels> => {
+  const custom = await getData('studentMenuLabels', {});
+  return { ...DEFAULT_STUDENT_MENU_LABELS, ...(custom || {}) };
+};
+
+export const saveStudentMenuLabels = async (labels: Partial<StudentMenuLabels>) => {
+  return saveData('studentMenuLabels', labels);
+};
+
 export const getAttendance = () => getData('attendance', []);
 export const saveAttendance = (attendance: any) => saveData('attendance', attendance);
 
