@@ -1,5 +1,5 @@
 import { db, isFirebaseConfigured } from './firebase';
-import { collection, doc, getDocs, getDoc, setDoc, writeBatch, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, setDoc, deleteDoc, writeBatch, query, where, onSnapshot } from 'firebase/firestore';
 
 const memoryCache: Record<string, { data: any; timestamp: number }> = {};
 const CACHE_TTL_MS = 2000; // 2 seconds short cache to prevent duplicate calls during single render
@@ -49,24 +49,24 @@ const setupRealtimeListener = (key: string) => {
 
         const localLastSavedAt = Number(localStorage.getItem(`${key}_lastSavedAt`) || 0);
 
-        // If local data was saved very recently and cloud timestamp is older, protect local data
-        if (localLastSavedAt > 0 && serverUpdatedAt > 0 && serverUpdatedAt < localLastSavedAt && (Date.now() - localLastSavedAt < 10000)) {
+        // If local data was saved more recently and cloud timestamp is older (within 15s), push localData to cloud
+        if (localLastSavedAt > 0 && serverUpdatedAt > 0 && localLastSavedAt > serverUpdatedAt && (Date.now() - localLastSavedAt < 15000)) {
           if (localData !== null && localData !== undefined) {
             setDoc(singletonRef, { data: localData, updatedAt: localLastSavedAt }, { merge: true }).catch(() => {});
             return;
           }
         }
 
-        // If both are arrays, merge to prevent any missing items
+        // The authoritative data is serverData when cloud is newer or equal
         let finalData = serverData;
-        if (Array.isArray(serverData) && Array.isArray(localData)) {
-          finalData = mergeArraysById(serverData, localData);
+        if (localLastSavedAt > serverUpdatedAt && localData !== null && localData !== undefined) {
+          finalData = localData;
         }
 
         memoryCache[key] = { data: finalData, timestamp: Date.now() };
         try {
           localStorage.setItem(key, JSON.stringify(finalData));
-          localStorage.setItem(`${key}_backup`, JSON.stringify({ data: finalData, updatedAt: serverUpdatedAt || Date.now() }));
+          localStorage.setItem(`${key}_backup`, JSON.stringify({ data: finalData, updatedAt: Math.max(serverUpdatedAt, localLastSavedAt, Date.now()) }));
         } catch (e) {}
 
         window.dispatchEvent(new CustomEvent('db_updated', { detail: { key, data: finalData } }));
@@ -227,16 +227,7 @@ const getData = async (key: string, defaultValue: any) => {
             const fbUpdatedAt = Number(snapData.updatedAt || 0);
             const localLastSavedAt = Number(localStorage.getItem(`${key}_lastSavedAt`) || 0);
 
-            // If local data is newer and has items, merge and sync to Firestore
-            if (Array.isArray(fbData) && Array.isArray(localData)) {
-              const merged = mergeArraysById(fbData, localData);
-              if (merged.length >= fbData.length && (merged.length > fbData.length || localLastSavedAt > fbUpdatedAt)) {
-                setDoc(singletonRef, { data: merged, updatedAt: Math.max(localLastSavedAt, fbUpdatedAt, Date.now()) }, { merge: true }).catch(() => {});
-                return merged;
-              }
-              return merged;
-            }
-
+            // If local data is newer, sync local data to Firestore
             if (localLastSavedAt > fbUpdatedAt && localData !== null && localData !== undefined) {
               setDoc(singletonRef, { data: localData, updatedAt: localLastSavedAt }, { merge: true }).catch(() => {});
               return localData;
@@ -248,16 +239,16 @@ const getData = async (key: string, defaultValue: any) => {
           console.warn(`Error fetching singleton ${key}:`, singErr);
         }
 
-        // 2. Legacy fallback: query collection once
+        // 2. Legacy fallback: query collection once only if singleton document does not exist
         if (Array.isArray(defaultValue)) {
           try {
             const querySnapshot = await getDocs(collection(db, key));
             if (!querySnapshot.empty) {
               const colData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
               if (colData.length > 0) {
-                const merged = Array.isArray(localData) ? mergeArraysById(colData, localData) : colData;
-                setDoc(doc(db, 'singletons', key), { data: merged, updatedAt: Date.now() }, { merge: true }).catch(() => {});
-                return merged;
+                const initialData = Array.isArray(localData) && localData.length > 0 ? localData : colData;
+                setDoc(doc(db, 'singletons', key), { data: initialData, updatedAt: Date.now() }, { merge: true }).catch(() => {});
+                return initialData;
               }
             }
           } catch (colErr) {
@@ -649,6 +640,27 @@ export const saveStudents = async (students: any) => {
     id: String(student.id || "STU" + Math.floor(100000 + Math.random() * 900000))
   }));
   return saveData('students', sanitized);
+};
+
+export const deleteStudent = async (id: string | number) => {
+  const targetId = String(id).trim().toLowerCase();
+  const currentStudents = await getStudents();
+  const updatedStudents = currentStudents.filter((s: any) => {
+    const sId = String(s.id || '').trim().toLowerCase();
+    const sRoll = String(s.rollNo || '').trim().toLowerCase();
+    const sUser = String(s.username || '').trim().toLowerCase();
+    return sId !== targetId && sRoll !== targetId && sUser !== targetId;
+  });
+
+  await saveStudents(updatedStudents);
+
+  if (isFirebaseConfigured) {
+    try {
+      await deleteDoc(doc(db, 'students', String(id)));
+    } catch (_) {}
+  }
+
+  return updatedStudents;
 };
 
 export const getZoomLinks = async () => {

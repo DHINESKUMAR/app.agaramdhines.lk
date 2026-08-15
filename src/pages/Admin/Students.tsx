@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { getStudents, saveStudents, getClasses, getAdminSettings, sanitizeSubjectList, areSubjectsMatching } from "../../lib/db";
+import { getStudents, saveStudents, deleteStudent, getClasses, getAdminSettings, sanitizeSubjectList, areSubjectsMatching } from "../../lib/db";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { secondaryAuth } from "../../lib/firebase";
 import * as XLSX from "xlsx";
@@ -515,11 +515,15 @@ export default function Students() {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this student? They will not be able to login.")) {
-      const updatedStudents = students.filter(s => s.id !== id);
-      setStudents(updatedStudents);
-      await saveStudents(updatedStudents);
-      alert("Student deleted successfully. They can no longer login.");
+    if (window.confirm("இந்த மாணவரை நீக்க விரும்புகிறீர்களா? (Are you sure you want to delete this student? They will not be able to login.)")) {
+      try {
+        const updatedStudents = await deleteStudent(id);
+        setStudents(updatedStudents);
+        alert("மாணவர் வெற்றிகரமாக Database-லிருந்து நீக்கப்பட்டார் / Student deleted successfully from database.");
+      } catch (err: any) {
+        console.error("Error deleting student:", err);
+        alert("Error deleting student: " + (err.message || err));
+      }
     }
   };
 
