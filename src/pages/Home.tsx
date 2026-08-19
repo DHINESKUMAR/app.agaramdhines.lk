@@ -97,15 +97,39 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // Check for existing session
+    // Check for existing session (Remember Login)
     const session = localStorage.getItem('userSession');
     if (session && session !== 'undefined' && session !== 'null') {
       try {
         const userData = JSON.parse(session);
         if (userData && userData.role) {
-          if (userData.role === 'Admin') navigate('/admin');
-          else if (userData.role === 'Student') navigate('/student-dashboard', { state: userData });
-          else if (userData.role === 'Staff') navigate('/staff-dashboard', { state: userData });
+          if (userData.role === 'Admin') {
+            navigate('/admin');
+          } else if (userData.role === 'Staff') {
+            navigate('/staff-dashboard', { state: userData });
+          } else if (userData.role === 'Student') {
+            // Verify student still exists in active database and is not deleted
+            getStudents().then(students => {
+              const studentId = String(userData.id || userData.student_id || '').trim().toLowerCase();
+              const roll = String(userData.rollNo || '').trim().toLowerCase();
+              const user = String(userData.username || '').trim().toLowerCase();
+              const exists = (students || []).some((s: any) => {
+                if (!s) return false;
+                const sId = String(s.id || s.student_id || '').trim().toLowerCase();
+                const sRoll = String(s.rollNo || '').trim().toLowerCase();
+                const sUser = String(s.username || '').trim().toLowerCase();
+                return (studentId && sId === studentId) || (roll && sRoll === roll) || (user && sUser === user);
+              });
+
+              if (exists) {
+                navigate('/student-dashboard', { state: userData });
+              } else {
+                localStorage.removeItem('userSession');
+              }
+            }).catch(() => {
+              navigate('/student-dashboard', { state: userData });
+            });
+          }
         }
       } catch (e) {
         console.error("Invalid session data");

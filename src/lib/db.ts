@@ -645,14 +645,29 @@ export const saveStudents = async (students: any) => {
 export const deleteStudent = async (id: string | number) => {
   const targetId = String(id).trim().toLowerCase();
   const currentStudents = await getStudents();
-  const updatedStudents = currentStudents.filter((s: any) => {
+  const updatedStudents = (currentStudents || []).filter((s: any) => {
+    if (!s) return false;
     const sId = String(s.id || '').trim().toLowerCase();
     const sRoll = String(s.rollNo || '').trim().toLowerCase();
     const sUser = String(s.username || '').trim().toLowerCase();
-    return sId !== targetId && sRoll !== targetId && sUser !== targetId;
+    const sCode = String(s.studentCode || '').trim().toLowerCase();
+    return sId !== targetId && sRoll !== targetId && sUser !== targetId && sCode !== targetId;
   });
 
   await saveStudents(updatedStudents);
+
+  try {
+    const sessionRaw = localStorage.getItem('userSession');
+    if (sessionRaw) {
+      const session = JSON.parse(sessionRaw);
+      const sessId = String(session?.id || session?.student_id || '').trim().toLowerCase();
+      const sessRoll = String(session?.rollNo || '').trim().toLowerCase();
+      const sessUser = String(session?.username || '').trim().toLowerCase();
+      if (sessId === targetId || sessRoll === targetId || sessUser === targetId) {
+        localStorage.removeItem('userSession');
+      }
+    }
+  } catch (_) {}
 
   if (isFirebaseConfigured) {
     try {

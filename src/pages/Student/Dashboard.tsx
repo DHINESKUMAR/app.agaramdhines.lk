@@ -578,22 +578,35 @@ export default function StudentDashboard() {
 
     const loadData = async () => {
       const allStudents = await getStudents();
-      const studentId = data.id || data.student_id;
-      const freshStudentData = allStudents.find((s: any) => 
-        s.id === studentId || s.student_id === studentId
-      ) || data;
+      const targetId = String(data.id || data.student_id || '').trim().toLowerCase();
+      const targetRoll = String(data.rollNo || '').trim().toLowerCase();
+      const targetUser = String(data.username || '').trim().toLowerCase();
+
+      const freshStudentData = (allStudents || []).find((s: any) => {
+        if (!s) return false;
+        const sId = String(s.id || s.student_id || '').trim().toLowerCase();
+        const sRoll = String(s.rollNo || '').trim().toLowerCase();
+        const sUser = String(s.username || '').trim().toLowerCase();
+        return (targetId && sId === targetId) || (targetRoll && sRoll === targetRoll) || (targetUser && sUser === targetUser);
+      });
       
-      if (freshStudentData) {
-        setStudentData(freshStudentData);
-        setCurrentStudentData(freshStudentData);
-        setDisplayName(freshStudentData.name);
-        setProfileImage(freshStudentData.image || null);
-        setEnrolledClasses(freshStudentData.subjects || freshStudentData.enrolledClasses || []);
-        try {
-          localStorage.setItem('userSession', JSON.stringify({ ...data, ...freshStudentData, role: 'Student' }));
-        } catch (e) {
-          console.error("Failed to update userSession in localStorage:", e);
-        }
+      if (!freshStudentData) {
+        // The student was deleted from database, clear stale session and redirect
+        localStorage.removeItem('userSession');
+        alert("இந்த மாணவர் கணக்கு தரவுத்தளத்தில் இல்லை அல்லது நீக்கப்பட்டுள்ளது. / This student account is not found or has been deleted.");
+        navigate("/");
+        return;
+      }
+      
+      setStudentData(freshStudentData);
+      setCurrentStudentData(freshStudentData);
+      setDisplayName(freshStudentData.name);
+      setProfileImage(freshStudentData.image || null);
+      setEnrolledClasses(freshStudentData.subjects || freshStudentData.enrolledClasses || []);
+      try {
+        localStorage.setItem('userSession', JSON.stringify({ ...data, ...freshStudentData, role: 'Student' }));
+      } catch (e) {
+        console.error("Failed to update userSession in localStorage:", e);
       }
 
       const allCourses = await getCourses();
