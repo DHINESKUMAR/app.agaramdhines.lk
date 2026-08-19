@@ -14,7 +14,7 @@ export default defineConfig(({mode}) => {
         registerType: 'autoUpdate',
         injectRegister: 'auto',
         devOptions: {
-          enabled: true
+          enabled: false
         },
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'logo.png', 'logo-192.png', 'logo-512.png', 'logo-maskable-192.png', 'logo-maskable-512.png', 'screenshots/home.jpg', 'screenshots/desktop.jpg'],
         manifest: {
