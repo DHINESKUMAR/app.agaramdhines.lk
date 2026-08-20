@@ -4,6 +4,7 @@ import { signInWithGoogle, auth } from "../lib/firebase";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 import { GraduationCap, Globe, LogIn, Mail, Shield, MessageCircle, Users, Play, Facebook, Twitter, Instagram, Apple, PlayCircle, Award, BookOpen, Home as HomeIcon, Video, UserPlus, Phone, ChevronLeft, ChevronRight, X, Menu, Megaphone, Pin, ExternalLink, Calendar } from "lucide-react";
 import { getStudents, getStaffs, getAdminSettings, getPasswordRequests, savePasswordRequests, getAnnouncements, saveStudents, saveStaffs, getHomePageContent } from "../lib/db";
+import { getUserSession, saveUserSession } from "../lib/authSession";
 import { motion, AnimatePresence } from "motion/react";
 import Chatbot from "../components/Chatbot";
 import QrScanner from "../components/QrScanner";
@@ -97,42 +98,18 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // Check for existing session (Remember Login)
-    const session = localStorage.getItem('userSession');
-    if (session && session !== 'undefined' && session !== 'null') {
-      try {
-        const userData = JSON.parse(session);
-        if (userData && userData.role) {
-          if (userData.role === 'Admin') {
-            navigate('/admin');
-          } else if (userData.role === 'Staff') {
-            navigate('/staff-dashboard', { state: userData });
-          } else if (userData.role === 'Student') {
-            // Verify student still exists in active database and is not deleted
-            getStudents().then(students => {
-              const studentId = String(userData.id || userData.student_id || '').trim().toLowerCase();
-              const roll = String(userData.rollNo || '').trim().toLowerCase();
-              const user = String(userData.username || '').trim().toLowerCase();
-              const exists = (students || []).some((s: any) => {
-                if (!s) return false;
-                const sId = String(s.id || s.student_id || '').trim().toLowerCase();
-                const sRoll = String(s.rollNo || '').trim().toLowerCase();
-                const sUser = String(s.username || '').trim().toLowerCase();
-                return (studentId && sId === studentId) || (roll && sRoll === roll) || (user && sUser === user);
-              });
-
-              if (exists) {
-                navigate('/student-dashboard', { state: userData });
-              } else {
-                localStorage.removeItem('userSession');
-              }
-            }).catch(() => {
-              navigate('/student-dashboard', { state: userData });
-            });
-          }
-        }
-      } catch (e) {
-        console.error("Invalid session data");
+    // Check for existing session (Permanent Remember Login)
+    const session = getUserSession();
+    if (session && session.role) {
+      if (session.role === 'Admin') {
+        navigate('/admin', { replace: true });
+        return;
+      } else if (session.role === 'Staff') {
+        navigate('/staff-dashboard', { state: session, replace: true });
+        return;
+      } else if (session.role === 'Student') {
+        navigate('/student-dashboard', { state: session, replace: true });
+        return;
       }
     }
 
@@ -226,7 +203,7 @@ export default function Home() {
           enrolledClasses: student.enrolledClasses || [],
           role: 'Student'
         };
-        localStorage.setItem('userSession', JSON.stringify(studentData));
+        saveUserSession(studentData);
         navigate("/student-dashboard", { state: studentData });
       } else {
         alert("Invalid username or password. / தவறான பயனர் பெயர் அல்லது கடவுச்சொல்.");
@@ -247,7 +224,7 @@ export default function Home() {
     const isMasterAdmin = adminUsername === "ddhinesnivas111@gmail.com" && adminPassword === "0756452527dD";
     
     if (isConfiguredAdmin || isMasterAdmin) {
-      localStorage.setItem('userSession', JSON.stringify({ role: 'Admin' }));
+      saveUserSession({ role: 'Admin', username: adminUsername || 'Admin' });
       navigate("/admin");
     } else {
       alert("Invalid admin credentials");
@@ -287,7 +264,7 @@ export default function Home() {
         const isMasterAdmin = user === "ddhinesnivas111@gmail.com" && pass === "0756452527dD";
         
         if (isConfiguredAdmin || isMasterAdmin) {
-          localStorage.setItem('userSession', JSON.stringify({ role: 'Admin' }));
+          saveUserSession({ role: 'Admin', username: user || 'Admin' });
           navigate("/admin");
         } else {
           alert("Invalid Admin QR Code");
@@ -344,7 +321,7 @@ export default function Home() {
             enrolledClasses: student.enrolledClasses || [],
             role: 'Student'
           };
-          localStorage.setItem('userSession', JSON.stringify(studentData));
+          saveUserSession(studentData);
           navigate("/student-dashboard", { state: studentData });
           return;
         }
@@ -368,7 +345,7 @@ export default function Home() {
             role: staff.role || "Teacher",
             assignedClasses: staff.assignedClasses || []
           };
-          localStorage.setItem('userSession', JSON.stringify({ ...staffData, role: 'Staff' }));
+          saveUserSession({ ...staffData, role: 'Staff' });
           navigate("/staff-dashboard", { state: staffData });
           return;
         }
@@ -377,7 +354,7 @@ export default function Home() {
       // 5. Fallback check for Admin ID
       const settings = await getAdminSettings();
       if (scanVal === String(settings?.username || "").trim().toLowerCase() || scanVal === "ddhinesnivas111@gmail.com") {
-         localStorage.setItem('userSession', JSON.stringify({ role: 'Admin' }));
+         saveUserSession({ role: 'Admin', username: scanVal || 'Admin' });
          navigate("/admin");
          return;
       }
@@ -409,7 +386,7 @@ export default function Home() {
           role: staff.role || "Teacher",
           assignedClasses: staff.assignedClasses || []
         };
-        localStorage.setItem('userSession', JSON.stringify({ ...staffData, role: 'Staff' }));
+        saveUserSession({ ...staffData, role: 'Staff' });
         navigate("/staff-dashboard", { state: staffData });
       } else {
         alert("Invalid staff credentials");

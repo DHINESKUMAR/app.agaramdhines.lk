@@ -1,5 +1,6 @@
 import { db, isFirebaseConfigured } from './firebase';
 import { collection, doc, getDocs, getDoc, setDoc, deleteDoc, writeBatch, query, where, onSnapshot } from 'firebase/firestore';
+import { getUserSession, clearUserSession } from './authSession';
 
 const memoryCache: Record<string, { data: any; timestamp: number }> = {};
 const CACHE_TTL_MS = 2000; // 2 seconds short cache to prevent duplicate calls during single render
@@ -657,14 +658,13 @@ export const deleteStudent = async (id: string | number) => {
   await saveStudents(updatedStudents);
 
   try {
-    const sessionRaw = localStorage.getItem('userSession');
-    if (sessionRaw) {
-      const session = JSON.parse(sessionRaw);
+    const session = getUserSession();
+    if (session) {
       const sessId = String(session?.id || session?.student_id || '').trim().toLowerCase();
       const sessRoll = String(session?.rollNo || '').trim().toLowerCase();
       const sessUser = String(session?.username || '').trim().toLowerCase();
       if (sessId === targetId || sessRoll === targetId || sessUser === targetId) {
-        localStorage.removeItem('userSession');
+        clearUserSession();
       }
     }
   } catch (_) {}

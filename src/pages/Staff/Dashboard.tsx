@@ -21,6 +21,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
 import { getAttendance, getZoomLinks, saveZoomLinks, getHomework, saveHomework, getStaffAttendance, saveStaffAttendance, getTimeTable, saveTimeTable, getStudents, getAdminSettings } from "../../lib/db";
+import { getUserSession, saveUserSession, clearUserSession } from "../../lib/authSession";
 import CountdownTimer from "../../components/CountdownTimer";
 import PopupAnnouncement from "../../components/PopupAnnouncement";
 import LiveChat from "../../components/LiveChat";
@@ -70,24 +71,17 @@ export default function StaffDashboard() {
   }, []);
 
   useEffect(() => {
-    let data = staff;
+    let data = staff || location.state;
     if (!data) {
-      const session = localStorage.getItem('userSession');
-      if (session && session !== 'undefined' && session !== 'null') {
-        try {
-          const parsed = JSON.parse(session);
-          if (parsed && parsed.role === 'Staff') {
-            data = parsed;
-            setStaff(parsed);
-          }
-        } catch (e) {
-          console.error("Invalid session data");
-        }
+      const session = getUserSession();
+      if (session && session.role === 'Staff') {
+        data = session;
+        setStaff(session);
       }
     }
 
     if (!data) {
-      navigate("/");
+      navigate("/", { replace: true });
       return;
     }
 
@@ -99,8 +93,8 @@ export default function StaffDashboard() {
   if (!staff) return null;
 
   const handleLogout = () => {
-    localStorage.removeItem('userSession');
-    navigate("/");
+    clearUserSession();
+    navigate("/", { replace: true });
   };
 
   const navItems = [

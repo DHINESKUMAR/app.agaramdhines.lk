@@ -49,6 +49,7 @@ import jsPDF from "jspdf";
 import RecordingSection from "../../components/RecordingSection";
 
 import { getCourses, getCourseMaterials, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts, getStudentMenuLabels, DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels } from "../../lib/db";
+import { getUserSession, saveUserSession, clearUserSession } from "../../lib/authSession";
 import CountdownTimer from "../../components/CountdownTimer";
 import PopupAnnouncement from "../../components/PopupAnnouncement";
 import LiveChat from "../../components/LiveChat";
@@ -526,7 +527,7 @@ export default function StudentDashboard() {
             enrolledClasses: student.enrolledClasses || [],
             role: 'Student'
           };
-          localStorage.setItem('userSession', JSON.stringify(newStudentData));
+          saveUserSession(newStudentData);
           setStudentData(newStudentData);
           setCurrentStudentData(student);
           alert(`Successfully logged in as ${student.name}`);
@@ -552,24 +553,17 @@ export default function StudentDashboard() {
   }, []);
 
   useEffect(() => {
-    let data = studentData;
+    let data = studentData || location.state;
     if (!data) {
-      const session = localStorage.getItem('userSession');
-      if (session && session !== 'undefined' && session !== 'null') {
-        try {
-          const parsed = JSON.parse(session);
-          if (parsed && parsed.role === 'Student') {
-            data = parsed;
-            setStudentData(parsed);
-          }
-        } catch (e) {
-          console.error("Invalid session data");
-        }
+      const session = getUserSession();
+      if (session && session.role === 'Student') {
+        data = session;
+        setStudentData(session);
       }
     }
 
     if (!data) {
-      navigate("/");
+      navigate("/", { replace: true });
       return;
     }
 
@@ -577,36 +571,34 @@ export default function StudentDashboard() {
     setCurrentStudentData(data);
 
     const loadData = async () => {
-      const allStudents = await getStudents();
-      const targetId = String(data.id || data.student_id || '').trim().toLowerCase();
-      const targetRoll = String(data.rollNo || '').trim().toLowerCase();
-      const targetUser = String(data.username || '').trim().toLowerCase();
-
-      const freshStudentData = (allStudents || []).find((s: any) => {
-        if (!s) return false;
-        const sId = String(s.id || s.student_id || '').trim().toLowerCase();
-        const sRoll = String(s.rollNo || '').trim().toLowerCase();
-        const sUser = String(s.username || '').trim().toLowerCase();
-        return (targetId && sId === targetId) || (targetRoll && sRoll === targetRoll) || (targetUser && sUser === targetUser);
-      });
-      
-      if (!freshStudentData) {
-        // The student was deleted from database, clear stale session and redirect
-        localStorage.removeItem('userSession');
-        alert("இந்த மாணவர் கணக்கு தரவுத்தளத்தில் இல்லை அல்லது நீக்கப்பட்டுள்ளது. / This student account is not found or has been deleted.");
-        navigate("/");
-        return;
-      }
-      
-      setStudentData(freshStudentData);
-      setCurrentStudentData(freshStudentData);
-      setDisplayName(freshStudentData.name);
-      setProfileImage(freshStudentData.image || null);
-      setEnrolledClasses(freshStudentData.subjects || freshStudentData.enrolledClasses || []);
+      let freshStudentData: any = data;
       try {
-        localStorage.setItem('userSession', JSON.stringify({ ...data, ...freshStudentData, role: 'Student' }));
-      } catch (e) {
-        console.error("Failed to update userSession in localStorage:", e);
+        const allStudents = await getStudents();
+        const targetId = String(data.id || data.student_id || '').trim().toLowerCase();
+        const targetRoll = String(data.rollNo || '').trim().toLowerCase();
+        const targetUser = String(data.username || '').trim().toLowerCase();
+
+        if (Array.isArray(allStudents) && allStudents.length > 0) {
+          const matched = allStudents.find((s: any) => {
+            if (!s) return false;
+            const sId = String(s.id || s.student_id || '').trim().toLowerCase();
+            const sRoll = String(s.rollNo || '').trim().toLowerCase();
+            const sUser = String(s.username || '').trim().toLowerCase();
+            return (targetId && sId === targetId) || (targetRoll && sRoll === targetRoll) || (targetUser && sUser === targetUser);
+          });
+          
+          if (matched) {
+            freshStudentData = matched;
+            setStudentData(matched);
+            setCurrentStudentData(matched);
+            setDisplayName(matched.name);
+            setProfileImage(matched.image || null);
+            setEnrolledClasses(matched.subjects || matched.enrolledClasses || []);
+            saveUserSession({ ...data, ...matched, role: 'Student' });
+          }
+        }
+      } catch (err) {
+        console.warn("Could not sync fresh student data, retaining session:", err);
       }
 
       const allCourses = await getCourses();
@@ -1515,8 +1507,8 @@ export default function StudentDashboard() {
           </button>
           <button
             onClick={() => {
-              localStorage.removeItem('userSession');
-              navigate("/");
+              clearUserSession();
+              navigate("/", { replace: true });
             }}
             className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-500 rounded-full transition-colors"
           >

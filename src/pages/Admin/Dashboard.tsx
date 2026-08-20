@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../../lib/firebase";
 import { getAdminSettings } from "../../lib/db";
+import { getUserSession, clearUserSession } from "../../lib/authSession";
 import PopupAnnouncement from "../../components/PopupAnnouncement";
 import { useChatNotifications } from "../../hooks/useChatNotifications";
 import { useHomeworkNotifications } from "../../hooks/useHomeworkNotifications";
@@ -81,19 +82,9 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    const session = localStorage.getItem('userSession');
-    if (!session || session === 'undefined' || session === 'null') {
-      navigate('/');
-      return;
-    }
-    try {
-      const userData = JSON.parse(session);
-      if (!userData || userData.role !== 'Admin') {
-        navigate('/');
-        return;
-      }
-    } catch (e) {
-      navigate('/');
+    const session = getUserSession();
+    if (!session || session.role !== 'Admin') {
+      navigate('/', { replace: true });
       return;
     }
 
@@ -223,13 +214,14 @@ export default function AdminDashboard() {
 
   const handleLogout = async () => {
     try {
-      localStorage.removeItem('userSession');
-      await signOut(auth);
+      clearUserSession();
+      try { await signOut(auth); } catch (_) {}
       // Redirect to home and replace history to prevent back navigation
       navigate("/", { replace: true });
     } catch (error) {
       console.error("Logout error:", error);
-      alert("Failed to log out. Please try again.");
+      clearUserSession();
+      navigate("/", { replace: true });
     }
   };
 
