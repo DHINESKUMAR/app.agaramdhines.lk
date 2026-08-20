@@ -999,7 +999,7 @@ export const getStudentPayments = async (studentId: string) => {
   return [];
 };
 
-const ALL_BACKUP_COLLECTIONS = [
+export const ALL_BACKUP_COLLECTIONS = [
   'adminSettings', 'homePageContent', 'chatbotSettings', 'passwordRequests',
   'students', 'zoomLinks', 'courses', 'courseMaterials', 'youtubeLinks',
   'fees', 'attendance', 'schedule', 'classLinks', 'courseWebsiteLinks',
@@ -1009,54 +1009,126 @@ const ALL_BACKUP_COLLECTIONS = [
   'chatMessages'
 ];
 
-export const exportFullSystemBackup = async () => {
+export interface BackupOptions {
+  pathPrefix?: string;
+  selectedCollections?: string[];
+  dateFilter?: {
+    enabled: boolean;
+    startDate?: string;
+    endDate?: string;
+  };
+  note?: string;
+}
+
+export const exportCustomPathBackup = async (options: BackupOptions = {}) => {
+  const targetCollections = (options.selectedCollections && options.selectedCollections.length > 0)
+    ? options.selectedCollections
+    : ALL_BACKUP_COLLECTIONS;
+
+  const pathPrefix = options.pathPrefix?.trim() || "Backups/Auto_Date";
   const backupData: Record<string, any> = {};
-  for (const key of ALL_BACKUP_COLLECTIONS) {
+
+  for (const key of targetCollections) {
     try {
-      backupData[key] = await getData(key, null);
+      let rawData = await getData(key, null);
+      
+      // Apply date filtering if enabled and data is an array
+      if (options.dateFilter?.enabled && Array.isArray(rawData)) {
+        const start = options.dateFilter.startDate ? new Date(options.dateFilter.startDate).getTime() : 0;
+        const end = options.dateFilter.endDate ? new Date(options.dateFilter.endDate + 'T23:59:59.999Z').getTime() : Infinity;
+
+        rawData = rawData.filter((item: any) => {
+          if (!item) return false;
+          const itemDateStr = item.date || item.paymentDate || item.examDate || item.createdAt || item.timestamp;
+          if (!itemDateStr) return true; // Keep items without date (e.g. Master records)
+          const itemTime = new Date(itemDateStr).getTime();
+          if (isNaN(itemTime)) return true;
+          return itemTime >= start && itemTime <= end;
+        });
+      }
+
+      backupData[key] = rawData;
     } catch (e) {
       console.error(`Error backing up collection ${key}:`, e);
     }
   }
+
   const now = new Date();
   const dateFormatted = now.toLocaleDateString("en-GB") + " " + now.toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit', hour12: true });
+
   return {
     system: "Agaram Dhines Online Academy",
-    version: "1.0",
+    version: "2.0",
+    path: pathPrefix,
     exportDate: now.toISOString(),
     exportDateFormatted: dateFormatted,
+    note: options.note || "Date & Path Backup",
+    dateFilter: options.dateFilter || { enabled: false },
+    includedCollections: targetCollections,
     data: backupData
   };
 };
 
-export const restoreFullSystemBackup = async (backupPayload: any) => {
+export const exportFullSystemBackup = async () => {
+  return exportCustomPathBackup({
+    pathPrefix: "Backups/Full_System",
+    selectedCollections: ALL_BACKUP_COLLECTIONS,
+    note: "Full System Backup"
+  });
+};
+
+export const restoreCustomPathBackup = async (backupPayload: any, selectedKeysToRestore?: string[]) => {
   if (!backupPayload || typeof backupPayload !== 'object' || !backupPayload.data) {
     throw new Error('செல்லுபடியற்ற காப்புப்பிரதி கோப்பு (Invalid backup file format)');
   }
   const dataMap = backupPayload.data;
-  for (const key of Object.keys(dataMap)) {
+  const allowedKeys = selectedKeysToRestore && selectedKeysToRestore.length > 0
+    ? selectedKeysToRestore
+    : Object.keys(dataMap);
+
+  const restoredList: string[] = [];
+
+  for (const key of allowedKeys) {
     if (ALL_BACKUP_COLLECTIONS.includes(key) && dataMap[key] !== null && dataMap[key] !== undefined) {
       await saveData(key, dataMap[key]);
+      restoredList.push(key);
     }
   }
-  return true;
+  return {
+    success: true,
+    restoredCollections: restoredList,
+    totalRestored: restoredList.length
+  };
+};
+
+export const restoreFullSystemBackup = async (backupPayload: any) => {
+  return restoreCustomPathBackup(backupPayload);
 };
 
 export const getSystemBackups = async () => {
   return getData('systemBackups', []);
 };
 
-export const saveSystemBackupSnapshot = async (note: string = "Manual Backup") => {
-  const fullBackup = await exportFullSystemBackup();
+export const saveSystemBackupSnapshot = async (options: string | BackupOptions = "Manual Backup") => {
+  const backupOptions: BackupOptions = typeof options === 'string'
+    ? { note: options, pathPrefix: "Backups/" + new Date().toISOString().split('T')[0] }
+    : options;
+
+  const fullBackup = await exportCustomPathBackup(backupOptions);
   const existingBackups = await getData('systemBackups', []);
+  
   const newSnapshot = {
     id: "backup_" + Date.now(),
+    path: fullBackup.path,
     dateStr: fullBackup.exportDate,
     formattedDate: fullBackup.exportDateFormatted,
-    note,
+    note: fullBackup.note,
+    dateFilter: fullBackup.dateFilter,
+    includedCollections: fullBackup.includedCollections,
     data: fullBackup.data
   };
-  const updatedList = [newSnapshot, ...(Array.isArray(existingBackups) ? existingBackups : [])].slice(0, 20); // keep last 20 date backups
+
+  const updatedList = [newSnapshot, ...(Array.isArray(existingBackups) ? existingBackups : [])].slice(0, 30); // keep last 30 date backups
   await saveData('systemBackups', updatedList);
   return newSnapshot;
 };
