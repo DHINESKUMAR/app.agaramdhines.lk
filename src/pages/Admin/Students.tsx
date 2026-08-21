@@ -308,24 +308,40 @@ export default function Students() {
     
     try {
       const currentStudents = await getStudents();
+      const targetUser = formData.username.trim().toLowerCase();
+      const cleanRollNo = formData.rollNo ? formData.rollNo.toString().trim() : "";
 
-      // Check for duplicate roll number
-      if (formData.rollNo) {
-        const isDuplicateRoll = currentStudents.some((s: any) => s.rollNo && s.rollNo.toString().trim() === formData.rollNo.toString().trim());
-        if (isDuplicateRoll) {
-          alert("ஏற்கனவே இந்த roll number save ஆகி உள்ளது / This roll number is already in use.");
-          setUpdateProgress(-1);
-          return;
-        }
+      // Check if this student already exists by username or ID, if so update them
+      const existingStudentIndex = currentStudents.findIndex((s: any) => 
+        (s.username && s.username.toString().trim().toLowerCase() === targetUser) ||
+        (s.id && (formData as any).id && String(s.id).trim() === String((formData as any).id).trim())
+      );
+
+      let updatedStudents: any[];
+
+      if (existingStudentIndex !== -1) {
+        // Update existing record
+        updatedStudents = currentStudents.map((s: any, idx: number) => {
+          if (idx === existingStudentIndex) {
+            return {
+              ...s,
+              ...formData,
+              rollNo: cleanRollNo || s.rollNo || "",
+              id: String(s.id)
+            };
+          }
+          return s;
+        });
+      } else {
+        // Create new student
+        const generatedId = (formData as any).id || "STU" + Math.floor(100000 + Math.random() * 900000);
+        const newStudent = {
+          ...formData,
+          rollNo: cleanRollNo,
+          id: String(generatedId)
+        };
+        updatedStudents = [...currentStudents.filter((s: any) => String(s.id) !== String(newStudent.id)), newStudent];
       }
-
-      const generatedId = (formData as any).id || "STU" + Math.floor(100000 + Math.random() * 900000);
-      const newStudent = {
-        ...formData,
-        id: String(generatedId)
-      };
-      
-      const updatedStudents = [...currentStudents.filter((s: any) => String(s.id) !== String(newStudent.id)), newStudent];
       
       setUpdateProgress(70);
       
@@ -336,14 +352,14 @@ export default function Students() {
       setUpdateProgress(100);
       
       setTimeout(() => {
-        alert("Student added successfully to the Database!");
+        alert("Student saved successfully!");
         resetForm();
         setView("menu");
         setUpdateProgress(-1);
       }, 150);
     } catch (error: any) {
-      console.error("Error creating student:", error);
-      alert("Error creating student: " + (error.message || error));
+      console.error("Error saving student:", error);
+      alert("Error saving student: " + (error.message || error));
       setUpdateProgress(-1);
     }
   };
@@ -359,24 +375,34 @@ export default function Students() {
     
     try {
       const currentStudents = await getStudents();
+      const targetId = editingStudentId ? String(editingStudentId).trim() : "";
+      const targetUser = formData.username ? formData.username.trim().toLowerCase() : "";
+      const cleanRollNo = formData.rollNo ? formData.rollNo.toString().trim() : "";
 
-      // Check for duplicate roll number
-      if (formData.rollNo) {
-        const isDuplicateRoll = currentStudents.some((s: any) => 
-          String(s.id) !== String(editingStudentId) && 
-          s.rollNo && 
-          s.rollNo.toString().trim() === formData.rollNo.toString().trim()
-        );
-        if (isDuplicateRoll) {
-          alert("ஏற்கனவே இந்த roll number save ஆகி உள்ளது / This roll number is already in use.");
-          setUpdateProgress(-1);
-          return;
+      let matched = false;
+      const updatedStudents = currentStudents.map((s: any) => {
+        const isMatch = (targetId && String(s.id).trim() === targetId) ||
+                        (targetUser && s.username && s.username.toString().trim().toLowerCase() === targetUser);
+        if (isMatch) {
+          matched = true;
+          return { 
+            ...s, 
+            ...formData, 
+            rollNo: cleanRollNo,
+            id: String(s.id || targetId || "STU" + Math.floor(100000 + Math.random() * 900000))
+          };
         }
-      }
+        return s;
+      });
 
-      const updatedStudents = currentStudents.map((s: any) => 
-        String(s.id) === String(editingStudentId) ? { ...s, ...formData, id: String(s.id) } : s
-      );
+      // If for any reason the student wasn't in the list by ID, add/upsert the student
+      if (!matched) {
+        updatedStudents.push({
+          ...formData,
+          rollNo: cleanRollNo,
+          id: targetId || "STU" + Math.floor(100000 + Math.random() * 900000)
+        });
+      }
       
       setUpdateProgress(70);
       await saveStudents(updatedStudents);
@@ -465,7 +491,7 @@ export default function Students() {
       admissionDate: student.admissionDate || "",
       image: student.image || ""
     });
-    setEditingStudentId(student.id);
+    setEditingStudentId(String(student.id || ""));
     setView("edit");
   };
 
