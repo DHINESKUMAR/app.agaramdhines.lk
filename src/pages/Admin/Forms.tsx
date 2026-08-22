@@ -13,7 +13,8 @@ import {
   getStudents, 
   saveStudents,
   getAdminSettings,
-  syncDatabaseWithCloud
+  syncDatabaseWithCloud,
+  extractSubmissionFields
 } from '../../lib/db';
 import { 
   Plus, 
@@ -270,14 +271,29 @@ export default function AdminForms() {
     setForms(updatedList);
   };
 
+  // Helper to extract clean display values for any submission (past or new)
+  const getSubmissionDisplay = (sub: FormSubmission) => {
+    const parentForm = forms.find(f => f.id === sub.formId);
+    const extracted = extractSubmissionFields(parentForm, sub.data || {}, sub);
+    return {
+      studentName: sub.studentName || extracted.studentName || '',
+      rollNo: sub.rollNo || extracted.rollNo || '',
+      district: sub.district || extracted.district || '',
+      grade: sub.grade || extracted.grade || '',
+      phone: sub.phone || extracted.phone || '',
+      email: sub.email || extracted.email || ''
+    };
+  };
+
   // Enroll Submission into Academy Students Database
   const handleEnrollStudent = async (sub: FormSubmission) => {
     try {
+      const disp = getSubmissionDisplay(sub);
       const allStudents = await getStudents();
       const existing = allStudents.find((s: any) => 
-        (s.phone && sub.phone && s.phone.replace(/[^0-9]/g, '') === sub.phone.replace(/[^0-9]/g, '')) ||
-        (s.rollNo && sub.rollNo && s.rollNo.toLowerCase() === sub.rollNo.toLowerCase()) ||
-        (s.name && sub.studentName && s.name.toLowerCase() === sub.studentName.toLowerCase())
+        (s.phone && disp.phone && s.phone.replace(/[^0-9]/g, '') === disp.phone.replace(/[^0-9]/g, '')) ||
+        (s.rollNo && disp.rollNo && s.rollNo.toLowerCase() === disp.rollNo.toLowerCase()) ||
+        (s.name && disp.studentName && s.name.toLowerCase() === disp.studentName.toLowerCase())
       );
 
       if (existing) {
@@ -286,17 +302,17 @@ export default function AdminForms() {
         }
       }
 
-      const newRollNo = sub.rollNo || String(Math.floor(1000 + Math.random() * 9000));
+      const newRollNo = disp.rollNo || String(Math.floor(1000 + Math.random() * 9000));
       const newStudent = {
         id: "STU" + Math.floor(100000 + Math.random() * 900000),
-        name: sub.studentName || "New Student",
+        name: disp.studentName || "New Student",
         rollNo: newRollNo,
         username: newRollNo,
-        password: sub.phone ? sub.phone.slice(-4) : "1234",
-        grade: sub.grade || "தரம் 10",
-        phone: sub.phone || "",
-        email: sub.email || "",
-        district: sub.district || "",
+        password: disp.phone ? disp.phone.slice(-4) : "1234",
+        grade: disp.grade || "தரம் 10",
+        phone: disp.phone || "",
+        email: disp.email || "",
+        district: disp.district || "",
         enrolledClasses: ["தமிழ்"],
         subjects: ["தமிழ்"],
         createdAt: new Date().toISOString(),
@@ -445,14 +461,15 @@ export default function AdminForms() {
     const counts: Record<string, number> = {};
     submissions.forEach(sub => {
       if (selectedFormFilter !== 'all' && sub.formId !== selectedFormFilter) return;
-      const dist = sub.district ? sub.district.trim() : 'குறிப்பிடப்படவில்லை (Not specified)';
+      const disp = getSubmissionDisplay(sub);
+      const dist = disp.district ? disp.district.trim() : 'குறிப்பிடப்படவில்லை (Not specified)';
       counts[dist] = (counts[dist] || 0) + 1;
     });
 
     return Object.entries(counts)
       .map(([district, count]) => ({ district, count }))
       .sort((a, b) => b.count - a.count);
-  }, [submissions, selectedFormFilter]);
+  }, [submissions, forms, selectedFormFilter]);
 
   // Filtered Submissions
   const filteredSubmissions = useMemo(() => {
@@ -460,9 +477,11 @@ export default function AdminForms() {
       // Form filter
       if (selectedFormFilter !== 'all' && sub.formId !== selectedFormFilter) return false;
 
+      const disp = getSubmissionDisplay(sub);
+
       // District filter
       if (selectedDistrictFilter !== 'all') {
-        const subDist = (sub.district || '').toLowerCase();
+        const subDist = (disp.district || '').toLowerCase();
         const selDist = selectedDistrictFilter.toLowerCase();
         if (!subDist.includes(selDist) && !selDist.includes(subDist)) return false;
       }
@@ -470,17 +489,17 @@ export default function AdminForms() {
       // Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchName = (sub.studentName || '').toLowerCase().includes(q);
-        const matchRoll = (sub.rollNo || '').toLowerCase().includes(q);
-        const matchPhone = (sub.phone || '').toLowerCase().includes(q);
-        const matchDist = (sub.district || '').toLowerCase().includes(q);
-        const matchGrade = (sub.grade || '').toLowerCase().includes(q);
+        const matchName = (disp.studentName || '').toLowerCase().includes(q);
+        const matchRoll = (disp.rollNo || '').toLowerCase().includes(q);
+        const matchPhone = (disp.phone || '').toLowerCase().includes(q);
+        const matchDist = (disp.district || '').toLowerCase().includes(q);
+        const matchGrade = (disp.grade || '').toLowerCase().includes(q);
         if (!matchName && !matchRoll && !matchPhone && !matchDist && !matchGrade) return false;
       }
 
       return true;
     });
-  }, [submissions, selectedFormFilter, selectedDistrictFilter, searchQuery]);
+  }, [submissions, forms, selectedFormFilter, selectedDistrictFilter, searchQuery]);
 
   // Export to Excel
   const handleExportExcel = () => {
@@ -490,25 +509,27 @@ export default function AdminForms() {
     }
 
     const exportRows = filteredSubmissions.map((sub, idx) => {
+      const disp = getSubmissionDisplay(sub);
       const row: Record<string, any> = {
         "வ.எண் (No)": idx + 1,
         "படிவத்தின் தலைப்பு (Form Title)": sub.formTitle || sub.formId,
-        "மாணவர் பெயர் (Student Name)": sub.studentName || "-",
-        "பதிவு எண் (Roll No)": sub.rollNo || "-",
-        "மாவட்டம் (District)": sub.district || "-",
-        "தரம் / வகுப்பு (Grade)": sub.grade || "-",
-        "தொலைபேசி / WhatsApp": sub.phone || "-",
-        "மின்னஞ்சல் (Email)": sub.email || "-",
+        "மாணவர் பெயர் (Student Name)": disp.studentName || "-",
+        "பதிவு எண் (Roll No)": disp.rollNo || "-",
+        "மாவட்டம் (District)": disp.district || "-",
+        "தரம் / வகுப்பு (Grade)": disp.grade || "-",
+        "தொலைபேசி / WhatsApp": disp.phone || "-",
+        "மின்னஞ்சல் (Email)": disp.email || "-",
         "சமர்ப்பிக்கப்பட்ட திகதி (Date)": new Date(sub.submittedAt).toLocaleString(),
         "நிலை (Status)": sub.status === 'enrolled' ? 'இணைக்கப்பட்டார் (Enrolled)' : 'புதியது (New)'
       };
 
       // Add custom field values
       if (sub.data) {
+        const parentForm = forms.find(f => f.id === sub.formId);
         Object.entries(sub.data).forEach(([k, v]) => {
-          if (!k.startsWith('f_name') && !k.startsWith('f_district') && !k.startsWith('f_grade') && !k.startsWith('f_phone')) {
-            row[k] = Array.isArray(v) ? v.join(', ') : String(v || '');
-          }
+          const matchedField = parentForm?.fields?.find(f => f.id === k);
+          const colName = matchedField ? matchedField.label : k;
+          row[colName] = Array.isArray(v) ? v.join(', ') : String(v || '');
         });
       }
 
@@ -534,15 +555,18 @@ export default function AdminForms() {
     doc.setFontSize(11);
     doc.text(`Google Forms Submissions Report • Date: ${new Date().toLocaleDateString()}`, 14, 22);
 
-    const tableData = filteredSubmissions.map((s, idx) => [
-      idx + 1,
-      s.studentName || "-",
-      s.district || "-",
-      s.grade || "-",
-      s.phone || "-",
-      s.formTitle || "-",
-      new Date(s.submittedAt).toLocaleDateString()
-    ]);
+    const tableData = filteredSubmissions.map((s, idx) => {
+      const disp = getSubmissionDisplay(s);
+      return [
+        idx + 1,
+        disp.studentName || "-",
+        disp.district || "-",
+        disp.grade || "-",
+        disp.phone || "-",
+        s.formTitle || "-",
+        new Date(s.submittedAt).toLocaleDateString()
+      ];
+    });
 
     autoTable(doc, {
       startY: 28,
@@ -1002,79 +1026,82 @@ export default function AdminForms() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-800">
-                    {filteredSubmissions.map((sub, index) => (
-                      <tr key={sub.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="px-4 py-3.5 font-mono text-slate-400">{index + 1}</td>
-                        <td className="px-4 py-3.5 font-bold text-slate-900">
-                          {sub.studentName || "-"}
-                          {sub.rollNo && (
-                            <span className="block font-mono text-10px text-slate-400 font-normal">
-                              Roll: {sub.rollNo}
+                    {filteredSubmissions.map((sub, index) => {
+                      const disp = getSubmissionDisplay(sub);
+                      return (
+                        <tr key={sub.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-4 py-3.5 font-mono text-slate-400">{index + 1}</td>
+                          <td className="px-4 py-3.5 font-bold text-slate-900">
+                            {disp.studentName || "-"}
+                            {disp.rollNo && (
+                              <span className="block font-mono text-10px text-slate-400 font-normal">
+                                Roll: {disp.rollNo}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 font-medium text-slate-700">
+                            <span className="inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md text-xs">
+                              <MapPin size={11} className="text-slate-400" />
+                              {disp.district || "-"}
                             </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3.5 font-medium text-slate-700">
-                          <span className="inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md text-xs">
-                            <MapPin size={11} className="text-slate-400" />
-                            {sub.district || "-"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 text-slate-600">{sub.grade || "-"}</td>
-                        <td className="px-4 py-3.5 font-mono text-slate-700">
-                          {sub.phone ? (
-                            <a
-                              href={`https://wa.me/${sub.phone.replace(/[^0-9]/g, '')}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-emerald-700 hover:underline flex items-center gap-1 font-semibold"
-                            >
-                              <Phone size={12} />
-                              {sub.phone}
-                            </a>
-                          ) : (
-                            "-"
-                          )}
-                        </td>
-                        <td className="px-4 py-3.5 text-slate-500 text-xs max-w-[150px] truncate" title={sub.formTitle}>
-                          {sub.formTitle || sub.formId}
-                        </td>
-                        <td className="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">
-                          {new Date(sub.submittedAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => setViewSubmissionModal(sub)}
-                              className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold text-xs transition-colors"
-                              title="முழு விபரங்களைப் பார்க்க"
-                            >
-                              View
-                            </button>
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-600">{disp.grade || "-"}</td>
+                          <td className="px-4 py-3.5 font-mono text-slate-700">
+                            {disp.phone ? (
+                              <a
+                                href={`https://wa.me/${disp.phone.replace(/[^0-9]/g, '')}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-emerald-700 hover:underline flex items-center gap-1 font-semibold"
+                              >
+                                <Phone size={12} />
+                                {disp.phone}
+                              </a>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-500 text-xs max-w-[150px] truncate" title={sub.formTitle}>
+                            {sub.formTitle || sub.formId}
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">
+                            {new Date(sub.submittedAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => setViewSubmissionModal(sub)}
+                                className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold text-xs transition-colors"
+                                title="முழு விபரங்களைப் பார்க்க"
+                              >
+                                View
+                              </button>
 
-                            <button
-                              onClick={() => handleEnrollStudent(sub)}
-                              className={`px-2.5 py-1 rounded-lg font-semibold text-xs transition-colors flex items-center gap-1 ${
-                                sub.status === 'enrolled'
-                                  ? 'bg-emerald-50 text-emerald-700 cursor-default'
-                                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs'
-                              }`}
-                              title="அகாடமி மாணவர் பட்டியலில் சேர்க்க"
-                            >
-                              <UserPlus size={12} />
-                              <span>{sub.status === 'enrolled' ? 'Enrolled' : '+ Student'}</span>
-                            </button>
+                              <button
+                                onClick={() => handleEnrollStudent(sub)}
+                                className={`px-2.5 py-1 rounded-lg font-semibold text-xs transition-colors flex items-center gap-1 ${
+                                  sub.status === 'enrolled'
+                                    ? 'bg-emerald-50 text-emerald-700 cursor-default'
+                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs'
+                                }`}
+                                title="அகாடமி மாணவர் பட்டியலில் சேர்க்க"
+                              >
+                                <UserPlus size={12} />
+                                <span>{sub.status === 'enrolled' ? 'Enrolled' : '+ Student'}</span>
+                              </button>
 
-                            <button
-                              onClick={() => handleDeleteSubmission(sub.id)}
-                              className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                              title="பதிவை நிரந்தரமாக நீக்க"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              <button
+                                onClick={() => handleDeleteSubmission(sub.id)}
+                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                title="பதிவை நிரந்தரமாக நீக்க"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1751,94 +1778,110 @@ export default function AdminForms() {
       )}
 
       {/* MODAL 2: SUBMISSION DETAILS MODAL */}
-      {viewSubmissionModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-              <div>
-                <span className="text-10px font-bold uppercase tracking-wider text-blue-800 bg-blue-100 px-2 py-0.5 rounded">
-                  Response Details
-                </span>
-                <h3 className="font-extrabold text-slate-900 text-lg mt-1">
-                  {viewSubmissionModal.studentName || "Student Response"}
-                </h3>
-              </div>
-              <button
-                onClick={() => setViewSubmissionModal(null)}
-                className="text-slate-400 hover:text-slate-700 p-1"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm">
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+      {viewSubmissionModal && (() => {
+        const disp = getSubmissionDisplay(viewSubmissionModal);
+        const parentForm = forms.find(f => f.id === viewSubmissionModal.formId);
+        return (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
+              <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
                 <div>
-                  <span className="text-slate-400 text-xs block">படிவம் (Form)</span>
-                  <span className="font-semibold text-slate-800">{viewSubmissionModal.formTitle}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-xs block">திகதி (Submitted At)</span>
-                  <span className="font-semibold text-slate-800">
-                    {new Date(viewSubmissionModal.submittedAt).toLocaleString()}
+                  <span className="text-10px font-bold uppercase tracking-wider text-blue-800 bg-blue-100 px-2 py-0.5 rounded">
+                    Response Details
                   </span>
+                  <h3 className="font-extrabold text-slate-900 text-lg mt-1">
+                    {disp.studentName || "Student Response"}
+                  </h3>
                 </div>
-                <div>
-                  <span className="text-slate-400 text-xs block">மாவட்டம் (District)</span>
-                  <span className="font-semibold text-slate-800">{viewSubmissionModal.district || "-"}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-xs block">வகுப்பு (Grade)</span>
-                  <span className="font-semibold text-slate-800">{viewSubmissionModal.grade || "-"}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-xs block">தொலைபேசி (Phone)</span>
-                  <span className="font-semibold text-slate-800">{viewSubmissionModal.phone || "-"}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-xs block">மின்னஞ்சல் (Email)</span>
-                  <span className="font-semibold text-slate-800">{viewSubmissionModal.email || "-"}</span>
-                </div>
+                <button
+                  onClick={() => setViewSubmissionModal(null)}
+                  className="text-slate-400 hover:text-slate-700 p-1"
+                >
+                  <X size={20} />
+                </button>
               </div>
 
-              {/* Dynamic Field Responses */}
-              <div className="space-y-3 pt-2">
-                <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider text-slate-500 border-b pb-1">
-                  அனைத்துப் பதில்கள் (All Submitted Values)
-                </h4>
-                {viewSubmissionModal.data && Object.entries(viewSubmissionModal.data).map(([k, v], idx) => (
-                  <div key={idx} className="border-b border-slate-100 pb-2">
-                    <span className="text-xs text-slate-500 block font-medium">
-                      {k.replace('f_', '').replace(/_/g, ' ')}
-                    </span>
-                    <span className="font-semibold text-slate-900 block mt-0.5 whitespace-pre-wrap">
-                      {Array.isArray(v) ? v.join(', ') : String(v || '-')}
+              <div className="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm">
+                <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <div>
+                    <span className="text-slate-400 text-xs block">படிவம் (Form)</span>
+                    <span className="font-semibold text-slate-800">{viewSubmissionModal.formTitle}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-xs block">திகதி (Submitted At)</span>
+                    <span className="font-semibold text-slate-800">
+                      {new Date(viewSubmissionModal.submittedAt).toLocaleString()}
                     </span>
                   </div>
-                ))}
+                  <div>
+                    <span className="text-slate-400 text-xs block">மாணவர் பெயர் (Name)</span>
+                    <span className="font-semibold text-slate-800">{disp.studentName || "-"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-xs block">பதிவு எண் (Roll No)</span>
+                    <span className="font-semibold text-slate-800">{disp.rollNo || "-"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-xs block">மாவட்டம் (District)</span>
+                    <span className="font-semibold text-slate-800">{disp.district || "-"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-xs block">வகுப்பு (Grade)</span>
+                    <span className="font-semibold text-slate-800">{disp.grade || "-"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-xs block">தொலைபேசி (Phone)</span>
+                    <span className="font-semibold text-slate-800">{disp.phone || "-"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-xs block">மின்னஞ்சல் (Email)</span>
+                    <span className="font-semibold text-slate-800">{disp.email || "-"}</span>
+                  </div>
+                </div>
+
+                {/* Dynamic Field Responses */}
+                <div className="space-y-3 pt-2">
+                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider text-slate-500 border-b pb-1">
+                    அனைத்துப் பதில்கள் (All Submitted Values)
+                  </h4>
+                  {viewSubmissionModal.data && Object.entries(viewSubmissionModal.data).map(([k, v], idx) => {
+                    const matchedField = parentForm?.fields?.find(f => f.id === k);
+                    const fieldLabel = matchedField ? matchedField.label : k.replace('f_', '').replace(/_/g, ' ');
+                    return (
+                      <div key={idx} className="border-b border-slate-100 pb-2">
+                        <span className="text-xs text-slate-500 block font-medium">
+                          {fieldLabel}
+                        </span>
+                        <span className="font-semibold text-slate-900 block mt-0.5 whitespace-pre-wrap">
+                          {Array.isArray(v) ? v.join(', ') : String(v || '-')}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
-              <button
-                onClick={() => handleDeleteSubmission(viewSubmissionModal.id)}
-                className="text-red-600 hover:text-red-800 font-semibold text-xs flex items-center gap-1"
-              >
-                <Trash2 size={14} /> பதிவை நீக்கு (Delete Entry)
-              </button>
-
-              <div className="flex gap-2">
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
                 <button
-                  onClick={() => handleEnrollStudent(viewSubmissionModal)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs"
+                  onClick={() => handleDeleteSubmission(viewSubmissionModal.id)}
+                  className="text-red-600 hover:text-red-800 font-semibold text-xs flex items-center gap-1"
                 >
-                  <UserPlus size={14} /> மாணவராகச் சேர் (Enroll Student)
+                  <Trash2 size={14} /> பதிவை நீக்கு (Delete Entry)
                 </button>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleEnrollStudent(viewSubmissionModal)}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <UserPlus size={14} /> மாணவராகச் சேர் (Enroll Student)
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Form Saved & Ready to Share Modal */}
       {createdFormSuccessModal && (

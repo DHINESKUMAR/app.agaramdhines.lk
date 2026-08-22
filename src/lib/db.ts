@@ -1158,9 +1158,184 @@ export const deleteForm = async (formId: string): Promise<CustomForm[]> => {
   return updatedForms;
 };
 
+export const extractSubmissionFields = (
+  form: CustomForm | undefined,
+  payload: Record<string, any>,
+  existing?: Partial<FormSubmission>
+): {
+  studentName: string;
+  rollNo: string;
+  district: string;
+  grade: string;
+  phone: string;
+  email: string;
+} => {
+  const data = payload || {};
+  let studentName = existing?.studentName || '';
+  let rollNo = existing?.rollNo || '';
+  let district = existing?.district || '';
+  let grade = existing?.grade || '';
+  let phone = existing?.phone || '';
+  let email = existing?.email || '';
+
+  // 1. If form is defined, check field definitions (by type, label, or id)
+  if (form && Array.isArray(form.fields)) {
+    for (const field of form.fields) {
+      const val = data[field.id];
+      if (val === undefined || val === null || String(val).trim() === '') continue;
+      const strVal = String(val).trim();
+      const lbl = (field.label || '').toLowerCase();
+
+      // Phone
+      if (!phone && (field.type === 'phone' || field.id === form.phoneFieldId || /phone|mobile|whatsapp|தொடர்பு|தொலைபேசி|இலக்கம்/i.test(lbl))) {
+        phone = strVal;
+      }
+      // District
+      if (!district && (field.type === 'district' || /district|மாவட்டம்/i.test(lbl))) {
+        district = strVal;
+      }
+      // Grade
+      if (!grade && (field.type === 'grade' || /grade|class|வகுப்பு|தரம்/i.test(lbl))) {
+        grade = strVal;
+      }
+      // Student Name
+      if (!studentName && (field.type === 'text' || field.type === 'textarea') && /பெயர்|name|மாணவர்|student/i.test(lbl) && !/பாடசாலை|school|பெற்றோர்|parent|பரீட்சை|exam/i.test(lbl)) {
+        studentName = strVal;
+      }
+      // Roll No
+      if (!rollNo && /roll|பதிவு\s*எண்|குறியீடு|index/i.test(lbl)) {
+        rollNo = strVal;
+      }
+      // Email
+      if (!email && (field.type === 'email' || /email|மின்னஞ்சல்|mail/i.test(lbl))) {
+        email = strVal;
+      }
+    }
+  }
+
+  // 2. Direct key heuristics across payload
+  for (const [key, rawVal] of Object.entries(data)) {
+    if (rawVal === undefined || rawVal === null || String(rawVal).trim() === '') continue;
+    const val = String(rawVal).trim();
+    const k = key.toLowerCase();
+
+    // Phone detection
+    if (!phone) {
+      if (/phone|mobile|whatsapp|தொடர்பு|தொலைபேசி/i.test(k)) {
+        phone = val;
+      } else {
+        const cleanDigits = val.replace(/[^0-9]/g, '');
+        if (cleanDigits.length >= 9 && cleanDigits.length <= 12 && (cleanDigits.startsWith('07') || cleanDigits.startsWith('7') || cleanDigits.startsWith('947') || cleanDigits.startsWith('01') || cleanDigits.startsWith('02') || cleanDigits.startsWith('03') || cleanDigits.startsWith('04') || cleanDigits.startsWith('05') || cleanDigits.startsWith('06') || cleanDigits.startsWith('08') || cleanDigits.startsWith('09'))) {
+          phone = val;
+        }
+      }
+    }
+
+    // District detection
+    if (!district) {
+      if (/district|மாவட்டம்/i.test(k)) {
+        district = val;
+      } else {
+        const match = SRI_LANKA_DISTRICTS.find(d => d.toLowerCase().includes(val.toLowerCase()) || val.toLowerCase().includes(d.toLowerCase().split(' ')[0]));
+        if (match) {
+          district = match;
+        }
+      }
+    }
+
+    // Grade detection
+    if (!grade) {
+      if (/grade|class|வகுப்பு|தரம்/i.test(k)) {
+        grade = val;
+      } else if (/^(தரம்\s*\d+|grade\s*\d+|o\/l|a\/l|தரம்\s*0?[6-9]|தரம்\s*1[0-1])/i.test(val)) {
+        grade = val;
+      }
+    }
+
+    // Student Name detection
+    if (!studentName) {
+      if (/name|பெயர்|மாணவர்|student|f_name/i.test(k) && !/parent|school|பாடசாலை|பெற்றோர்/i.test(k)) {
+        studentName = val;
+      }
+    }
+
+    // Roll No detection
+    if (!rollNo && /roll|reg|பதிவு|index/i.test(k)) {
+      rollNo = val;
+    }
+
+    // Email detection
+    if (!email) {
+      if (/email|mail|மின்னஞ்சல்/i.test(k) || (val.includes('@') && val.includes('.'))) {
+        email = val;
+      }
+    }
+  }
+
+  // 3. Fallback for Name if still empty: take first non-empty text string that isn't phone, district, grade or email
+  if (!studentName) {
+    for (const [key, rawVal] of Object.entries(data)) {
+      if (typeof rawVal === 'string' && rawVal.trim().length > 1) {
+        const str = rawVal.trim();
+        if (str !== phone && str !== district && str !== grade && str !== email && !str.includes('@') && !/^\d+$/.test(str)) {
+          studentName = str;
+          break;
+        }
+      }
+    }
+  }
+
+  return {
+    studentName: studentName.trim(),
+    rollNo: rollNo.trim(),
+    district: district.trim(),
+    grade: grade.trim(),
+    phone: phone.trim(),
+    email: email.trim()
+  };
+};
+
 export const getFormSubmissions = async (): Promise<FormSubmission[]> => {
   const submissions = await getData('formSubmissions', []);
-  return Array.isArray(submissions) ? submissions : [];
+  const list = Array.isArray(submissions) ? submissions : [];
+  
+  if (list.length === 0) return [];
+
+  // Auto-heal any past submissions that have missing top-level fields
+  const forms = await getForms();
+  let hasRepairs = false;
+
+  const healed = list.map(sub => {
+    if (!sub) return sub;
+    const form = forms.find(f => f.id === sub.formId);
+    const extracted = extractSubmissionFields(form, sub.data || {}, sub);
+    
+    if (
+      (!sub.studentName && extracted.studentName) ||
+      (!sub.district && extracted.district) ||
+      (!sub.grade && extracted.grade) ||
+      (!sub.phone && extracted.phone) ||
+      (!sub.email && extracted.email)
+    ) {
+      hasRepairs = true;
+      return {
+        ...sub,
+        studentName: sub.studentName || extracted.studentName,
+        rollNo: sub.rollNo || extracted.rollNo,
+        district: sub.district || extracted.district,
+        grade: sub.grade || extracted.grade,
+        phone: sub.phone || extracted.phone,
+        email: sub.email || extracted.email,
+      };
+    }
+    return sub;
+  });
+
+  if (hasRepairs) {
+    saveData('formSubmissions', healed).catch(() => {});
+  }
+
+  return healed;
 };
 
 export const saveFormSubmissions = async (submissions: FormSubmission[]): Promise<void> => {
@@ -1240,13 +1415,9 @@ export const submitFormResponse = async (formId: string, payload: Record<string,
     throw new Error("மன்னிக்கவும், இந்தப் படிவம் தற்போது புதிய சமர்ப்பிப்புகளை ஏற்றுக்கொள்ளவில்லை (This form is closed).");
   }
 
-  // Auto-detect standard fields if provided in custom fields
-  const studentName = payload.f_name || payload.name || payload.studentName || payload.fullName || "";
-  const rollNo = payload.f_roll || payload.rollNo || payload.studentCode || "";
-  const district = payload.f_district || payload.district || "";
-  const grade = payload.f_grade || payload.grade || payload.class || "";
-  const phone = payload.f_phone || payload.phone || payload.mobile || payload.whatsapp || (form?.phoneFieldId ? payload[form.phoneFieldId] : "") || "";
-  const email = payload.f_email || payload.email || "";
+  // Auto-detect standard fields dynamically using field types, labels and values
+  const extracted = extractSubmissionFields(form, payload);
+  const { studentName, rollNo, district, grade, phone, email } = extracted;
 
   // Duplicate Phone Number & Submission Limits Check
   const maxAllowed = form?.maxSubmissionsPerPhone !== undefined ? form.maxSubmissionsPerPhone : 1;
