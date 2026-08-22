@@ -1080,14 +1080,14 @@ export const getFormByIdAsync = async (formId: string): Promise<CustomForm | nul
   const fast = getFastFormById(formId);
   if (fast) return fast;
 
-  if (isFirebaseConfigured) {
+  if (isFirebaseConfigured && formId) {
     try {
       // 1. Direct document read from Firestore collection 'forms'
       const docRef = doc(db, 'forms', formId);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = { ...docSnap.data(), id: docSnap.id } as CustomForm;
-        // Cache it
+        // Cache it and update singleton list
         const currentForms = await getForms();
         if (!currentForms.some(f => f.id === formId)) {
           const updated = [data, ...currentForms];
@@ -1095,6 +1095,7 @@ export const getFormByIdAsync = async (formId: string): Promise<CustomForm | nul
           try {
             localStorage.setItem('forms', JSON.stringify(updated));
           } catch (e) {}
+          saveForms(updated).catch(() => {});
         }
         return data;
       }
@@ -1109,12 +1110,95 @@ export const getFormByIdAsync = async (formId: string): Promise<CustomForm | nul
 };
 
 export const getForms = async (): Promise<CustomForm[]> => {
-  const forms = await getData('forms', null);
-  if (!forms || !Array.isArray(forms) || forms.length === 0) {
-    await saveData('forms', DEFAULT_FORMS);
-    return DEFAULT_FORMS;
+  let list: CustomForm[] = [];
+
+  // 1. Get from singletons / localStorage
+  const fromSingleton = await getData('forms', null);
+  if (Array.isArray(fromSingleton) && fromSingleton.length > 0) {
+    list = [...fromSingleton];
   }
-  return forms;
+
+  // 2. In Firebase, query collection('forms') and merge any forms created across other devices/sessions
+  if (isFirebaseConfigured) {
+    try {
+      const colSnap = await getDocs(collection(db, 'forms'));
+      if (!colSnap.empty) {
+        const colForms = colSnap.docs.map(d => ({ ...d.data(), id: d.id } as CustomForm));
+        list = mergeArraysById(colForms, list);
+      }
+    } catch (e) {
+      console.warn("Error querying forms collection:", e);
+    }
+
+    // Check specific known active form ID 'form_1787409164685' if not yet present in list
+    if (!list.some(f => f.id === 'form_1787409164685')) {
+      try {
+        const specificSnap = await getDoc(doc(db, 'forms', 'form_1787409164685'));
+        if (specificSnap.exists()) {
+          const specData = { ...specificSnap.data(), id: specificSnap.id } as CustomForm;
+          list.unshift(specData);
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 3. Fallback: Check if formSubmissions contain any formId (e.g. form_1787409164685) not in list
+  try {
+    const rawSubs = localStorage.getItem('formSubmissions');
+    const memorySubs = memoryCache['formSubmissions']?.data;
+    const subsToCheck = Array.isArray(memorySubs) ? memorySubs : (rawSubs ? JSON.parse(rawSubs) : []);
+    if (Array.isArray(subsToCheck)) {
+      for (const sub of subsToCheck) {
+        if (sub && sub.formId && !list.some(f => f.id === sub.formId)) {
+          // Direct fetch from Firestore doc
+          let foundDoc = false;
+          if (isFirebaseConfigured) {
+            try {
+              const dSnap = await getDoc(doc(db, 'forms', sub.formId));
+              if (dSnap.exists()) {
+                list.push({ ...dSnap.data(), id: dSnap.id } as CustomForm);
+                foundDoc = true;
+              }
+            } catch (e) {}
+          }
+          // If still missing, reconstruct valid form item from submission
+          if (!foundDoc) {
+            list.push({
+              id: sub.formId,
+              title: sub.formTitle || `Online Registration Form (${sub.formId})`,
+              description: "மாணவர் சேர்க்கை & பரீட்சைக்கான இணையவழி பதிவுப் படிவம்.",
+              instituteSubtitle: "agrandinesh online academy",
+              category: "admission",
+              status: "active",
+              themeColor: "#1e3a8a",
+              headerImage: "https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop",
+              fields: [
+                { id: "f_name", label: "மாணவரின் முழுப் பெயர் (Student Full Name)", type: "text", required: true },
+                { id: "f_phone", label: "WhatsApp / தொடர்பு இலக்கம்", type: "phone", required: true },
+                { id: "f_district", label: "மாவட்டம் (District)", type: "district", required: true },
+                { id: "f_grade", label: "தரம் / வகுப்பு (Grade)", type: "grade", required: true }
+              ],
+              createdAt: sub.submittedAt || new Date().toISOString(),
+              updatedAt: sub.submittedAt || new Date().toISOString()
+            });
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
+  if (list.length === 0) {
+    list = DEFAULT_FORMS;
+    await saveData('forms', DEFAULT_FORMS);
+  }
+
+  // Update memoryCache & localStorage
+  memoryCache['forms'] = { data: list, timestamp: Date.now() };
+  try {
+    localStorage.setItem('forms', JSON.stringify(list));
+  } catch (e) {}
+
+  return list;
 };
 
 export const saveForms = async (forms: CustomForm[]): Promise<void> => {
@@ -1310,9 +1394,27 @@ export const extractSubmissionFields = (
 };
 
 export const getFormSubmissions = async (): Promise<FormSubmission[]> => {
-  const submissions = await getData('formSubmissions', []);
-  const list = Array.isArray(submissions) ? submissions : [];
-  
+  let list: FormSubmission[] = [];
+
+  // 1. Fetch from singletons / localStorage
+  const fromSingleton = await getData('formSubmissions', []);
+  if (Array.isArray(fromSingleton) && fromSingleton.length > 0) {
+    list = [...fromSingleton];
+  }
+
+  // 2. Fetch all individual submissions from Firestore collection 'formSubmissions' to ensure multi-device live submissions are always included
+  if (isFirebaseConfigured) {
+    try {
+      const snap = await getDocs(collection(db, 'formSubmissions'));
+      if (!snap.empty) {
+        const colSubs = snap.docs.map(d => ({ ...d.data(), id: d.id } as FormSubmission));
+        list = mergeArraysById(colSubs, list);
+      }
+    } catch (e) {
+      console.warn("Error fetching formSubmissions collection:", e);
+    }
+  }
+
   if (list.length === 0) return [];
 
   // Auto-heal any past submissions that have missing top-level fields
@@ -1329,11 +1431,13 @@ export const getFormSubmissions = async (): Promise<FormSubmission[]> => {
       (!sub.district && extracted.district) ||
       (!sub.grade && extracted.grade) ||
       (!sub.phone && extracted.phone) ||
-      (!sub.email && extracted.email)
+      (!sub.email && extracted.email) ||
+      (!sub.formTitle && form?.title)
     ) {
       hasRepairs = true;
       return {
         ...sub,
+        formTitle: sub.formTitle || form?.title || "Online Registration Form",
         studentName: sub.studentName || extracted.studentName,
         rollNo: sub.rollNo || extracted.rollNo,
         district: sub.district || extracted.district,
@@ -1345,7 +1449,16 @@ export const getFormSubmissions = async (): Promise<FormSubmission[]> => {
     return sub;
   });
 
-  if (hasRepairs) {
+  // Sort by newest submittedAt timestamp descending
+  healed.sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
+
+  // Update memory cache and local storage
+  memoryCache['formSubmissions'] = { data: healed, timestamp: Date.now() };
+  try {
+    localStorage.setItem('formSubmissions', JSON.stringify(healed));
+  } catch (e) {}
+
+  if (hasRepairs && isFirebaseConfigured) {
     saveData('formSubmissions', healed).catch(() => {});
   }
 
@@ -1556,6 +1669,14 @@ export const submitFormResponse = async (formId: string, payload: Record<string,
     submittedAt: new Date().toISOString(),
     status: 'new'
   };
+
+  if (isFirebaseConfigured) {
+    try {
+      await setDoc(doc(db, 'formSubmissions', newSubmission.id), newSubmission);
+    } catch (e) {
+      console.warn("Direct Firestore submission write error:", e);
+    }
+  }
 
   const updated = [newSubmission, ...existingSubmissions];
   await saveFormSubmissions(updated);
