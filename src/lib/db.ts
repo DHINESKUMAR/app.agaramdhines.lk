@@ -42,32 +42,13 @@ const setupRealtimeListener = (key: string) => {
         const serverData = snapPayload.data;
         const serverUpdatedAt = Number(snapPayload.updatedAt || 0);
 
-        let localData: any = null;
-        try {
-          const raw = localStorage.getItem(key);
-          if (raw && raw !== 'undefined') localData = JSON.parse(raw);
-        } catch (_) {}
-
-        const localLastSavedAt = Number(localStorage.getItem(`${key}_lastSavedAt`) || 0);
-
-        // If local data was saved more recently and cloud timestamp is older (within 15s), push localData to cloud
-        if (localLastSavedAt > 0 && serverUpdatedAt > 0 && localLastSavedAt > serverUpdatedAt && (Date.now() - localLastSavedAt < 15000)) {
-          if (localData !== null && localData !== undefined) {
-            setDoc(singletonRef, { data: localData, updatedAt: localLastSavedAt }, { merge: true }).catch(() => {});
-            return;
-          }
-        }
-
-        // The authoritative data is serverData when cloud is newer or equal
-        let finalData = serverData;
-        if (localLastSavedAt > serverUpdatedAt && localData !== null && localData !== undefined) {
-          finalData = localData;
-        }
+        // Authoritative source of truth is Firestore cloud
+        const finalData = serverData;
 
         memoryCache[key] = { data: finalData, timestamp: Date.now() };
         try {
           localStorage.setItem(key, JSON.stringify(finalData));
-          localStorage.setItem(`${key}_backup`, JSON.stringify({ data: finalData, updatedAt: Math.max(serverUpdatedAt, localLastSavedAt, Date.now()) }));
+          localStorage.setItem(`${key}_backup`, JSON.stringify({ data: finalData, updatedAt: serverUpdatedAt || Date.now() }));
         } catch (e) {}
 
         window.dispatchEvent(new CustomEvent('db_updated', { detail: { key, data: finalData } }));
@@ -225,15 +206,6 @@ const getData = async (key: string, defaultValue: any) => {
           if (singletonSnap.exists() && singletonSnap.data()?.data !== undefined) {
             const snapData = singletonSnap.data();
             const fbData = snapData.data;
-            const fbUpdatedAt = Number(snapData.updatedAt || 0);
-            const localLastSavedAt = Number(localStorage.getItem(`${key}_lastSavedAt`) || 0);
-
-            // If local data is newer, sync local data to Firestore
-            if (localLastSavedAt > fbUpdatedAt && localData !== null && localData !== undefined) {
-              setDoc(singletonRef, { data: localData, updatedAt: localLastSavedAt }, { merge: true }).catch(() => {});
-              return localData;
-            }
-
             return fbData;
           }
         } catch (singErr) {
@@ -910,6 +882,227 @@ export const saveBehaviourRecords = (records: any) => saveData('behaviourRecords
 export const getQuestionPapers = () => getData('questionPapers', []);
 export const saveQuestionPapers = (papers: any) => saveData('questionPapers', papers);
 
+export const SRI_LANKA_DISTRICTS = [
+  "யாழ்ப்பாணம் (Jaffna)",
+  "கிளிநொச்சி (Kilinochchi)",
+  "முல்லைத்தீவு (Mullaitivu)",
+  "வவுனியா (Vavuniya)",
+  "மன்னார் (Mannar)",
+  "மட்டக்களப்பு (Batticaloa)",
+  "திருகோணமலை (Trincomalee)",
+  "அம்பாறை (Ampara)",
+  "கண்டி (Kandy)",
+  "மாத்தளை (Matale)",
+  "நுவரெலியா (Nuwara Eliya)",
+  "கொழும்பு (Colombo)",
+  "கம்பஹா (Gampaha)",
+  "களுத்துறை (Kalutara)",
+  "காலி (Galle)",
+  "மாத்தறை (Matara)",
+  "அம்பாந்தோட்டை (Hambantota)",
+  "குருணாகல் (Kurunegala)",
+  "புத்தளம் (Puttalam)",
+  "அநுராதபுரம் (Anuradhapura)",
+  "பொலன்னறுவை (Polonnaruwa)",
+  "பதுளை (Badulla)",
+  "மொணராகலை (Monaragala)",
+  "இரத்தினபுரி (Ratnapura)",
+  "கேகாலை (Kegalle)"
+];
+
+export interface FormField {
+  id: string;
+  label: string;
+  type: 'text' | 'number' | 'select' | 'district' | 'grade' | 'textarea' | 'radio' | 'checkbox' | 'phone' | 'email' | 'date';
+  required: boolean;
+  placeholder?: string;
+  options?: string[];
+  helpText?: string;
+}
+
+export interface CustomForm {
+  id: string;
+  title: string;
+  description: string;
+  category: 'admission' | 'exam' | 'contact' | 'feedback' | 'general';
+  status: 'active' | 'closed';
+  fields: FormField[];
+  createdAt: string;
+  updatedAt: string;
+  themeColor?: string;
+  successMessage?: string;
+}
+
+export interface FormSubmission {
+  id: string;
+  formId: string;
+  formTitle: string;
+  studentName?: string;
+  rollNo?: string;
+  district?: string;
+  grade?: string;
+  phone?: string;
+  email?: string;
+  data: Record<string, any>;
+  submittedAt: string;
+  status?: 'new' | 'reviewed' | 'enrolled';
+}
+
+const DEFAULT_FORMS: CustomForm[] = [
+  {
+    id: "form_admission_2026",
+    title: "மாணவர் சேர்க்கைப் படிவம் (Student Admission & Registration 2026)",
+    description: "அகரம் தினேஸ் தமிழ் ஆன்லைன் அகாடமியின் புதிய தவணை தமிழ் வகுப்புகளுக்கான நேரடி பதிவுப் படிவம். அனைத்து விபரங்களையும் சரியாக பூர்த்தி செய்யவும்.",
+    category: "admission",
+    status: "active",
+    themeColor: "#1e3a8a",
+    successMessage: "உங்கள் சேர்க்கைப் பதிவு வெற்றிகரமாக பெறப்பட்டது! எமது நிர்வாகப் பிரிவு விரைவில் உங்களைத் தொடர்பு கொள்ளும்.",
+    createdAt: "2026-08-20T00:00:00.000Z",
+    updatedAt: "2026-08-20T00:00:00.000Z",
+    fields: [
+      { id: "f_name", label: "மாணவரின் முழுப் பெயர் (Student Full Name)", type: "text", required: true, placeholder: "உதாரணம்: K. தினேஸ் அல்லது K. Dhines" },
+      { id: "f_phone", label: "WhatsApp / தொடர்பு இலக்கம் (Mobile Phone)", type: "phone", required: true, placeholder: "0778054232" },
+      { id: "f_district", label: "மாவட்டம் (District)", type: "district", required: true },
+      { id: "f_grade", label: "தரம் / வகுப்பு (Grade / Class)", type: "grade", required: true },
+      { id: "f_school", label: "பாடசாலை (School Name)", type: "text", required: false, placeholder: "பாடசாலையின் பெயர்" },
+      { id: "f_parent", label: "பெற்றோர் / பாதுகாவலர் பெயர் (Parent / Guardian Name)", type: "text", required: false },
+      { id: "f_email", label: "மின்னஞ்சல் (Email Address)", type: "email", required: false, placeholder: "example@gmail.com" },
+      { id: "f_address", label: "முகவரி (Residential Address)", type: "textarea", required: false, placeholder: "முகவரியை உள்ளிடவும்" },
+      { id: "f_remarks", label: "கூடுதல் குறிப்புகள் / கேள்விகள் (Special Notes / Inquiries)", type: "textarea", required: false }
+    ]
+  },
+  {
+    id: "form_exam_reg_2026",
+    title: "மாதிரி வினாத்தாள் & பரீட்சைப் பதிவுப் படிவம் (Exam Registration)",
+    description: "தரம் 06 முதல் 11 வரையிலான தமிழ் மாதிரி வினாத்தாள் பரீட்சை மற்றும் வினா விடை கருத்தரங்கில் பங்கேற்க விரும்பும் மாணவர்களுக்கான பதிவுப் படிவம்.",
+    category: "exam",
+    status: "active",
+    themeColor: "#b91c1c",
+    successMessage: "பரீட்சைக்கான உங்கள் விண்ணப்பம் பதிவு செய்யப்பட்டுள்ளது! தேர்வுத் திகதி மற்றும் Zoom இணைப்பு WhatsApp ஊடாக அனுப்பப்படும்.",
+    createdAt: "2026-08-21T00:00:00.000Z",
+    updatedAt: "2026-08-21T00:00:00.000Z",
+    fields: [
+      { id: "f_name", label: "மாணவரின் பெயர் (Student Name)", type: "text", required: true, placeholder: "பெயரை உள்ளிடவும்" },
+      { id: "f_roll", label: "அகாடமி பதிவு எண் / Roll Number (இருப்பின்)", type: "text", required: false, placeholder: "STU1234 அல்லது 1001" },
+      { id: "f_district", label: "மாவட்டம் (District)", type: "district", required: true },
+      { id: "f_grade", label: "தரம் (Grade)", type: "grade", required: true },
+      { id: "f_phone", label: "WhatsApp இலக்கம் (WhatsApp Number)", type: "phone", required: true, placeholder: "07xxxxxxxx" },
+      { id: "f_exam_type", label: "பங்கேற்க விரும்பும் தேர்வு (Exam / Paper Choice)", type: "select", required: true, options: ["மாதிரித் தேர்வு (Model Exam Paper)", "வினா விடை கருத்தரங்கு (Q&A Seminar)", "30 நாள் தமிழ் விசேட பரீட்சை (30-Day Tamil Exam)"] },
+      { id: "f_notes", label: "விசேட குறிப்புகள் (Any Special Requirements)", type: "textarea", required: false }
+    ]
+  },
+  {
+    id: "form_contact_feedback",
+    title: "பொதுத் தொடர்பு & கருத்துப் படிவம் (General Inquiries & Feedback)",
+    description: "வகுப்புகள், கட்டண விபரங்கள் அல்லது உங்கள் ஆலோசனைகளை நேரடியாக எமக்குத் தெரிவிக்க இந்தப் படிவத்தைப் பயன்படுத்தவும்.",
+    category: "contact",
+    status: "active",
+    themeColor: "#047857",
+    successMessage: "உங்கள் கருத்து / வினவல் பெறப்பட்டது. எங்கள் நிர்வாகக் குழு விரைவில் உங்களுக்கு பதிலளிக்கும்.",
+    createdAt: "2026-08-22T00:00:00.000Z",
+    updatedAt: "2026-08-22T00:00:00.000Z",
+    fields: [
+      { id: "f_name", label: "உங்கள் பெயர் (Your Name)", type: "text", required: true },
+      { id: "f_phone", label: "தொலைபேசி / WhatsApp இலக்கம்", type: "phone", required: true },
+      { id: "f_district", label: "மாவட்டம் (District)", type: "district", required: true },
+      { id: "f_topic", label: "கருத்துப் பிரிவு (Subject / Topic)", type: "select", required: true, options: ["வகுப்பு விபரம் (Class Details)", "கட்டணம் தொடர்பானவை (Fee Inquiries)", "சான்றிதழ் மற்றும் ஆவணங்கள் (Certificates)", "கருத்து / ஆலோசனை (Suggestions / Feedback)", "இதர விபரங்கள் (Other)"] },
+      { id: "f_message", label: "உங்கள் செய்தி அல்லது வினவல் (Message / Inquiry)", type: "textarea", required: true, placeholder: "உங்கள் செய்தியை விரிவாக உள்ளிடவும்..." }
+    ]
+  }
+];
+
+export const getForms = async (): Promise<CustomForm[]> => {
+  const forms = await getData('forms', null);
+  if (!forms || !Array.isArray(forms) || forms.length === 0) {
+    await saveData('forms', DEFAULT_FORMS);
+    return DEFAULT_FORMS;
+  }
+  return forms;
+};
+
+export const saveForms = async (forms: CustomForm[]): Promise<void> => {
+  const clean = Array.isArray(forms) ? forms : [];
+  return saveData('forms', clean);
+};
+
+export const deleteForm = async (formId: string): Promise<CustomForm[]> => {
+  const forms = await getForms();
+  const updatedForms = forms.filter(f => f.id !== formId);
+  await saveForms(updatedForms);
+
+  // Also clean up submissions for this form
+  const submissions = await getFormSubmissions();
+  const updatedSubmissions = submissions.filter(s => s.formId !== formId);
+  await saveFormSubmissions(updatedSubmissions);
+
+  return updatedForms;
+};
+
+export const getFormSubmissions = async (): Promise<FormSubmission[]> => {
+  const submissions = await getData('formSubmissions', []);
+  return Array.isArray(submissions) ? submissions : [];
+};
+
+export const saveFormSubmissions = async (submissions: FormSubmission[]): Promise<void> => {
+  const clean = Array.isArray(submissions) ? submissions : [];
+  return saveData('formSubmissions', clean);
+};
+
+export const deleteFormSubmission = async (submissionId: string): Promise<FormSubmission[]> => {
+  const submissions = await getFormSubmissions();
+  const updated = submissions.filter(s => s.id !== submissionId);
+  await saveFormSubmissions(updated);
+  return updated;
+};
+
+export const submitFormResponse = async (formId: string, payload: Record<string, any>): Promise<FormSubmission> => {
+  const forms = await getForms();
+  const form = forms.find(f => f.id === formId);
+  const formTitle = form ? form.title : "Custom Form Submission";
+
+  // Auto-detect standard fields if provided in custom fields
+  const studentName = payload.f_name || payload.name || payload.studentName || payload.fullName || "";
+  const rollNo = payload.f_roll || payload.rollNo || payload.studentCode || "";
+  const district = payload.f_district || payload.district || "";
+  const grade = payload.f_grade || payload.grade || payload.class || "";
+  const phone = payload.f_phone || payload.phone || payload.mobile || payload.whatsapp || "";
+  const email = payload.f_email || payload.email || "";
+
+  const newSubmission: FormSubmission = {
+    id: "sub_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+    formId,
+    formTitle,
+    studentName,
+    rollNo,
+    district,
+    grade,
+    phone,
+    email,
+    data: payload,
+    submittedAt: new Date().toISOString(),
+    status: 'new'
+  };
+
+  const existingSubmissions = await getFormSubmissions();
+  const updated = [newSubmission, ...existingSubmissions];
+  await saveFormSubmissions(updated);
+
+  return newSubmission;
+};
+
+export const syncDatabaseWithCloud = async (forceRefresh: boolean = false): Promise<void> => {
+  if (forceRefresh) {
+    Object.keys(memoryCache).forEach(k => delete memoryCache[k]);
+  }
+  // Re-fetch essential collections
+  await Promise.all([
+    getData('students', []),
+    getData('fees', []),
+    getData('forms', DEFAULT_FORMS),
+    getData('formSubmissions', [])
+  ]);
+};
+
 export const getNotifications = (grade: string) => {
   if (isFirebaseConfigured) {
     // We return a query that can be used with onSnapshot
@@ -1006,7 +1199,7 @@ export const ALL_BACKUP_COLLECTIONS = [
   'classes', 'homework', 'staffs', 'staffAttendance', 'subjects',
   'incomeExpense', 'grades', 'timetable', 'examMarks', 'webPosts',
   'examSettings', 'announcements', 'behaviourRecords', 'questionPapers',
-  'chatMessages'
+  'chatMessages', 'forms', 'formSubmissions'
 ];
 
 export interface BackupOptions {

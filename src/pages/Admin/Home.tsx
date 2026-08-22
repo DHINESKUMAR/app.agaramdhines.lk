@@ -186,6 +186,28 @@ export default function AdminHome() {
         </div>
       </div>
 
+      {/* Google Forms / Registration Setup Banner */}
+      <div className="bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 rounded-xl p-5 text-white shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="bg-white/20 text-white text-[11px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+              NEW Feature
+            </span>
+            <h3 className="text-base font-bold text-white">Google Forms மாதிரி மாணவர் சேர்க்கை & பதிவுப் படிவங்கள்</h3>
+          </div>
+          <p className="text-xs text-blue-100 max-w-xl">
+            படிவங்களை உருவாக்கி இணைப்பை மாணவர்களுடன் பகிருங்கள். மாவட்ட வாரியான மாணவர் எண்ணிக்கை மற்றும் பதில்களை உடனடியாகப் பெற்று எக்செல் (Excel) வடிவில் சேமிக்கலாம்.
+          </p>
+        </div>
+        <a
+          href="/admin/forms"
+          className="inline-flex items-center gap-2 bg-white text-blue-900 hover:bg-blue-50 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 shadow-sm"
+        >
+          <span>படிவங்களை நிர்வகிக்க (Open Forms)</span>
+          <ArrowUpRight size={14} />
+        </a>
+      </div>
+
       {/* Widgets Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Estimated Fee Donut Chart */}

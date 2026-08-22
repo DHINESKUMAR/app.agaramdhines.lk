@@ -39,6 +39,8 @@ import ChatbotSettings from "./pages/Admin/ChatbotSettings";
 import Behaviour from "./pages/Admin/Behaviour";
 import QuestionPaper from "./pages/Admin/QuestionPaper";
 import HomePageSettings from "./pages/Admin/HomePageSettings";
+import Forms from "./pages/Admin/Forms";
+import PublicForm from "./pages/PublicForm";
 import ResetPassword from "./pages/ResetPassword";
 import StudentDashboard from "./pages/Student/Dashboard";
 import StaffDashboard from "./pages/Staff/Dashboard";
@@ -64,9 +66,12 @@ export default function App() {
         <Route path="/careers" element={<Careers />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/terms-of-service" element={<TermsOfService />} />
+        <Route path="/form/:id" element={<PublicForm />} />
+        <Route path="/forms/:id" element={<PublicForm />} />
 
         <Route path="/admin" element={<AdminDashboard />}>
           <Route index element={<AdminHome />} />
+          <Route path="forms" element={<Forms />} />
           <Route path="students" element={<Students />} />
           <Route path="bulk-documents" element={<BulkDocuments />} />
           <Route path="promote-students" element={<PromoteStudents />} />

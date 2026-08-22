@@ -172,6 +172,7 @@ export default function AdminDashboard() {
       name: "Communication", 
       icon: <WhatsAppIcon size={18} />,
       subItems: [
+        { name: "Google Forms / படிவங்கள்", path: "/admin/forms" },
         { name: "WhatsApp", path: "/admin/whatsapp" },
         { name: "Messaging", path: "/admin/circulars" },
         { name: "SMS Services", path: "/admin/sms" },
