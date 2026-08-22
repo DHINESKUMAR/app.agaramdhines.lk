@@ -930,6 +930,9 @@ export interface CustomForm {
   createdAt: string;
   updatedAt: string;
   themeColor?: string;
+  headerImage?: string; // Image URL or Base64 data URL (up to 3MB)
+  instituteSubtitle?: string; // e.g. "agrandinesh online academy" or "Agaram Dhines Online Academy"
+  descriptionPoints?: string[]; // Up to 3 key bullet points for concise display and WhatsApp previews
   successMessage?: string;
   maxSubmissionsPerPhone?: number; // 1 = One submission only (Default), 2 = Up to 2 submissions, 0 = Unlimited
   preventDuplicatePhone?: boolean; // Default true
@@ -963,6 +966,13 @@ const DEFAULT_FORMS: CustomForm[] = [
     id: "form_admission_2026",
     title: "மாணவர் சேர்க்கைப் படிவம் (Student Admission & Registration 2026)",
     description: "அகரம் தினேஸ் தமிழ் ஆன்லைன் அகாடமியின் புதிய தவணை தமிழ் வகுப்புகளுக்கான நேரடி பதிவுப் படிவம். அனைத்து விபரங்களையும் சரியாக பூர்த்தி செய்யவும்.",
+    instituteSubtitle: "agrandinesh online academy",
+    headerImage: "https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop",
+    descriptionPoints: [
+      "இலங்கையின் 25 மாவட்ட மாணவர்களுக்கான நேரடி தமிழ் இணையவழி வகுப்புகள்.",
+      "தவணைப் பரீட்சை வினாத்தாள் பயிற்சிகள் மற்றும் உடனடி Zoom இணைப்புகள்.",
+      "ஒரு மாணவருக்கு ஒரு பதிவு மட்டுமே அனுமதிக்கப்படும் (Single Verified Entry)."
+    ],
     category: "admission",
     status: "active",
     themeColor: "#1e3a8a",
@@ -987,6 +997,13 @@ const DEFAULT_FORMS: CustomForm[] = [
     id: "form_exam_reg_2026",
     title: "மாதிரி வினாத்தாள் & பரீட்சைப் பதிவுப் படிவம் (Exam Registration)",
     description: "தரம் 06 முதல் 11 வரையிலான தமிழ் மாதிரி வினாத்தாள் பரீட்சை மற்றும் வினா விடை கருத்தரங்கில் பங்கேற்க விரும்பும் மாணவர்களுக்கான பதிவுப் படிவம்.",
+    instituteSubtitle: "agrandinesh online academy",
+    headerImage: "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?q=80&w=1200&auto=format&fit=crop",
+    descriptionPoints: [
+      "தரம் 6 - 11 மாணவர்களுக்கான விசேட மாதிரி வினாத்தாள் தொகுப்பு.",
+      "தேர்வு வழிகாட்டல் மற்றும் விடைத்தாள் திருத்தக் கருத்தரங்கு.",
+      "WhatsApp ஊடாக பரீட்சை அட்டவணை மற்றும் Zoom இணைப்பு பகிரப்படும்."
+    ],
     category: "exam",
     status: "active",
     themeColor: "#b91c1c",
@@ -1009,6 +1026,13 @@ const DEFAULT_FORMS: CustomForm[] = [
     id: "form_contact_feedback",
     title: "பொதுத் தொடர்பு & கருத்துப் படிவம் (General Inquiries & Feedback)",
     description: "வகுப்புகள், கட்டண விபரங்கள் அல்லது உங்கள் ஆலோசனைகளை நேரடியாக எமக்குத் தெரிவிக்க இந்தப் படிவத்தைப் பயன்படுத்தவும்.",
+    instituteSubtitle: "agrandinesh online academy",
+    headerImage: "https://images.unsplash.com/photo-1577495508048-b635879837f1?q=80&w=1200&auto=format&fit=crop",
+    descriptionPoints: [
+      "வகுப்புகள் மற்றும் கட்டண விபரங்கள் தொடர்பான ஆலோசனைகள்.",
+      "அகாடமி நிர்வாகக் குழுவின் நேரடி வழிகாட்டல் மற்றும் உதவி.",
+      "விரைவான WhatsApp / தொலைபேசி பதில் சேவை."
+    ],
     category: "contact",
     status: "active",
     themeColor: "#047857",

@@ -43,7 +43,10 @@ import {
   Calendar,
   Phone,
   Mail,
-  ChevronDown
+  ChevronDown,
+  Image as ImageIcon,
+  Upload,
+  Sparkles
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import * as XLSX from 'xlsx';
@@ -74,6 +77,12 @@ export default function AdminForms() {
   // Create/Edit Form State
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
+  const [formHeaderImage, setFormHeaderImage] = useState<string>('');
+  const [formInstituteSubtitle, setFormInstituteSubtitle] = useState<string>('agrandinesh online academy');
+  const [formDescriptionPoint1, setFormDescriptionPoint1] = useState<string>('');
+  const [formDescriptionPoint2, setFormDescriptionPoint2] = useState<string>('');
+  const [formDescriptionPoint3, setFormDescriptionPoint3] = useState<string>('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [formCategory, setFormCategory] = useState<'admission' | 'exam' | 'contact' | 'feedback' | 'general'>('admission');
   const [formStatus, setFormStatus] = useState<'active' | 'closed'>('active');
   const [formThemeColor, setFormThemeColor] = useState('#1e3a8a');
@@ -149,12 +158,71 @@ export default function AdminForms() {
     setTimeout(() => setCopiedId(null), 2500);
   };
 
-  // WhatsApp Share
+  // WhatsApp Share with 3 Points & Clean Preview Formatting
   const handleShareWhatsApp = (formItem: CustomForm) => {
     const fullUrl = `${window.location.origin}/form/${formItem.id}`;
-    const message = `*${formItem.title}*\n\n${formItem.description || "படிவத்தை பூர்த்தி செய்து சமர்ப்பிக்கவும்."}\n\n👉 *படிவ இணைப்பு (Form Link):*\n${fullUrl}\n\n- ${adminSettings?.instituteName || "Agaram Dhines Online Academy"}`;
+    const subtitle = formItem.instituteSubtitle || "agrandinesh online academy";
+    
+    let pointsText = '';
+    if (formItem.descriptionPoints && formItem.descriptionPoints.length > 0) {
+      const validPoints = formItem.descriptionPoints.filter(p => p && p.trim().length > 0);
+      if (validPoints.length > 0) {
+        pointsText = '\n' + validPoints.map(p => `• ${p.trim()}`).join('\n') + '\n';
+      }
+    }
+
+    const message = `*${formItem.title}*\n_${subtitle}_\n\n${formItem.description || "படிவத்தை பூர்த்தி செய்து சமர்ப்பிக்கவும்."}${pointsText}\n👉 *படிவ இணைப்பு (Form Link):*\n${fullUrl}\n\n🎓 *${adminSettings?.instituteName || "Agaram Dhines Online Academy"}*`;
     const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
+  };
+
+  // Image Upload Handler with Canvas Compression (< 3MB input -> optimized 150KB - 250KB WebP/JPEG)
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 3 * 1024 * 1024) {
+      alert("படத்தின் அளவு அதிகபட்சம் 3MB வரை மட்டுமே அனுமதிக்கப்படும். (Maximum image size is 3MB)");
+      return;
+    }
+
+    setIsUploadingImage(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1200;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.84);
+          setFormHeaderImage(compressedDataUrl);
+        } else {
+          setFormHeaderImage(event.target?.result as string);
+        }
+        setIsUploadingImage(false);
+      };
+      img.onerror = () => {
+        setFormHeaderImage(event.target?.result as string);
+        setIsUploadingImage(false);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
   };
 
   // Delete Form
@@ -253,6 +321,11 @@ export default function AdminForms() {
     setEditingForm(formItem);
     setFormTitle(formItem.title);
     setFormDescription(formItem.description);
+    setFormHeaderImage(formItem.headerImage || '');
+    setFormInstituteSubtitle(formItem.instituteSubtitle || 'agrandinesh online academy');
+    setFormDescriptionPoint1(formItem.descriptionPoints?.[0] || '');
+    setFormDescriptionPoint2(formItem.descriptionPoints?.[1] || '');
+    setFormDescriptionPoint3(formItem.descriptionPoints?.[2] || '');
     setFormCategory(formItem.category);
     setFormStatus(formItem.status);
     setFormThemeColor(formItem.themeColor || '#1e3a8a');
@@ -269,6 +342,11 @@ export default function AdminForms() {
     setEditingForm(null);
     setFormTitle('');
     setFormDescription('');
+    setFormHeaderImage('https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop');
+    setFormInstituteSubtitle('agrandinesh online academy');
+    setFormDescriptionPoint1('இலங்கையின் 25 மாவட்ட மாணவர்களுக்கான நேரடி தமிழ் இணையவழி வகுப்புகள்.');
+    setFormDescriptionPoint2('தவணைப் பரீட்சை வினாத்தாள் பயிற்சிகள் மற்றும் உடனடி Zoom இணைப்புகள்.');
+    setFormDescriptionPoint3('ஒரு மாணவருக்கு ஒரு பதிவு மட்டுமே அனுமதிக்கப்படும் (Single Verified Entry).');
     setFormCategory('admission');
     setFormStatus('active');
     setFormThemeColor('#1e3a8a');
@@ -277,7 +355,7 @@ export default function AdminForms() {
     setFormPreventDuplicatePhone(true);
     setFormPhoneFieldId('');
     setFormFields([
-      { id: "f_" + Date.now() + "_1", label: "மாணவரின் முழுப் பெயர் (Student Name)", type: "text", required: true, placeholder: "பெயரை உள்ளிடவும்" },
+      { id: "f_" + Date.now() + "_1", label: "மாணவரின் முழுப் பெயர் (Student Full Name)", type: "text", required: true, placeholder: "பெயரை உள்ளிடவும்" },
       { id: "f_" + Date.now() + "_2", label: "WhatsApp / தொடர்பு இலக்கம்", type: "phone", required: true, placeholder: "07xxxxxxxx" },
       { id: "f_" + Date.now() + "_3", label: "மாவட்டம் (District)", type: "district", required: true },
       { id: "f_" + Date.now() + "_4", label: "தரம் / வகுப்பு (Grade)", type: "grade", required: true }
@@ -312,10 +390,18 @@ export default function AdminForms() {
     const now = new Date().toISOString();
     const formId = editingForm ? editingForm.id : "form_" + Date.now();
 
+    // 3 points description array
+    const points = [formDescriptionPoint1, formDescriptionPoint2, formDescriptionPoint3]
+      .map(p => p.trim())
+      .filter(p => p.length > 0);
+
     const newFormObj: CustomForm = {
       id: formId,
       title: formTitle.trim(),
       description: formDescription.trim(),
+      headerImage: formHeaderImage ? formHeaderImage.trim() : undefined,
+      instituteSubtitle: formInstituteSubtitle.trim() || 'agrandinesh online academy',
+      descriptionPoints: points.length > 0 ? points : undefined,
       category: formCategory,
       status: formStatus,
       themeColor: formThemeColor,
@@ -989,12 +1075,21 @@ export default function AdminForms() {
       {activeTab === 'create' && (
         <form onSubmit={handleSaveForm} className="space-y-6 max-w-4xl mx-auto">
           
-          {/* Header Card */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">
-                {editingForm ? "படிவத்தை திருத்து (Edit Form)" : "புதிய படிவம் உருவாக்கம் (Create Google-like Form)"}
-              </h2>
+          {/* TAB 3: CREATE / EDIT FORM BUILDER */}
+          {/* Header Banner & Branding Card */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <ImageIcon className="text-blue-600" size={20} />
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">
+                    படிவத்தின் தலைப்புப் படம் & அகாடமி அடையாளம் (Banner & Branding)
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    படிவத்தின் மேல் தோன்றும் படம் மற்றும் WhatsApp பகிர்தலுக்கான படம் (Max 3MB).
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setActiveTab('forms')}
@@ -1003,6 +1098,125 @@ export default function AdminForms() {
                 ரத்து செய்ய (Cancel)
               </button>
             </div>
+
+            {/* Banner Image Preview & Upload Controls */}
+            <div className="space-y-3">
+              <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 min-h-[140px] sm:min-h-[180px] flex items-center justify-center group">
+                {formHeaderImage ? (
+                  <>
+                    <img
+                      src={formHeaderImage}
+                      alt="Form Header Banner"
+                      className="w-full h-44 sm:h-52 object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <label className="cursor-pointer bg-white text-slate-800 px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-md hover:bg-slate-50 flex items-center gap-1.5">
+                        <Upload size={14} /> படத்தை மாற்ற (Change)
+                        <input
+                          type="file"
+                          accept="image/png, image/jpeg, image/jpg, image/webp"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setFormHeaderImage('')}
+                        className="bg-red-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-md hover:bg-red-700 flex items-center gap-1.5"
+                      >
+                        <Trash2 size={14} /> நீக்கு (Remove)
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center p-6 space-y-2">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                      <ImageIcon size={24} />
+                    </div>
+                    <p className="text-xs font-medium text-slate-600">
+                      படிவத்தின் முகப்புப் படம் எதுவும் தேர்ந்தெடுக்கப்படவில்லை
+                    </p>
+                    <label className="inline-flex items-center gap-1.5 cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs hover:bg-blue-700 transition-all">
+                      <Upload size={14} /> படம் பதிவேற்றுக (Upload Image up to 3MB)
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/jpg, image/webp"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {isUploadingImage && (
+                  <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex items-center justify-center">
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-700">
+                      <RefreshCw className="animate-spin" size={16} /> படத்தை உகப்பாக்குகிறது...
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Preset Banners Selection */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                  <Sparkles size={12} className="text-amber-500" /> முன்மாதிரி படங்கள் (Presets):
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFormHeaderImage('https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop')}
+                  className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 font-medium transition-colors border border-slate-200"
+                >
+                  🎓 சேர்க்கை / கல்வி
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormHeaderImage('https://images.unsplash.com/photo-1434030216411-0b793f4b4173?q=80&w=1200&auto=format&fit=crop')}
+                  className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 font-medium transition-colors border border-slate-200"
+                >
+                  📝 பரீட்சை & வினாத்தாள்
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormHeaderImage('https://images.unsplash.com/photo-1577495508048-b635879837f1?q=80&w=1200&auto=format&fit=crop')}
+                  className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 font-medium transition-colors border border-slate-200"
+                >
+                  💬 பொதுத் தொடர்பு
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormHeaderImage('https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1200&auto=format&fit=crop')}
+                  className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 font-medium transition-colors border border-slate-200"
+                >
+                  💻 ஆன்லைன் வகுப்பு
+                </button>
+              </div>
+
+              {/* Subtitle / Academy Name */}
+              <div className="pt-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  அகாடமி பெயர் / Subtitle (URL & WhatsApp இல் தோன்றும் பெயர்) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formInstituteSubtitle}
+                  onChange={(e) => setFormInstituteSubtitle(e.target.value)}
+                  placeholder="agrandinesh online academy"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-medium"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  குறிப்பு: இது படிவத்தின் முகப்பிலும் மற்றும் WhatsApp பகிர்வுகளிலும் முக்கிய அடையாளமாகத் தோன்றும் (Format: <code>agrandinesh online academy</code>).
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Form Title & 3 Highlights Card */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+            <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2.5">
+              படிவ விபரங்கள் & 3 முக்கிய குறிப்புகள் (Details & 3 Key Bullet Points)
+            </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
@@ -1014,22 +1228,68 @@ export default function AdminForms() {
                   required
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
-                  placeholder="உதாரணம்: மாணவர் சேர்க்கைப் படிவம் 2026"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  placeholder="உதாரணம்: மாணவர் சேர்க்கைப் படிவம் (Student Admission & Registration 2026)"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-semibold"
                 />
               </div>
 
               <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  படிவத்தின் விளக்கம் / அறிவுறுத்தல்கள் (Description / Instructions)
+                  படிவத்தின் பொது விளக்கம் (General Description)
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  placeholder="படிவம் பற்றிய மேலதிக விபரங்கள்..."
+                  placeholder="படிவம் பற்றிய சிறிய அறிமுகம் அல்லது விளக்கம்..."
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
+              </div>
+
+              {/* 3 Structured Description Points */}
+              <div className="md:col-span-2 bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <CheckCircle2 size={14} className="text-blue-600" />
+                    3 முக்கிய குறிப்புகள் (3 Highlight Points for Fast Reading & WhatsApp Share):
+                  </span>
+                  <span className="text-[11px] text-slate-500">மாணவர்கள் எளிதில் புரிந்து கொள்ள ஏதுவாக</span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-blue-700 w-5 text-center">1.</span>
+                    <input
+                      type="text"
+                      value={formDescriptionPoint1}
+                      onChange={(e) => setFormDescriptionPoint1(e.target.value)}
+                      placeholder="புள்ளி 1: உதாரணம் - இலங்கையின் 25 மாவட்ட மாணவர்களுக்கான நேரடி தமிழ் வகுப்புகள்."
+                      className="w-full px-3.5 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-blue-700 w-5 text-center">2.</span>
+                    <input
+                      type="text"
+                      value={formDescriptionPoint2}
+                      onChange={(e) => setFormDescriptionPoint2(e.target.value)}
+                      placeholder="புள்ளி 2: உதாரணம் - தவணைப் பரீட்சை வினாத்தாள் பயிற்சிகள் மற்றும் உடனடி Zoom இணைப்புகள்."
+                      className="w-full px-3.5 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-blue-700 w-5 text-center">3.</span>
+                    <input
+                      type="text"
+                      value={formDescriptionPoint3}
+                      onChange={(e) => setFormDescriptionPoint3(e.target.value)}
+                      placeholder="புள்ளி 3: உதாரணம் - ஒரு மாணவருக்கு ஒரு பதிவு மட்டுமே அனுமதிக்கப்படும்."
+                      className="w-full px-3.5 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -1089,6 +1349,51 @@ export default function AdminForms() {
                   placeholder="உங்கள் பதிவு வெற்றிகரமாக பெறப்பட்டது!"
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Live WhatsApp Share Preview Card */}
+          <div className="bg-[#0b141a] rounded-2xl p-5 sm:p-6 text-white shadow-md border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                <MessageSquare size={14} /> WhatsApp பகிர்தல் மாதிரிப் பார்வை (Live WhatsApp Preview):
+              </span>
+              <span className="text-[11px] text-slate-400">இணைப்பு பகிரப்படும் போது இவ்வாறு காட்சி தரும்</span>
+            </div>
+
+            <div className="max-w-md bg-[#202c33] rounded-xl p-3 border border-[#2a3942] space-y-2 text-xs">
+              {formHeaderImage && (
+                <div className="rounded-lg overflow-hidden h-36 w-full bg-slate-900">
+                  <img
+                    src={formHeaderImage}
+                    alt="WhatsApp Preview"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+              <div className="space-y-1">
+                <div className="text-slate-400 text-[10px] uppercase tracking-wider font-semibold">
+                  {formInstituteSubtitle || "agrandinesh online academy"}
+                </div>
+                <div className="font-bold text-sm text-slate-100 leading-snug">
+                  {formTitle || "மாணவர் சேர்க்கைப் படிவம் (Student Admission & Registration)"}
+                </div>
+                <div className="text-slate-300 text-xs leading-relaxed line-clamp-2">
+                  {formDescription || "அகரம் தினேஸ் தமிழ் ஆன்லைன் அகாடமியின் நேரடி பதிவுப் படிவம்."}
+                </div>
+                
+                {(formDescriptionPoint1 || formDescriptionPoint2 || formDescriptionPoint3) && (
+                  <div className="pt-1.5 border-t border-[#2a3942] space-y-1 text-[11px] text-slate-200">
+                    {formDescriptionPoint1 && <div>• {formDescriptionPoint1}</div>}
+                    {formDescriptionPoint2 && <div>• {formDescriptionPoint2}</div>}
+                    {formDescriptionPoint3 && <div>• {formDescriptionPoint3}</div>}
+                  </div>
+                )}
+
+                <div className="pt-1 text-[11px] text-emerald-400 font-mono">
+                  {window.location.origin}/form/{editingForm?.id || "form_admission_2026"}
+                </div>
               </div>
             </div>
           </div>

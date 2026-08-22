@@ -27,7 +27,10 @@ import {
   HelpCircle,
   ExternalLink,
   ShieldCheck,
-  Info
+  Info,
+  Share2,
+  Copy,
+  Check
 } from 'lucide-react';
 
 export default function PublicForm() {
@@ -75,6 +78,41 @@ export default function PublicForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedData, setSubmittedData] = useState<any>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  // Sync document title and social share preview
+  useEffect(() => {
+    if (form) {
+      const subtitle = form.instituteSubtitle || "agrandinesh online academy";
+      document.title = `${form.title} | ${subtitle}`;
+    }
+  }, [form]);
+
+  // Handle WhatsApp Share
+  const handleShareWhatsApp = () => {
+    if (!form) return;
+    const fullUrl = window.location.href;
+    const subtitle = form.instituteSubtitle || "agrandinesh online academy";
+    
+    let pointsText = '';
+    if (form.descriptionPoints && form.descriptionPoints.length > 0) {
+      const validPoints = form.descriptionPoints.filter(p => p && p.trim().length > 0);
+      if (validPoints.length > 0) {
+        pointsText = '\n' + validPoints.map(p => `• ${p.trim()}`).join('\n') + '\n';
+      }
+    }
+
+    const message = `*${form.title}*\n_${subtitle}_\n\n${form.description || "படிவத்தை பூர்த்தி செய்து உடனே சமர்ப்பிக்கவும்."}${pointsText}\n👉 *படிவ இணைப்பு (Form Link):*\n${fullUrl}\n\n🎓 *${adminSettings?.instituteName || "Agaram Dhines Online Academy"}*`;
+    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  // Handle Copy Link
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
 
   // Background Sync to get latest form definition and settings without delaying initial paint
   useEffect(() => {
@@ -531,32 +569,74 @@ export default function PublicForm() {
         
         {/* Top Academy Banner */}
         <div className="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+          {/* Header Image if available */}
+          {form.headerImage && (
+            <div className="w-full h-44 sm:h-56 overflow-hidden bg-slate-100 relative">
+              <img
+                src={form.headerImage}
+                alt={form.title}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent flex items-end p-4 sm:p-6">
+                <div className="text-white">
+                  <div className="text-xs uppercase font-bold tracking-widest text-blue-200">
+                    {form.instituteSubtitle || "agrandinesh online academy"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div 
             className="h-3.5 w-full"
             style={{ backgroundColor: primaryColor }}
           />
           <div className="p-6 sm:p-8 space-y-4">
-            <div className="flex items-center gap-3.5">
-              <img
-                src={adminSettings?.profileImage || "/logo.png"}
-                alt="Logo"
-                className="w-12 h-12 rounded-xl object-contain border border-slate-100 p-1 bg-white shadow-xs"
-                onError={(e: any) => { e.target.src = "/logo.png"; }}
-              />
-              <div>
-                <h2 className="text-xs uppercase tracking-wider font-bold text-slate-500">
-                  {adminSettings?.instituteName || "AGARAM DHINES ONLINE ACADEMY"}
-                </h2>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
-                    form.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
-                  }`}>
-                    {form.status === 'active' ? '● ஏற்கும் நிலையில் உள்ளது (Accepting Responses)' : '● மூடப்பட்டுள்ளது (Closed)'}
-                  </span>
-                  <span className="text-xs text-slate-400 capitalize">
-                    {form.category}
-                  </span>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3.5">
+                <img
+                  src={adminSettings?.profileImage || "/logo.png"}
+                  alt="Logo"
+                  className="w-12 h-12 rounded-xl object-contain border border-slate-100 p-1 bg-white shadow-xs"
+                  onError={(e: any) => { e.target.src = "/logo.png"; }}
+                />
+                <div>
+                  <h2 className="text-xs font-bold text-slate-700 tracking-wide">
+                    {form.instituteSubtitle || "agrandinesh online academy"}
+                  </h2>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
+                      form.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                    }`}>
+                      {form.status === 'active' ? '● ஏற்கும் நிலையில் உள்ளது (Open)' : '● மூடப்பட்டுள்ளது (Closed)'}
+                    </span>
+                    <span className="text-xs text-slate-400 capitalize">
+                      {form.category}
+                    </span>
+                  </div>
                 </div>
+              </div>
+
+              {/* Share on WhatsApp Button */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleShareWhatsApp}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs transition-colors border border-emerald-200 shadow-2xs"
+                  title="WhatsApp இல் பகிர்க"
+                >
+                  <MessageSquare size={13} className="text-emerald-600" />
+                  <span>WhatsApp பகிர்க</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-medium text-xs transition-colors border border-slate-200"
+                  title="இணைப்பை நகலெடுக்க"
+                >
+                  {copiedLink ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                  <span>{copiedLink ? "நகலெடுக்கப்பட்டது!" : "Copy"}</span>
+                </button>
               </div>
             </div>
 
@@ -570,6 +650,28 @@ export default function PublicForm() {
                 </p>
               )}
             </div>
+
+            {/* 3 Structured Highlight Points */}
+            {form.descriptionPoints && form.descriptionPoints.length > 0 && (
+              <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-200/80 space-y-2.5 my-2">
+                <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <CheckCircle2 size={14} className="text-blue-600" />
+                  <span>முக்கிய அறிவுறுத்தல்கள் (Key Information):</span>
+                </div>
+                <div className="space-y-2 text-xs sm:text-sm text-slate-700">
+                  {form.descriptionPoints.map((point, index) => (
+                    point.trim() && (
+                      <div key={index} className="flex items-start gap-2.5 leading-relaxed">
+                        <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                          {index + 1}
+                        </span>
+                        <span>{point.trim()}</span>
+                      </div>
+                    )
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="pt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 border-t border-slate-100">
               <span className="flex items-center gap-1">
@@ -586,7 +688,7 @@ export default function PublicForm() {
                   </span>
                 ) : null}
                 <span className="text-slate-400">
-                  பாதுகாப்பான படிவம்
+                  agrandinesh.lk/v1/app
                 </span>
               </div>
             </div>
