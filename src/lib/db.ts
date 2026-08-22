@@ -931,6 +931,9 @@ export interface CustomForm {
   updatedAt: string;
   themeColor?: string;
   successMessage?: string;
+  maxSubmissionsPerPhone?: number; // 1 = One submission only (Default), 2 = Up to 2 submissions, 0 = Unlimited
+  preventDuplicatePhone?: boolean; // Default true
+  phoneFieldId?: string; // ID of the phone field in form
 }
 
 export interface FormSubmission {
@@ -948,6 +951,13 @@ export interface FormSubmission {
   status?: 'new' | 'reviewed' | 'enrolled';
 }
 
+export const normalizePhoneNumber = (raw: string): string => {
+  if (!raw) return '';
+  const digits = String(raw).replace(/[^0-9]/g, '');
+  // Extract last 9 digits for Sri Lankan phone numbers (e.g. 778054232 from 0778054232 or +94778054232)
+  return digits.length >= 9 ? digits.slice(-9) : digits;
+};
+
 const DEFAULT_FORMS: CustomForm[] = [
   {
     id: "form_admission_2026",
@@ -957,6 +967,8 @@ const DEFAULT_FORMS: CustomForm[] = [
     status: "active",
     themeColor: "#1e3a8a",
     successMessage: "உங்கள் சேர்க்கைப் பதிவு வெற்றிகரமாக பெறப்பட்டது! எமது நிர்வாகப் பிரிவு விரைவில் உங்களைத் தொடர்பு கொள்ளும்.",
+    maxSubmissionsPerPhone: 1,
+    preventDuplicatePhone: true,
     createdAt: "2026-08-20T00:00:00.000Z",
     updatedAt: "2026-08-20T00:00:00.000Z",
     fields: [
@@ -979,6 +991,8 @@ const DEFAULT_FORMS: CustomForm[] = [
     status: "active",
     themeColor: "#b91c1c",
     successMessage: "பரீட்சைக்கான உங்கள் விண்ணப்பம் பதிவு செய்யப்பட்டுள்ளது! தேர்வுத் திகதி மற்றும் Zoom இணைப்பு WhatsApp ஊடாக அனுப்பப்படும்.",
+    maxSubmissionsPerPhone: 1,
+    preventDuplicatePhone: true,
     createdAt: "2026-08-21T00:00:00.000Z",
     updatedAt: "2026-08-21T00:00:00.000Z",
     fields: [
@@ -999,6 +1013,8 @@ const DEFAULT_FORMS: CustomForm[] = [
     status: "active",
     themeColor: "#047857",
     successMessage: "உங்கள் கருத்து / வினவல் பெறப்பட்டது. எங்கள் நிர்வாகக் குழு விரைவில் உங்களுக்கு பதிலளிக்கும்.",
+    maxSubmissionsPerPhone: 2,
+    preventDuplicatePhone: true,
     createdAt: "2026-08-22T00:00:00.000Z",
     updatedAt: "2026-08-22T00:00:00.000Z",
     fields: [
@@ -1010,6 +1026,30 @@ const DEFAULT_FORMS: CustomForm[] = [
     ]
   }
 ];
+
+// Instant Fast Form Fetch (Zero Delay for Students)
+export const getFastFormById = (formId: string): CustomForm | null => {
+  // Check memory cache
+  const cachedForms = memoryCache['forms']?.data;
+  if (Array.isArray(cachedForms)) {
+    const found = cachedForms.find((f: any) => f.id === formId);
+    if (found) return found;
+  }
+  // Check local storage directly
+  try {
+    const raw = localStorage.getItem('forms');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const found = parsed.find((f: any) => f.id === formId);
+        if (found) return found;
+      }
+    }
+  } catch (e) {}
+
+  // Check default template fallback
+  return DEFAULT_FORMS.find(f => f.id === formId) || null;
+};
 
 export const getForms = async (): Promise<CustomForm[]> => {
   const forms = await getData('forms', null);
@@ -1055,18 +1095,90 @@ export const deleteFormSubmission = async (submissionId: string): Promise<FormSu
   return updated;
 };
 
+export const checkPhoneSubmissionStatus = async (formId: string, rawPhone: string) => {
+  if (!rawPhone || !formId) {
+    return { count: 0, maxLimit: 1, isAllowed: true, submissions: [], preventDuplicates: true, reason: '' };
+  }
+  const normalized = normalizePhoneNumber(rawPhone);
+  if (!normalized) {
+    return { count: 0, maxLimit: 1, isAllowed: true, submissions: [], preventDuplicates: true, reason: '' };
+  }
+
+  const [forms, existingSubmissions] = await Promise.all([
+    getForms(),
+    getFormSubmissions()
+  ]);
+
+  const form = forms.find(f => f.id === formId);
+  const maxLimit = form?.maxSubmissionsPerPhone !== undefined ? form.maxSubmissionsPerPhone : 1;
+  const preventDuplicates = form?.preventDuplicatePhone !== false;
+
+  const userSubmissions = existingSubmissions.filter(s => {
+    if (s.formId !== formId) return false;
+    const subPhone = normalizePhoneNumber(s.phone || s.data?.f_phone || s.data?.phone || s.data?.whatsapp || '');
+    return subPhone === normalized;
+  });
+
+  const count = userSubmissions.length;
+  const isAllowed = !preventDuplicates || maxLimit === 0 || count < maxLimit;
+  let reason = '';
+  if (!isAllowed) {
+    if (maxLimit === 1) {
+      reason = "இந்த தொலைபேசி இலக்கத்தைப் பயன்படுத்தி ஏற்கனவே ஒரு பதிவு சமர்ப்பிக்கப்பட்டுள்ளது (1 submission per phone only).";
+    } else {
+      reason = `இந்த தொலைபேசி இலக்கத்திற்கான அதிகபட்ச சமர்ப்பிப்பு வரம்பை (${maxLimit} முறைகள்) எட்டிவிட்டது.`;
+    }
+  }
+
+  return {
+    count,
+    maxLimit,
+    isAllowed,
+    submissions: userSubmissions,
+    preventDuplicates,
+    reason
+  };
+};
+
 export const submitFormResponse = async (formId: string, payload: Record<string, any>): Promise<FormSubmission> => {
   const forms = await getForms();
   const form = forms.find(f => f.id === formId);
   const formTitle = form ? form.title : "Custom Form Submission";
+
+  if (form && form.status === 'closed') {
+    throw new Error("மன்னிக்கவும், இந்தப் படிவம் தற்போது புதிய சமர்ப்பிப்புகளை ஏற்றுக்கொள்ளவில்லை (This form is closed).");
+  }
 
   // Auto-detect standard fields if provided in custom fields
   const studentName = payload.f_name || payload.name || payload.studentName || payload.fullName || "";
   const rollNo = payload.f_roll || payload.rollNo || payload.studentCode || "";
   const district = payload.f_district || payload.district || "";
   const grade = payload.f_grade || payload.grade || payload.class || "";
-  const phone = payload.f_phone || payload.phone || payload.mobile || payload.whatsapp || "";
+  const phone = payload.f_phone || payload.phone || payload.mobile || payload.whatsapp || (form?.phoneFieldId ? payload[form.phoneFieldId] : "") || "";
   const email = payload.f_email || payload.email || "";
+
+  // Duplicate Phone Number & Submission Limits Check
+  const maxAllowed = form?.maxSubmissionsPerPhone !== undefined ? form.maxSubmissionsPerPhone : 1;
+  const preventDuplicates = form?.preventDuplicatePhone !== false;
+
+  const existingSubmissions = await getFormSubmissions();
+
+  if (phone && preventDuplicates && maxAllowed > 0) {
+    const normalizedInputPhone = normalizePhoneNumber(phone);
+    const matches = existingSubmissions.filter(s => {
+      if (s.formId !== formId) return false;
+      const sPhone = normalizePhoneNumber(s.phone || s.data?.f_phone || s.data?.phone || s.data?.whatsapp || '');
+      return sPhone === normalizedInputPhone;
+    });
+
+    if (matches.length >= maxAllowed) {
+      if (maxAllowed === 1) {
+        throw new Error(`இந்த தொலைபேசி இலக்கம் (${phone}) ஏற்கனவே பதிவு செய்யப்பட்டுள்ளது. இந்தப் படிவத்தில் ஒரு முறை மட்டுமே (1 time only) பதிவு செய்ய முடியும். ஏதேனும் மாற்றம் செய்ய வேண்டியிருப்பின் நிர்வாகியைத் தொடர்பு கொள்ளவும்.`);
+      } else {
+        throw new Error(`இந்த தொலைபேசி இலக்கம் (${phone}) ஏற்கனவே ${matches.length} முறை பதிவு செய்யப்பட்டுள்ளது. அதிகபட்ச வரம்பு (${maxAllowed} முறை) முடிவடைந்தது.`);
+      }
+    }
+  }
 
   const newSubmission: FormSubmission = {
     id: "sub_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
@@ -1083,7 +1195,6 @@ export const submitFormResponse = async (formId: string, payload: Record<string,
     status: 'new'
   };
 
-  const existingSubmissions = await getFormSubmissions();
   const updated = [newSubmission, ...existingSubmissions];
   await saveFormSubmissions(updated);
 

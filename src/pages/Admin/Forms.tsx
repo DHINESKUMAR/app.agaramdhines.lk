@@ -79,6 +79,9 @@ export default function AdminForms() {
   const [formThemeColor, setFormThemeColor] = useState('#1e3a8a');
   const [formSuccessMessage, setFormSuccessMessage] = useState('');
   const [formFields, setFormFields] = useState<FormField[]>([]);
+  const [formMaxSubmissionsPerPhone, setFormMaxSubmissionsPerPhone] = useState<number>(1);
+  const [formPreventDuplicatePhone, setFormPreventDuplicatePhone] = useState<boolean>(true);
+  const [formPhoneFieldId, setFormPhoneFieldId] = useState<string>('');
 
   // Load Data
   const loadAllData = async (force: boolean = false) => {
@@ -254,6 +257,9 @@ export default function AdminForms() {
     setFormStatus(formItem.status);
     setFormThemeColor(formItem.themeColor || '#1e3a8a');
     setFormSuccessMessage(formItem.successMessage || '');
+    setFormMaxSubmissionsPerPhone(formItem.maxSubmissionsPerPhone !== undefined ? formItem.maxSubmissionsPerPhone : 1);
+    setFormPreventDuplicatePhone(formItem.preventDuplicatePhone !== false);
+    setFormPhoneFieldId(formItem.phoneFieldId || '');
     setFormFields([...formItem.fields]);
     setActiveTab('create');
   };
@@ -267,6 +273,9 @@ export default function AdminForms() {
     setFormStatus('active');
     setFormThemeColor('#1e3a8a');
     setFormSuccessMessage('உங்கள் பதிவு வெற்றிகரமாக பெறப்பட்டது! நன்றி.');
+    setFormMaxSubmissionsPerPhone(1);
+    setFormPreventDuplicatePhone(true);
+    setFormPhoneFieldId('');
     setFormFields([
       { id: "f_" + Date.now() + "_1", label: "மாணவரின் முழுப் பெயர் (Student Name)", type: "text", required: true, placeholder: "பெயரை உள்ளிடவும்" },
       { id: "f_" + Date.now() + "_2", label: "WhatsApp / தொடர்பு இலக்கம்", type: "phone", required: true, placeholder: "07xxxxxxxx" },
@@ -311,6 +320,9 @@ export default function AdminForms() {
       status: formStatus,
       themeColor: formThemeColor,
       successMessage: formSuccessMessage.trim(),
+      maxSubmissionsPerPhone: Number(formMaxSubmissionsPerPhone),
+      preventDuplicatePhone: Boolean(formPreventDuplicatePhone),
+      phoneFieldId: formPhoneFieldId || undefined,
       fields: formFields,
       createdAt: editingForm ? editingForm.createdAt : now,
       updatedAt: now
@@ -693,10 +705,21 @@ export default function AdminForms() {
                         </div>
 
                         <div className="pt-2 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100">
-                          <span>{item.fields.length} கேள்விகள் (Fields)</span>
-                          <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
-                            {subCount} சமர்ப்பிப்புகள்
-                          </span>
+                          <span>{item.fields.length} கேள்விகள்</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${
+                              item.maxSubmissionsPerPhone === 1
+                                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                : item.maxSubmissionsPerPhone === 2
+                                ? 'bg-purple-50 text-purple-800 border border-purple-200'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {item.maxSubmissionsPerPhone === 1 ? '1 Entry/Phone' : item.maxSubmissionsPerPhone === 2 ? 'Max 2/Phone' : 'Unlimited'}
+                            </span>
+                            <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
+                              {subCount} சமர்ப்பிப்புகள்
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1067,6 +1090,106 @@ export default function AdminForms() {
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Submission Security & Limit Settings Card */}
+          <div className="bg-gradient-to-br from-blue-50/70 via-indigo-50/40 to-white rounded-2xl p-6 border border-blue-200 shadow-xs space-y-4">
+            <div className="flex items-center gap-2 text-blue-900 border-b border-blue-100 pb-3">
+              <Phone size={18} className="text-blue-700" />
+              <div>
+                <h3 className="font-bold text-sm sm:text-base text-blue-950">
+                  மாணவர் சமர்ப்பிப்பு வரம்புகள் & தொலைபேசி இலக்கக் கட்டுப்பாடு (Submission Limits & Rules)
+                </h3>
+                <p className="text-xs text-blue-700">
+                  ஒரு மாணவர் எத்தனை முறை படிவத்தை சமர்ப்பிக்கலாம் மற்றும் போலி பதிவுகளை எவ்வாறு தடுக்கலாம் என்பதை இங்கே தீர்மானிக்கவும்.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
+              {/* Max Submissions Limit */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-800">
+                  ஒரு மாணவர் / தொலைபேசி இலக்கத்திற்கான சமர்ப்பிப்பு வரம்பு (Max Allowed Submissions) *
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormMaxSubmissionsPerPhone(1)}
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all text-center ${
+                      formMaxSubmissionsPerPhone === 1
+                        ? 'bg-blue-700 text-white border-blue-700 shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    1 முறை மட்டுமே (1 Time Only)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormMaxSubmissionsPerPhone(2)}
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all text-center ${
+                      formMaxSubmissionsPerPhone === 2
+                        ? 'bg-blue-700 text-white border-blue-700 shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    2 முறைகள் (2 Times)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormMaxSubmissionsPerPhone(0)}
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all text-center ${
+                      formMaxSubmissionsPerPhone === 0
+                        ? 'bg-blue-700 text-white border-blue-700 shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    வரம்பற்றது (Unlimited)
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-tight">
+                  {formMaxSubmissionsPerPhone === 1
+                    ? '✓ ஒரு தொலைபேசி இலக்கத்திலிருந்து 1 முறை மட்டுமே சமர்ப்பிக்க முடியும் (பரிந்துரைக்கப்படுகிறது).'
+                    : formMaxSubmissionsPerPhone === 2
+                    ? '✓ ஒரு தொலைபேசி இலக்கத்திலிருந்து அதிகபட்சம் 2 முறை சமர்ப்பிக்க முடியும் (திருத்தங்கள் செய்ய ஏதுவாக).'
+                    : '⚠ எத்தனை முறை வேண்டுமானாலும் சமர்ப்பிக்கலாம்.'}
+                </p>
+              </div>
+
+              {/* Prevent Duplicate Phone Toggle */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-800">
+                  ஒரே தொலைபேசி இலக்கப் பாதுகாப்பு (Duplicate Phone Prevention)
+                </label>
+                <label className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 cursor-pointer hover:border-blue-300 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={formPreventDuplicatePhone}
+                    onChange={(e) => setFormPreventDuplicatePhone(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-800 block">மீண்டும் மீண்டும் பதிவு செய்வதைத் தடு (Enforce Phone Lock)</span>
+                    <span className="text-slate-500 text-[11px]">
+                      ஏற்கனவே சமர்ப்பிக்கப்பட்ட தொலைபேசி இலக்கத்தை மீண்டும் பதிவு செய்ய முடியாது.
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Admin Process Guide Note */}
+            <div className="bg-white/80 rounded-xl p-3.5 border border-blue-100 text-xs text-slate-600 space-y-1">
+              <span className="font-bold text-blue-900 flex items-center gap-1">
+                <CheckCircle2 size={13} className="text-emerald-600" />
+                நிர்வாகி செயல்முறை வழிகாட்டி (Admin Process Guide):
+              </span>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                1. படிவத்தை உருவாக்கும்போது அல்லது திருத்தும்போது மேலே உள்ள விருப்பத்தில் <strong>1 முறை</strong> அல்லது <strong>2 முறை</strong> என்பதைத் தேர்ந்தெடுக்கலாம்.<br />
+                2. படிவத்தில் உள்ள தொலைபேசி இலக்கம் (Phone / WhatsApp) முக்கிய அடையாளப் புலமாகப் பயன்படுத்தப்படும்.<br />
+                3. மாணவர் ஏற்கனவே சமர்ப்பித்திருந்தால், மீண்டும் சமர்ப்பிக்க முற்படும்போது அவர்களுக்குத் தெளிவான எச்சரிக்கை செய்தி காண்பிக்கப்பட்டு போலி பதிவுகள் தடுக்கப்படும்.
+              </p>
             </div>
           </div>
 

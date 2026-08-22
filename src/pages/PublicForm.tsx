@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
   getForms, 
+  getFastFormById,
   submitFormResponse, 
+  checkPhoneSubmissionStatus,
   CustomForm, 
   FormField, 
   SRI_LANKA_DISTRICTS, 
@@ -23,72 +25,137 @@ import {
   MapPin, 
   GraduationCap, 
   HelpCircle,
-  ExternalLink
+  ExternalLink,
+  ShieldCheck,
+  Info
 } from 'lucide-react';
 
 export default function PublicForm() {
   const { id } = useParams<{ id: string }>();
-  const [form, setForm] = useState<CustomForm | null>(null);
-  const [adminSettings, setAdminSettings] = useState<any>(null);
-  const [classesList, setClassesList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  // Instant fast form loading from synchronous memory/storage cache
+  const fastInitialForm = useMemo(() => id ? getFastFormById(id) : null, [id]);
+  
+  const [form, setForm] = useState<CustomForm | null>(fastInitialForm);
+  const [adminSettings, setAdminSettings] = useState<any>(() => {
+    try {
+      const cached = localStorage.getItem('dhines_admin_settings');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [classesList, setClassesList] = useState<any[]>(() => {
+    try {
+      const cached = localStorage.getItem('dhines_classes');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState(!fastInitialForm);
   const [error, setError] = useState<string | null>(null);
 
   // Form State
-  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [formData, setFormData] = useState<Record<string, any>>(() => {
+    const initial: Record<string, any> = {};
+    if (fastInitialForm) {
+      fastInitialForm.fields.forEach(field => {
+        if (field.type === 'checkbox') {
+          initial[field.id] = [];
+        } else {
+          initial[field.id] = '';
+        }
+      });
+    }
+    return initial;
+  });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [phoneStatusNotice, setPhoneStatusNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedData, setSubmittedData] = useState<any>(null);
 
+  // Background Sync to get latest form definition and settings without delaying initial paint
   useEffect(() => {
-    const loadForm = async () => {
-      setLoading(true);
+    let isMounted = true;
+
+    const syncLatestData = async () => {
       try {
         const [forms, settings, classes] = await Promise.all([
           getForms(),
           getAdminSettings(),
           getClasses()
         ]);
-        setAdminSettings(settings);
-        setClassesList(classes || []);
+
+        if (!isMounted) return;
+
+        if (settings) setAdminSettings(settings);
+        if (classes) setClassesList(classes);
 
         const targetForm = forms.find(f => f.id === id);
         if (targetForm) {
           setForm(targetForm);
-          // Initialize form data defaults
-          const initial: Record<string, any> = {};
-          targetForm.fields.forEach(field => {
-            if (field.type === 'checkbox') {
-              initial[field.id] = [];
-            } else {
-              initial[field.id] = '';
-            }
-          });
-          setFormData(initial);
-        } else {
+          // If form was not loaded during initial render, populate fields now
+          if (!form) {
+            const initial: Record<string, any> = {};
+            targetForm.fields.forEach(field => {
+              initial[field.id] = field.type === 'checkbox' ? [] : '';
+            });
+            setFormData(initial);
+          }
+        } else if (!form) {
           setError("கோரப்பட்ட படிவம் கிடைக்கவில்லை (Form Not Found)");
         }
       } catch (err: any) {
-        setError(err?.message || "படிவத்தை ஏற்றுவதில் பிழை ஏற்பட்டது.");
+        if (!form) {
+          setError(err?.message || "படிவத்தை ஏற்றுவதில் பிழை ஏற்பட்டது.");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
-    if (id) {
-      loadForm();
-    }
+    syncLatestData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
   const handleInputChange = (fieldId: string, value: any) => {
     setFormData(prev => ({ ...prev, [fieldId]: value }));
+    
+    // Clear errors when user is typing
     if (formErrors[fieldId]) {
       setFormErrors(prev => {
         const next = { ...prev };
         delete next[fieldId];
         return next;
       });
+    }
+
+    // Check phone status if this is a phone field
+    const fieldObj = form?.fields.find(f => f.id === fieldId);
+    if (fieldObj && fieldObj.type === 'phone' && form) {
+      const cleanPhone = String(value).replace(/[\s\-\+]/g, '');
+      if (cleanPhone.length >= 9) {
+        checkPhoneSubmissionStatus(form.id, cleanPhone).then(status => {
+          if (!status.isAllowed) {
+            setFormErrors(prev => ({
+              ...prev,
+              [fieldId]: status.reason || "இந்த தொலைபேசி இலக்கம் ஏற்கனவே பயன்படுத்தப்பட்டுள்ளது."
+            }));
+            setPhoneStatusNotice(null);
+          } else if (status.count > 0 && status.maxLimit > 1) {
+            setPhoneStatusNotice(`குறிப்பு: இந்த தொலைபேசி இலக்கத்திற்கு ${status.count} சமர்ப்பிப்பு உள்ளது (அதிகபட்சம் ${status.maxLimit}).`);
+          } else {
+            setPhoneStatusNotice(null);
+          }
+        });
+      } else {
+        setPhoneStatusNotice(null);
+      }
     }
   };
 
@@ -142,7 +209,7 @@ export default function PublicForm() {
     if (!validateForm()) {
       // Scroll to first error
       const firstErrorKey = Object.keys(formErrors)[0];
-      const el = document.getElementById(`field_${firstErrorKey}`);
+      const el = document.getElementById(`container_${firstErrorKey}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
@@ -156,7 +223,20 @@ export default function PublicForm() {
       setIsSubmitted(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
-      alert("சமர்ப்பிப்பதில் பிழை: " + (err?.message || "Failed to submit"));
+      const errorMsg = err?.message || "Failed to submit";
+      
+      // If error is about duplicate phone, highlight the phone field
+      const phoneField = form.fields.find(f => f.type === 'phone' || f.id === form.phoneFieldId);
+      if (phoneField && (errorMsg.includes("தொலைபேசி") || errorMsg.includes("Phone") || errorMsg.includes("ஏற்கனவே"))) {
+        setFormErrors(prev => ({
+          ...prev,
+          [phoneField.id]: errorMsg
+        }));
+        const el = document.getElementById(`container_${phoneField.id}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+
+      alert("சமர்ப்பிப்பில் பிழை: " + errorMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -174,6 +254,7 @@ export default function PublicForm() {
     });
     setFormData(initial);
     setFormErrors({});
+    setPhoneStatusNotice(null);
     setIsSubmitted(false);
     setSubmittedData(null);
   };
@@ -490,13 +571,24 @@ export default function PublicForm() {
               )}
             </div>
 
-            <div className="pt-2 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100">
+            <div className="pt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 border-t border-slate-100">
               <span className="flex items-center gap-1">
                 <span className="text-red-500 font-bold">*</span> கட்டாய விபரங்களைக் குறிக்கிறது (Required)
               </span>
-              <span className="text-slate-400">
-                பாதுகாப்பான படிவம்
-              </span>
+              <div className="flex items-center gap-2">
+                {form.maxSubmissionsPerPhone === 1 ? (
+                  <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-md font-semibold text-[11px]">
+                    <ShieldCheck size={12} className="text-amber-600" /> 1 மாணவருக்கு 1 பதிவு மட்டுமே (Single Submission)
+                  </span>
+                ) : form.maxSubmissionsPerPhone === 2 ? (
+                  <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-900 border border-purple-200 px-2 py-0.5 rounded-md font-semibold text-[11px]">
+                    <ShieldCheck size={12} className="text-purple-600" /> அதிகபட்சம் 2 பதிவுகள் (Max 2 Entries)
+                  </span>
+                ) : null}
+                <span className="text-slate-400">
+                  பாதுகாப்பான படிவம்
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -623,9 +715,16 @@ export default function PublicForm() {
 
                   {renderField(field)}
 
+                  {field.type === 'phone' && phoneStatusNotice && !errorMsg && (
+                    <div className="flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 px-3 py-2 rounded-lg mt-2 border border-blue-200">
+                      <Info size={14} className="shrink-0 text-blue-600" />
+                      <span>{phoneStatusNotice}</span>
+                    </div>
+                  )}
+
                   {errorMsg && (
-                    <div className="flex items-center gap-1.5 text-xs text-red-600 font-medium mt-2">
-                      <AlertCircle size={14} />
+                    <div className="flex items-center gap-1.5 text-xs text-red-600 font-medium mt-2 bg-red-50/50 p-2 rounded-lg border border-red-100">
+                      <AlertCircle size={14} className="shrink-0" />
                       <span>{errorMsg}</span>
                     </div>
                   )}
