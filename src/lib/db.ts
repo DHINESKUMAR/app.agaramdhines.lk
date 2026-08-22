@@ -206,10 +206,10 @@ const getData = async (key: string, defaultValue: any) => {
           if (singletonSnap.exists() && singletonSnap.data()?.data !== undefined) {
             const snapData = singletonSnap.data();
             const fbData = snapData.data;
-            if (Array.isArray(fbData) && fbData.length > 0) {
+            if (Array.isArray(fbData)) {
               return fbData;
             }
-            if (!Array.isArray(defaultValue) && fbData !== null && fbData !== undefined) {
+            if (fbData !== null && fbData !== undefined) {
               return fbData;
             }
           }
@@ -217,16 +217,15 @@ const getData = async (key: string, defaultValue: any) => {
           console.warn(`Error fetching singleton ${key}:`, singErr);
         }
 
-        // 2. Collection fallback: query collection if singleton document is empty or missing
+        // 2. Collection fallback: query collection ONLY if singleton document does NOT exist in Firestore
         if (Array.isArray(defaultValue) || ['forms', 'students', 'zoomLinks', 'formSubmissions', 'classes', 'subjects'].includes(key)) {
           try {
             const querySnapshot = await getDocs(collection(db, key));
             if (!querySnapshot.empty) {
               const colData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
               if (colData.length > 0) {
-                const merged = Array.isArray(localData) && localData.length > 0 ? mergeArraysById(localData, colData) : colData;
-                setDoc(doc(db, 'singletons', key), { data: merged, updatedAt: Date.now() }, { merge: true }).catch(() => {});
-                return merged;
+                setDoc(doc(db, 'singletons', key), { data: colData, updatedAt: Date.now() }, { merge: false }).catch(() => {});
+                return colData;
               }
             }
           } catch (colErr) {
@@ -1139,21 +1138,36 @@ export const saveForms = async (forms: CustomForm[]): Promise<void> => {
 };
 
 export const deleteForm = async (formId: string): Promise<CustomForm[]> => {
+  const targetId = String(formId || '').trim();
   const forms = await getForms();
-  const updatedForms = forms.filter(f => f.id !== formId);
+  const updatedForms = forms.filter(f => String(f.id).trim() !== targetId);
   
-  if (isFirebaseConfigured) {
+  if (isFirebaseConfigured && targetId) {
     try {
-      await deleteDoc(doc(db, 'forms', formId));
-    } catch (e) {}
+      await deleteDoc(doc(db, 'forms', targetId));
+    } catch (e) {
+      console.warn("Error deleting form doc from Firestore:", e);
+    }
   }
 
-  await saveForms(updatedForms);
+  delete memoryCache['forms'];
+  await saveData('forms', updatedForms);
 
-  // Also clean up submissions for this form
+  // Also clean up and permanently delete submissions for this form
   const submissions = await getFormSubmissions();
-  const updatedSubmissions = submissions.filter(s => s.formId !== formId);
-  await saveFormSubmissions(updatedSubmissions);
+  const toDeleteSubs = submissions.filter(s => String(s.formId).trim() === targetId);
+  const updatedSubmissions = submissions.filter(s => String(s.formId).trim() !== targetId);
+  
+  if (isFirebaseConfigured) {
+    for (const sub of toDeleteSubs) {
+      if (sub && sub.id) {
+        deleteDoc(doc(db, 'formSubmissions', String(sub.id))).catch(() => {});
+      }
+    }
+  }
+
+  delete memoryCache['formSubmissions'];
+  await saveData('formSubmissions', updatedSubmissions);
 
   return updatedForms;
 };
@@ -1355,10 +1369,96 @@ export const saveFormSubmissions = async (submissions: FormSubmission[]): Promis
 };
 
 export const deleteFormSubmission = async (submissionId: string): Promise<FormSubmission[]> => {
+  const targetId = String(submissionId || '').trim();
   const submissions = await getFormSubmissions();
-  const updated = submissions.filter(s => s.id !== submissionId);
-  await saveFormSubmissions(updated);
+  
+  // Filter out any item matching targetId (by id or trimmed id)
+  const updated = submissions.filter(s => {
+    if (!s) return false;
+    const sId = String(s.id || '').trim();
+    return sId !== targetId;
+  });
+
+  // 1. Explicitly delete doc from Firestore collection if exists
+  if (isFirebaseConfigured && targetId) {
+    try {
+      await deleteDoc(doc(db, 'formSubmissions', targetId));
+    } catch (e) {
+      console.warn("Firestore delete submission doc error:", e);
+    }
+  }
+
+  // 2. Clear memory cache so next read cannot return old data
+  delete memoryCache['formSubmissions'];
+
+  // 3. Clear and rewrite local storage
+  try {
+    localStorage.setItem('formSubmissions', JSON.stringify(updated));
+    localStorage.setItem('formSubmissions_backup', JSON.stringify({ data: updated, updatedAt: Date.now() }));
+  } catch (e) {}
+
+  // 4. Overwrite singletons/formSubmissions in Firestore
+  if (isFirebaseConfigured) {
+    try {
+      const singletonRef = doc(db, 'singletons', 'formSubmissions');
+      await setDoc(singletonRef, { data: updated, updatedAt: Date.now() }, { merge: false });
+    } catch (e) {
+      console.warn("Firestore singleton delete update error:", e);
+    }
+  }
+
+  window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'formSubmissions', data: updated } }));
+
   return updated;
+};
+
+export const deleteAllFormSubmissions = async (formId?: string): Promise<FormSubmission[]> => {
+  const submissions = await getFormSubmissions();
+  let remaining: FormSubmission[] = [];
+  let toDelete: FormSubmission[] = [];
+
+  if (formId && formId !== 'all') {
+    const targetFormId = String(formId).trim();
+    remaining = submissions.filter(s => String(s.formId).trim() !== targetFormId);
+    toDelete = submissions.filter(s => String(s.formId).trim() === targetFormId);
+  } else {
+    remaining = [];
+    toDelete = [...submissions];
+  }
+
+  // 1. Delete all individual documents from Firestore collection
+  if (isFirebaseConfigured) {
+    for (const sub of toDelete) {
+      if (sub && sub.id) {
+        deleteDoc(doc(db, 'formSubmissions', String(sub.id))).catch(() => {});
+      }
+    }
+  }
+
+  // 2. Clear memory cache and rewrite storage
+  delete memoryCache['formSubmissions'];
+  await saveData('formSubmissions', remaining);
+  return remaining;
+};
+
+export const purgeDatabaseCache = async (): Promise<void> => {
+  // Clear in-memory cache
+  Object.keys(memoryCache).forEach(k => delete memoryCache[k]);
+  
+  // Clean up any stale keys from localStorage
+  try {
+    const allKeys = ['forms', 'formSubmissions', 'students', 'zoomLinks', 'classes', 'subjects'];
+    for (const k of allKeys) {
+      delete memoryCache[k];
+    }
+  } catch (e) {}
+
+  // Trigger sync with Firestore
+  if (isFirebaseConfigured) {
+    try {
+      await syncDatabaseWithCloud(true);
+    } catch (e) {}
+  }
 };
 
 export const checkPhoneSubmissionStatus = async (formId: string, rawPhone: string) => {

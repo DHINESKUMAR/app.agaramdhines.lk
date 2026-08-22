@@ -5,6 +5,8 @@ import {
   deleteForm, 
   getFormSubmissions, 
   deleteFormSubmission, 
+  deleteAllFormSubmissions,
+  purgeDatabaseCache,
   saveFormSubmissions,
   CustomForm, 
   FormField, 
@@ -248,7 +250,7 @@ export default function AdminForms() {
 
   // Delete Individual Submission
   const handleDeleteSubmission = async (submissionId: string) => {
-    if (!window.confirm("இந்த மாணவர் சமர்ப்பிப்பை நிச்சயமாக நீக்க வேண்டுமா? இது டேட்டாபேஸ் மற்றும் கணினி கேச்சிலிருந்து முற்றிலும் நீக்கப்படும்.")) {
+    if (!window.confirm("இந்த மாணவர் சமர்ப்பிப்பை நிச்சயமாக நீக்க வேண்டுமா? இது டேட்டாபேஸ், கிளவுட் மற்றும் கணினி கேச்சிலிருந்து முற்றிலும் நிரந்தரமாக நீக்கப்படும்.")) {
       return;
     }
     try {
@@ -257,9 +259,48 @@ export default function AdminForms() {
       if (viewSubmissionModal?.id === submissionId) {
         setViewSubmissionModal(null);
       }
-      alert("சமர்ப்பிப்பு நீக்கப்பட்டது.");
+      alert("சமர்ப்பிப்பு நிரந்தரமாக நீக்கப்பட்டது (Successfully Deleted).");
     } catch (err: any) {
       alert("பிழை: " + err?.message);
+    }
+  };
+
+  // Clear All Submissions (or for Selected Form)
+  const handleClearAllSubmissions = async () => {
+    const isFormSpecific = selectedFormFilter !== 'all';
+    const msg = isFormSpecific
+      ? "இந்த குறிப்பிட்ட படிவத்தின் அனைத்து சமர்ப்பிப்புகளையும் டேட்டாபேஸ் மற்றும் கேச்சிலிருந்து நிரந்தரமாக நீக்க வேண்டுமா?"
+      : "அனைத்துப் படிவங்களின் அனைத்து சமர்ப்பிப்புகளையும் டேட்டாபேஸ் மற்றும் கேச்சிலிருந்து நிரந்தரமாக நீக்க வேண்டுமா?";
+    
+    if (!window.confirm(msg)) {
+      return;
+    }
+
+    try {
+      const remaining = await deleteAllFormSubmissions(selectedFormFilter);
+      setSubmissions(remaining);
+      alert("அனைத்து சமர்ப்பிப்புகளும் நிரந்தரமாக அழிக்கப்பட்டன.");
+    } catch (err: any) {
+      alert("பிழை: " + err?.message);
+    }
+  };
+
+  // Refresh & Purge Cache
+  const handleRefreshAndPurge = async () => {
+    try {
+      setIsSyncing(true);
+      await purgeDatabaseCache();
+      const [freshForms, freshSubs] = await Promise.all([
+        getForms(),
+        getFormSubmissions()
+      ]);
+      setForms(freshForms || []);
+      setSubmissions(freshSubs || []);
+      alert("டேட்டாபேஸ் மற்றும் கேச் வெற்றிகரமாக புதுப்பிக்கப்பட்டது (Refreshed & Synced).");
+    } catch (err: any) {
+      alert("புதுப்பிப்பதில் பிழை: " + err?.message);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -980,8 +1021,17 @@ export default function AdminForms() {
               </div>
             </div>
 
-            {/* Export Buttons */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* Export & Management Buttons */}
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <button
+                onClick={handleRefreshAndPurge}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold transition-colors border border-blue-200"
+                title="டேட்டாபேஸ் மற்றும் கேச்சை முழுமையாக புதுப்பிக்க (Refresh & Sync Cloud)"
+              >
+                <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
+                <span>Sync / புதுப்பி</span>
+              </button>
+
               <button
                 onClick={handleExportExcel}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors shadow-2xs"
@@ -999,6 +1049,17 @@ export default function AdminForms() {
                 <Printer size={14} />
                 <span>Print PDF</span>
               </button>
+
+              {filteredSubmissions.length > 0 && (
+                <button
+                  onClick={handleClearAllSubmissions}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors border border-rose-200"
+                  title="அனைத்து சமர்ப்பிப்புகளையும் அழிக்க"
+                >
+                  <Trash2 size={14} />
+                  <span>அனைத்தும் நீக்கு (Clear All)</span>
+                </button>
+              )}
             </div>
           </div>
 
