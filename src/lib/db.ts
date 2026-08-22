@@ -206,22 +206,27 @@ const getData = async (key: string, defaultValue: any) => {
           if (singletonSnap.exists() && singletonSnap.data()?.data !== undefined) {
             const snapData = singletonSnap.data();
             const fbData = snapData.data;
-            return fbData;
+            if (Array.isArray(fbData) && fbData.length > 0) {
+              return fbData;
+            }
+            if (!Array.isArray(defaultValue) && fbData !== null && fbData !== undefined) {
+              return fbData;
+            }
           }
         } catch (singErr) {
           console.warn(`Error fetching singleton ${key}:`, singErr);
         }
 
-        // 2. Legacy fallback: query collection once only if singleton document does not exist
-        if (Array.isArray(defaultValue)) {
+        // 2. Collection fallback: query collection if singleton document is empty or missing
+        if (Array.isArray(defaultValue) || ['forms', 'students', 'zoomLinks', 'formSubmissions', 'classes', 'subjects'].includes(key)) {
           try {
             const querySnapshot = await getDocs(collection(db, key));
             if (!querySnapshot.empty) {
               const colData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
               if (colData.length > 0) {
-                const initialData = Array.isArray(localData) && localData.length > 0 ? localData : colData;
-                setDoc(doc(db, 'singletons', key), { data: initialData, updatedAt: Date.now() }, { merge: true }).catch(() => {});
-                return initialData;
+                const merged = Array.isArray(localData) && localData.length > 0 ? mergeArraysById(localData, colData) : colData;
+                setDoc(doc(db, 'singletons', key), { data: merged, updatedAt: Date.now() }, { merge: true }).catch(() => {});
+                return merged;
               }
             }
           } catch (colErr) {
@@ -293,8 +298,17 @@ const saveData = async (key: string, data: any) => {
     try {
       const singletonRef = doc(db, 'singletons', key);
       await setDoc(singletonRef, { data: cleanData, updatedAt: now }, { merge: true });
+
+      // If this is an array of items with IDs (e.g. forms, students, zoomLinks, formSubmissions), also sync individual documents
+      if (Array.isArray(cleanData) && ['forms', 'students', 'zoomLinks', 'formSubmissions'].includes(key)) {
+        for (const item of cleanData.slice(0, 100)) {
+          if (item && item.id) {
+            setDoc(doc(db, key, String(item.id)), { ...item, updatedAt: item.updatedAt || new Date().toISOString() }, { merge: true }).catch(() => {});
+          }
+        }
+      }
     } catch (error: any) {
-      console.warn(`Firebase async sync scheduled for ${key}:`, error?.message || error);
+      console.warn(`Firebase sync warning for ${key}:`, error?.message || error);
     }
   }
 };
@@ -652,22 +666,9 @@ export const deleteStudent = async (id: string | number) => {
 
 export const getZoomLinks = async () => {
   const links = await getData('zoomLinks', []);
-  const now = new Date().getTime();
-  const fiveHours = 5 * 60 * 60 * 1000;
-  
-  const validLinks = links.filter((link: any) => {
-    if (!link.datetime) return true;
-    const linkTime = new Date(link.datetime).getTime();
-    return (now - linkTime) < fiveHours;
-  });
-  
-  if (validLinks.length !== links.length) {
-    await saveZoomLinks(validLinks);
-  }
-  
-  return validLinks;
+  return Array.isArray(links) ? links : [];
 };
-export const saveZoomLinks = (links: any) => saveData('zoomLinks', links);
+export const saveZoomLinks = (links: any) => saveData('zoomLinks', Array.isArray(links) ? links : []);
 
 export const getCourses = () => getData('courses', []);
 export const saveCourses = (courses: any) => saveData('courses', courses);
@@ -1075,6 +1076,39 @@ export const getFastFormById = (formId: string): CustomForm | null => {
   return DEFAULT_FORMS.find(f => f.id === formId) || null;
 };
 
+// Asynchronous Form Fetch with Direct Firestore Document Lookup (Ensures phone and computer sync 100%)
+export const getFormByIdAsync = async (formId: string): Promise<CustomForm | null> => {
+  const fast = getFastFormById(formId);
+  if (fast) return fast;
+
+  if (isFirebaseConfigured) {
+    try {
+      // 1. Direct document read from Firestore collection 'forms'
+      const docRef = doc(db, 'forms', formId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = { ...docSnap.data(), id: docSnap.id } as CustomForm;
+        // Cache it
+        const currentForms = await getForms();
+        if (!currentForms.some(f => f.id === formId)) {
+          const updated = [data, ...currentForms];
+          memoryCache['forms'] = { data: updated, timestamp: Date.now() };
+          try {
+            localStorage.setItem('forms', JSON.stringify(updated));
+          } catch (e) {}
+        }
+        return data;
+      }
+    } catch (e) {
+      console.warn("Direct form fetch error:", e);
+    }
+  }
+
+  // 2. Fetch full list as fallback
+  const allForms = await getForms();
+  return allForms.find(f => f.id === formId) || null;
+};
+
 export const getForms = async (): Promise<CustomForm[]> => {
   const forms = await getData('forms', null);
   if (!forms || !Array.isArray(forms) || forms.length === 0) {
@@ -1086,12 +1120,34 @@ export const getForms = async (): Promise<CustomForm[]> => {
 
 export const saveForms = async (forms: CustomForm[]): Promise<void> => {
   const clean = Array.isArray(forms) ? forms : [];
+  
+  // Also write individual form documents to Firestore
+  if (isFirebaseConfigured) {
+    try {
+      for (const form of clean) {
+        if (form && form.id) {
+          const docRef = doc(db, 'forms', String(form.id));
+          await setDoc(docRef, { ...form, updatedAt: form.updatedAt || new Date().toISOString() }, { merge: true });
+        }
+      }
+    } catch (e) {
+      console.warn("Error saving individual form docs to Firebase:", e);
+    }
+  }
+
   return saveData('forms', clean);
 };
 
 export const deleteForm = async (formId: string): Promise<CustomForm[]> => {
   const forms = await getForms();
   const updatedForms = forms.filter(f => f.id !== formId);
+  
+  if (isFirebaseConfigured) {
+    try {
+      await deleteDoc(doc(db, 'forms', formId));
+    } catch (e) {}
+  }
+
   await saveForms(updatedForms);
 
   // Also clean up submissions for this form
@@ -1109,6 +1165,17 @@ export const getFormSubmissions = async (): Promise<FormSubmission[]> => {
 
 export const saveFormSubmissions = async (submissions: FormSubmission[]): Promise<void> => {
   const clean = Array.isArray(submissions) ? submissions : [];
+  
+  if (isFirebaseConfigured) {
+    try {
+      for (const sub of clean.slice(0, 50)) {
+        if (sub && sub.id) {
+          setDoc(doc(db, 'formSubmissions', String(sub.id)), sub, { merge: true }).catch(() => {});
+        }
+      }
+    } catch (e) {}
+  }
+
   return saveData('formSubmissions', clean);
 };
 

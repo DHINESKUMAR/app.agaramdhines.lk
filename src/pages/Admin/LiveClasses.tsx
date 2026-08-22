@@ -43,6 +43,9 @@ export default function LiveClasses() {
     ? classes.find(c => c.name === selectedGrade)?.subjects || []
     : [];
 
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
   const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.subject || !formData.title || !formData.link || !formData.datetime) {
@@ -50,35 +53,46 @@ export default function LiveClasses() {
       return;
     }
 
-    const newLink = { 
-      id: Date.now().toString(), 
-      grade: selectedGrade,
-      subject: formData.subject,
-      title: formData.title,
-      link: formData.link,
-      datetime: formData.datetime,
-      hostKey: formData.hostKey,
-      meetingId: formData.meetingId,
-      passcode: formData.passcode,
-      dateAdded: new Date().toISOString()
-    };
-    
-    const updatedLinks = [...links, newLink];
-    setLinks(updatedLinks);
-    await saveZoomLinks(updatedLinks);
-    
-    // Add Notification for Students
-    if (selectedGrade) {
-      await addNotification({
+    setIsSaving(true);
+    try {
+      const newLink = { 
+        id: "zoom_" + Date.now().toString(), 
         grade: selectedGrade,
-        title: "புதிய Zoom வகுப்பு!",
-        message: `${formData.subject}: ${formData.title} வகுப்பு நேரலைக்காக சேர்க்கப்பட்டுள்ளது.`,
-        type: 'zoom_class',
-        createdAt: new Date().toISOString()
-      });
+        subject: formData.subject,
+        title: formData.title,
+        link: formData.link.trim(),
+        datetime: formData.datetime,
+        hostKey: formData.hostKey.trim(),
+        meetingId: formData.meetingId.trim(),
+        passcode: formData.passcode.trim(),
+        dateAdded: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      const currentLinks = await getZoomLinks();
+      const updatedLinks = [newLink, ...currentLinks.filter(l => l.id !== newLink.id)];
+      setLinks(updatedLinks);
+      await saveZoomLinks(updatedLinks);
+      
+      // Add Notification for Students
+      if (selectedGrade) {
+        await addNotification({
+          grade: selectedGrade,
+          title: "புதிய Zoom வகுப்பு!",
+          message: `${formData.subject}: ${formData.title} வகுப்பு நேரலைக்காக சேர்க்கப்பட்டுள்ளது.`,
+          type: 'zoom_class',
+          createdAt: new Date().toISOString()
+        });
+      }
+      
+      setFormData({ subject: '', title: '', link: '', datetime: '', hostKey: '', meetingId: '', passcode: '' });
+      setSaveSuccessMsg("Zoom இணைப்பு டேட்டாபேஸ் மற்றும் கணினியில் வெற்றிகரமாக சேமிக்கப்பட்டது!");
+      setTimeout(() => setSaveSuccessMsg(null), 3500);
+    } catch (err: any) {
+      alert("Zoom இணைப்பை சேமிப்பதில் பிழை: " + err?.message);
+    } finally {
+      setIsSaving(false);
     }
-    
-    setFormData({ subject: '', title: '', link: '', datetime: '', hostKey: '', meetingId: '', passcode: '' });
   };
 
   const handleDelete = async (id: string) => {
@@ -216,12 +230,19 @@ export default function LiveClasses() {
                     className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow" 
                   />
                 </div>
+                {saveSuccessMsg && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-sm flex items-center gap-2">
+                    <span>✓</span>
+                    <span>{saveSuccessMsg}</span>
+                  </div>
+                )}
                 <button 
                   type="submit" 
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center justify-center gap-2"
+                  disabled={isSaving}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <Video size={18} />
-                  Save Zoom Link
+                  {isSaving ? "டேட்டாபேஸில் சேமிக்கப்படுகிறது (Saving to DB)..." : "Save Zoom Link (சேமிக்கவும்)"}
                 </button>
               </form>
             </div>

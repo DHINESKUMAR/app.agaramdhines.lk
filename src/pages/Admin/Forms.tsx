@@ -61,6 +61,7 @@ export default function AdminForms() {
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSavingForm, setIsSavingForm] = useState(false);
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
 
   // Filters for Submissions
@@ -73,6 +74,7 @@ export default function AdminForms() {
   const [viewSubmissionModal, setViewSubmissionModal] = useState<FormSubmission | null>(null);
   const [editingForm, setEditingForm] = useState<CustomForm | null>(null);
   const [enrollingSubmission, setEnrollingSubmission] = useState<FormSubmission | null>(null);
+  const [createdFormSuccessModal, setCreatedFormSuccessModal] = useState<CustomForm | null>(null);
 
   // Create/Edit Form State
   const [formTitle, setFormTitle] = useState('');
@@ -176,7 +178,7 @@ export default function AdminForms() {
     window.open(whatsappUrl, '_blank');
   };
 
-  // Image Upload Handler with Canvas Compression (< 3MB input -> optimized 150KB - 250KB WebP/JPEG)
+  // Image Upload Handler with High Clarity Canvas Optimization (< 3MB input -> crisp 40-70KB WebP/JPEG)
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -194,7 +196,7 @@ export default function AdminForms() {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const maxDim = 1200;
+        const maxDim = 900;
         if (width > maxDim || height > maxDim) {
           if (width > height) {
             height = Math.round((height * maxDim) / width);
@@ -208,8 +210,10 @@ export default function AdminForms() {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.84);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.78);
           setFormHeaderImage(compressedDataUrl);
         } else {
           setFormHeaderImage(event.target?.result as string);
@@ -387,45 +391,53 @@ export default function AdminForms() {
       return;
     }
 
-    const now = new Date().toISOString();
-    const formId = editingForm ? editingForm.id : "form_" + Date.now();
+    setIsSavingForm(true);
 
-    // 3 points description array
-    const points = [formDescriptionPoint1, formDescriptionPoint2, formDescriptionPoint3]
-      .map(p => p.trim())
-      .filter(p => p.length > 0);
+    try {
+      const now = new Date().toISOString();
+      const formId = editingForm ? editingForm.id : "form_" + Date.now();
 
-    const newFormObj: CustomForm = {
-      id: formId,
-      title: formTitle.trim(),
-      description: formDescription.trim(),
-      headerImage: formHeaderImage ? formHeaderImage.trim() : undefined,
-      instituteSubtitle: formInstituteSubtitle.trim() || 'agrandinesh online academy',
-      descriptionPoints: points.length > 0 ? points : undefined,
-      category: formCategory,
-      status: formStatus,
-      themeColor: formThemeColor,
-      successMessage: formSuccessMessage.trim(),
-      maxSubmissionsPerPhone: Number(formMaxSubmissionsPerPhone),
-      preventDuplicatePhone: Boolean(formPreventDuplicatePhone),
-      phoneFieldId: formPhoneFieldId || undefined,
-      fields: formFields,
-      createdAt: editingForm ? editingForm.createdAt : now,
-      updatedAt: now
-    };
+      // 3 points description array
+      const points = [formDescriptionPoint1, formDescriptionPoint2, formDescriptionPoint3]
+        .map(p => p.trim())
+        .filter(p => p.length > 0);
 
-    let updatedForms: CustomForm[];
-    if (editingForm) {
-      updatedForms = forms.map(f => f.id === editingForm.id ? newFormObj : f);
-    } else {
-      updatedForms = [newFormObj, ...forms];
+      const newFormObj: CustomForm = {
+        id: formId,
+        title: formTitle.trim(),
+        description: formDescription.trim(),
+        headerImage: formHeaderImage ? formHeaderImage.trim() : undefined,
+        instituteSubtitle: formInstituteSubtitle.trim() || 'agrandinesh online academy',
+        descriptionPoints: points.length > 0 ? points : undefined,
+        category: formCategory,
+        status: formStatus,
+        themeColor: formThemeColor,
+        successMessage: formSuccessMessage.trim(),
+        maxSubmissionsPerPhone: Number(formMaxSubmissionsPerPhone),
+        preventDuplicatePhone: Boolean(formPreventDuplicatePhone),
+        phoneFieldId: formPhoneFieldId || undefined,
+        fields: formFields,
+        createdAt: editingForm ? editingForm.createdAt : now,
+        updatedAt: now
+      };
+
+      let updatedForms: CustomForm[];
+      if (editingForm) {
+        updatedForms = forms.map(f => f.id === editingForm.id ? newFormObj : f);
+      } else {
+        updatedForms = [newFormObj, ...forms];
+      }
+
+      await saveForms(updatedForms);
+      setForms(updatedForms);
+      setEditingForm(null);
+      setActiveTab('forms');
+      setCreatedFormSuccessModal(newFormObj);
+    } catch (err: any) {
+      alert("படிவத்தை சேமிப்பதில் பிழை ஏற்பட்டது: " + (err?.message || err));
+    } finally {
+      setIsSavingForm(false);
     }
-
-    await saveForms(updatedForms);
-    setForms(updatedForms);
-    alert(editingForm ? "படிவம் வெற்றிகரமாக திருத்தப்பட்டது!" : "புதிய படிவம் வெற்றிகரமாக உருவாக்கப்பட்டது!");
-    setEditingForm(null);
-    setActiveTab('forms');
   };
 
   // District Breakdown Calculation
@@ -1674,9 +1686,15 @@ export default function AdminForms() {
 
             <button
               type="submit"
-              className="bg-[#1e3a8a] hover:bg-blue-800 text-white px-7 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md active:scale-98"
+              disabled={isSavingForm || isUploadingImage}
+              className="bg-[#1e3a8a] hover:bg-blue-800 text-white px-7 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md active:scale-98 disabled:opacity-50 flex items-center gap-2"
             >
-              {editingForm ? "படிவத்தை புதுப்பிக்க (Update Form)" : "படிவத்தை சேமித்து வெளியிட (Publish Form)"}
+              {isSavingForm && <RefreshCw size={14} className="animate-spin" />}
+              {isSavingForm 
+                ? "டேட்டாபேஸ் மற்றும் கணினியில் சேமிக்கப்படுகிறது..." 
+                : editingForm 
+                  ? "படிவத்தை புதுப்பிக்க (Update Form)" 
+                  : "படிவத்தை சேமித்து வெளியிட (Publish Form)"}
             </button>
           </div>
 
@@ -1817,6 +1835,94 @@ export default function AdminForms() {
                   <UserPlus size={14} /> மாணவராகச் சேர் (Enroll Student)
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Form Saved & Ready to Share Modal */}
+      {createdFormSuccessModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-emerald-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="h-3 w-full bg-emerald-600" />
+            <div className="p-6 sm:p-8 space-y-6 text-center">
+              
+              <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                <CheckCircle2 size={36} />
+              </div>
+
+              <div>
+                <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full mb-2">
+                  ✓ டேட்டாபேஸ் & கணினியில் வெற்றிகரமாக சேமிக்கப்பட்டது
+                </span>
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900">
+                  படிவம் தயார்! இணைப்பைப் பகிருங்கள்
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                  {createdFormSuccessModal.title}
+                </p>
+              </div>
+
+              {/* Shareable Link Box */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left space-y-2">
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
+                  படிவத்தின் பொது இணைப்பு (Public Share Link):
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${window.location.origin}/form/${createdFormSuccessModal.id}`}
+                    className="flex-1 bg-white border border-slate-300 px-3 py-2 rounded-xl text-xs sm:text-sm font-mono text-slate-700 select-all focus:outline-none"
+                  />
+                  <button
+                    onClick={() => handleCopyLink(createdFormSuccessModal.id)}
+                    className="inline-flex items-center gap-1 bg-[#1e3a8a] hover:bg-blue-800 text-white px-3.5 py-2 rounded-xl font-bold text-xs transition-all shrink-0 shadow-xs"
+                  >
+                    {copiedId === createdFormSuccessModal.id ? (
+                      <>
+                        <Check size={14} className="text-emerald-300" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => handleShareWhatsApp(createdFormSuccessModal)}
+                  className="flex-1 inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebd5a] text-white px-4 py-3 rounded-xl font-bold text-xs sm:text-sm shadow-sm transition-all"
+                >
+                  <MessageSquare size={16} />
+                  <span>WhatsApp இல் பகிர்க</span>
+                </button>
+                <a
+                  href={`/form/${createdFormSuccessModal.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs sm:text-sm transition-all"
+                >
+                  <ExternalLink size={16} />
+                  <span>படிவத்தை திறக்க (Open Form)</span>
+                </a>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => setCreatedFormSuccessModal(null)}
+                  className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
+                >
+                  மூடுக (Close)
+                </button>
+              </div>
+
             </div>
           </div>
         </div>

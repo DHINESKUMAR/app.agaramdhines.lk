@@ -1065,37 +1065,39 @@ export default function StudentDashboard() {
     }
     
     if (linkUrl) {
-      // Try to format standard zoom links for web client to work in iframe
-      let finalUrl = linkUrl;
+      const cleanUrl = linkUrl.trim();
+
+      // On mobile or direct click, open in new tab/app for 100% Zoom compatibility (avoiding iframe cross-origin camera/mic blocks)
+      // Check if user is on mobile or prefers direct zoom app
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // Direct launch in Zoom App or Browser
+        window.open(cleanUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      // Format standard zoom links for web client if iframe is used
+      let finalUrl = cleanUrl;
       try {
-        if (linkUrl.includes('zoom.us/j/')) {
-          const urlParts = new URL(linkUrl);
+        if (cleanUrl.includes('zoom.us/j/')) {
+          const urlParts = new URL(cleanUrl);
           const meetingId = urlParts.pathname.split('/j/')[1];
           const pwd = urlParts.searchParams.get('pwd');
-          // Base64 encode the student name to auto-fill the "Your Name" field in Zoom Web Client
           const encodedName = btoa(unescape(encodeURIComponent(studentData.name)));
-          // Use the standard wc/join path which handles passcodes better
           finalUrl = `https://zoom.us/wc/join/${meetingId}?prefer=1&un=${encodedName}${pwd ? '&pwd=' + pwd : ''}`;
-        } else if (linkUrl.includes('zoom.us/wc/join/')) {
-          // If it's already a wc/join link, try to append the name
-          const urlParts = new URL(linkUrl);
+        } else if (cleanUrl.includes('zoom.us/wc/join/')) {
+          const urlParts = new URL(cleanUrl);
           const encodedName = btoa(unescape(encodeURIComponent(studentData.name)));
           if (!urlParts.searchParams.has('un')) {
-            finalUrl = `${linkUrl}${linkUrl.includes('?') ? '&' : '?'}un=${encodedName}&prefer=1`;
+            finalUrl = `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}un=${encodedName}&prefer=1`;
           }
-        } else if (linkUrl.includes('zoom.us/wc/')) {
-          // Handle other wc formats
-          const urlParts = new URL(linkUrl);
-          const meetingId = urlParts.pathname.split('/wc/')[1].split('/')[0];
-          const pwd = urlParts.searchParams.get('pwd');
-          const encodedName = btoa(unescape(encodeURIComponent(studentData.name)));
-          finalUrl = `https://zoom.us/wc/join/${meetingId}?prefer=1&un=${encodedName}${pwd ? '&pwd=' + pwd : ''}`;
         }
       } catch (e) {
         console.error("Error formatting zoom link", e);
       }
       
-      // In-app zoom using iframe
+      // Store original link alongside formatted for external option
       setActiveMeetingUrl(finalUrl);
     } else {
       alert("Attendance Marked Successfully!");
@@ -1176,6 +1178,16 @@ export default function StudentDashboard() {
               Live Class
             </h2>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  window.open(activeMeetingUrl, '_blank', 'noopener,noreferrer');
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-md font-medium flex items-center gap-1.5 text-xs sm:text-sm"
+                title="Open in Zoom App or Browser Tab"
+              >
+                <ExternalLink size={16} />
+                <span>Open in Zoom App</span>
+              </button>
               <button 
                 onClick={async () => {
                   try {

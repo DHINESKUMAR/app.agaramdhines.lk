@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { 
   getForms, 
   getFastFormById,
+  getFormByIdAsync,
   submitFormResponse, 
   checkPhoneSubmissionStatus,
   CustomForm, 
@@ -116,12 +117,13 @@ export default function PublicForm() {
 
   // Background Sync to get latest form definition and settings without delaying initial paint
   useEffect(() => {
+    if (!id) return;
     let isMounted = true;
 
     const syncLatestData = async () => {
       try {
-        const [forms, settings, classes] = await Promise.all([
-          getForms(),
+        const [targetForm, settings, classes] = await Promise.all([
+          getFormByIdAsync(id),
           getAdminSettings(),
           getClasses()
         ]);
@@ -131,17 +133,19 @@ export default function PublicForm() {
         if (settings) setAdminSettings(settings);
         if (classes) setClassesList(classes);
 
-        const targetForm = forms.find(f => f.id === id);
         if (targetForm) {
           setForm(targetForm);
-          // If form was not loaded during initial render, populate fields now
-          if (!form) {
-            const initial: Record<string, any> = {};
+          setError(null);
+          // If form fields were not populated, initialize them now
+          setFormData(prev => {
+            const initial: Record<string, any> = { ...prev };
             targetForm.fields.forEach(field => {
-              initial[field.id] = field.type === 'checkbox' ? [] : '';
+              if (initial[field.id] === undefined) {
+                initial[field.id] = field.type === 'checkbox' ? [] : '';
+              }
             });
-            setFormData(initial);
-          }
+            return initial;
+          });
         } else if (!form) {
           setError("கோரப்பட்ட படிவம் கிடைக்கவில்லை (Form Not Found)");
         }
@@ -156,8 +160,23 @@ export default function PublicForm() {
 
     syncLatestData();
 
+    // Listen for real-time db updates (e.g. if admin updates the form while student has page open)
+    const handleDbUpdate = (e: any) => {
+      if (e?.detail?.key === 'forms' && isMounted) {
+        getFormByIdAsync(id).then(f => {
+          if (f && isMounted) {
+            setForm(f);
+            setError(null);
+          }
+        });
+      }
+    };
+
+    window.addEventListener('db_updated', handleDbUpdate);
+
     return () => {
       isMounted = false;
+      window.removeEventListener('db_updated', handleDbUpdate);
     };
   }, [id]);
 
