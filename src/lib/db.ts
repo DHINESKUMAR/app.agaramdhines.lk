@@ -2,9 +2,6 @@ import { db, isFirebaseConfigured } from './firebase';
 import { collection, doc, getDocs, getDoc, setDoc, deleteDoc, writeBatch, query, where, onSnapshot } from 'firebase/firestore';
 import { getUserSession, clearUserSession } from './authSession';
 
-const memoryCache: Record<string, { data: any; timestamp: number }> = {};
-const CACHE_TTL_MS = 2000; // 2 seconds short cache to prevent duplicate calls during single render
-
 // Real-time listener registry for Firebase singletons
 const activeListeners: Record<string, () => void> = {};
 
@@ -15,14 +12,12 @@ export const mergeArraysById = (primary: any[], secondary: any[]) => {
 
   const map = new Map<string, any>();
   
-  // Add secondary first
   secondary.forEach((item, index) => {
     if (!item) return;
     const key = item.id ? String(item.id).trim().toLowerCase() : `item_sec_${index}_${JSON.stringify(item)}`;
     map.set(key, item);
   });
 
-  // Overwrite with primary (newer/primary source)
   primary.forEach((item, index) => {
     if (!item) return;
     const key = item.id ? String(item.id).trim().toLowerCase() : `item_prim_${index}_${JSON.stringify(item)}`;
@@ -40,18 +35,7 @@ const setupRealtimeListener = (key: string) => {
       if (snapshot.exists() && snapshot.data()?.data !== undefined) {
         const snapPayload = snapshot.data();
         const serverData = snapPayload.data;
-        const serverUpdatedAt = Number(snapPayload.updatedAt || 0);
-
-        // Authoritative source of truth is Firestore cloud
-        const finalData = serverData;
-
-        memoryCache[key] = { data: finalData, timestamp: Date.now() };
-        try {
-          localStorage.setItem(key, JSON.stringify(finalData));
-          localStorage.setItem(`${key}_backup`, JSON.stringify({ data: finalData, updatedAt: serverUpdatedAt || Date.now() }));
-        } catch (e) {}
-
-        window.dispatchEvent(new CustomEvent('db_updated', { detail: { key, data: finalData } }));
+        window.dispatchEvent(new CustomEvent('db_updated', { detail: { key, data: serverData } }));
       }
     }, (err) => {
       console.warn(`Realtime snapshot error for ${key}:`, err);
@@ -111,17 +95,13 @@ const getStoredMetrics = (): DbMetrics => {
   };
 };
 
-const recordReadOperation = (count: number = 1, isCacheHit: boolean = false) => {
+const recordReadOperation = (count: number = 1) => {
   if (count <= 0) return;
   const metrics = getStoredMetrics();
   const now = new Date().toLocaleTimeString();
   
-  if (isCacheHit) {
-    metrics.cachedReadsToday += count;
-  } else {
-    metrics.readsToday += count;
-    metrics.totalReadsAllTime += count;
-  }
+  metrics.readsToday += count;
+  metrics.totalReadsAllTime += count;
   metrics.lastReadTime = now;
   try {
     localStorage.setItem('dbMetricsStats', JSON.stringify(metrics));
@@ -146,8 +126,8 @@ export const getDbHealthMetrics = (): DbMetrics => {
   return {
     ...metrics,
     isFirebaseConnected: isFirebaseConfigured,
-    healthStatus: isFirebaseConfigured ? "Healthy (Synced with Cloud)" : "Good (Local Storage Sync)",
-    healthScore: isFirebaseConfigured ? 100 : 95
+    healthStatus: isFirebaseConfigured ? "Direct Database Connection" : "Local Database Storage",
+    healthScore: 100
   };
 };
 
@@ -167,63 +147,33 @@ export const resetDbHealthMetrics = () => {
   return reset;
 };
 
-// Helper to get data from Firebase with localStorage fallback and memory caching
+// Direct Database Fetcher without caching layers
 const getData = async (key: string, defaultValue: any) => {
-  // Start realtime listener for instant cloud sync across all devices
   setupRealtimeListener(key);
-
-  // Check memory cache first
-  const cached = memoryCache[key];
-  if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
-    recordReadOperation(1, true);
-    return cached.data;
-  }
-
-  // Read local storage data first (with backup fallback)
-  let localData: any = null;
-  try {
-    const rawValue = localStorage.getItem(key);
-    if (rawValue && rawValue !== 'undefined' && rawValue !== 'null') {
-      localData = JSON.parse(rawValue);
-    } else {
-      const backupRaw = localStorage.getItem(`${key}_backup`);
-      if (backupRaw && backupRaw !== 'undefined' && backupRaw !== 'null') {
-        const parsedBackup = JSON.parse(backupRaw);
-        localData = parsedBackup?.data !== undefined ? parsedBackup.data : parsedBackup;
-      }
-    }
-  } catch (e) {
-    console.warn(`Error reading localStorage for ${key}:`, e);
-  }
 
   if (isFirebaseConfigured) {
     try {
       const fetchFirebase = async () => {
-        // 1. Try singletons document FIRST
+        // 1. Fetch from singletons collection in database
         try {
           const singletonRef = doc(db, 'singletons', key);
           const singletonSnap = await getDoc(singletonRef);
           if (singletonSnap.exists() && singletonSnap.data()?.data !== undefined) {
             const snapData = singletonSnap.data();
-            const fbData = snapData.data;
-            if (Array.isArray(fbData)) {
-              return fbData;
-            }
-            if (fbData !== null && fbData !== undefined) {
-              return fbData;
-            }
+            return snapData.data;
           }
         } catch (singErr) {
           console.warn(`Error fetching singleton ${key}:`, singErr);
         }
 
-        // 2. Collection fallback: query collection ONLY if singleton document does NOT exist in Firestore
+        // 2. Fetch from direct collection if singleton is not present
         if (Array.isArray(defaultValue) || ['forms', 'students', 'zoomLinks', 'formSubmissions', 'classes', 'subjects'].includes(key)) {
           try {
             const querySnapshot = await getDocs(collection(db, key));
             if (!querySnapshot.empty) {
-              const colData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+              const colData = querySnapshot.docs.map(d => ({ ...d.data(), id: d.id }));
               if (colData.length > 0) {
+                // Keep singleton in sync
                 setDoc(doc(db, 'singletons', key), { data: colData, updatedAt: Date.now() }, { merge: false }).catch(() => {});
                 return colData;
               }
@@ -233,72 +183,63 @@ const getData = async (key: string, defaultValue: any) => {
           }
         }
 
-        // Seed Firebase if singleton does not exist yet but local data exists
-        if (localData !== null && localData !== undefined) {
-          setDoc(doc(db, 'singletons', key), { data: localData, updatedAt: Date.now() }, { merge: true }).catch(() => {});
-          return localData;
-        }
-
-        return localData;
+        return null;
       };
 
-      const timeoutMs = 7000;
+      const timeoutMs = 8000;
       const fbData = await Promise.race([
         fetchFirebase(),
         new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs))
       ]);
 
       if (fbData !== null && fbData !== undefined) {
-        memoryCache[key] = { data: fbData, timestamp: Date.now() };
-        try {
-          localStorage.setItem(key, JSON.stringify(fbData));
-          localStorage.setItem(`${key}_backup`, JSON.stringify({ data: fbData, updatedAt: Date.now() }));
-        } catch (e) {}
-        recordReadOperation(1, false);
+        recordReadOperation(1);
         return fbData;
       }
     } catch (error: any) {
-      console.warn(`Firebase error fetching ${key}. Using local storage.`, error);
+      console.warn(`Firebase error fetching ${key}.`, error);
     }
   }
 
-  if (localData !== null && localData !== undefined) {
-    memoryCache[key] = { data: localData, timestamp: Date.now() };
-    recordReadOperation(1, true);
-    return localData;
+  // Fallback to local store on computer if network fails or offline
+  try {
+    const rawValue = localStorage.getItem(key);
+    if (rawValue && rawValue !== 'undefined' && rawValue !== 'null') {
+      recordReadOperation(1);
+      return JSON.parse(rawValue);
+    }
+  } catch (e) {
+    console.warn(`Error reading stored data for ${key}:`, e);
   }
 
-  memoryCache[key] = { data: defaultValue, timestamp: Date.now() };
-  recordReadOperation(1, false);
+  recordReadOperation(1);
   return defaultValue;
 };
 
-// Helper to save data to Firebase and localStorage simultaneously
+// Direct Database Saver - writes directly to Cloud Database and local store
 const saveData = async (key: string, data: any) => {
   const cleanData = JSON.parse(JSON.stringify(data ?? null));
   const now = Date.now();
 
   recordWriteOperation(1);
 
-  memoryCache[key] = { data: cleanData, timestamp: now };
-
+  // Store in local computer database
   try {
     localStorage.setItem(key, JSON.stringify(cleanData));
-    localStorage.setItem(`${key}_backup`, JSON.stringify({ data: cleanData, updatedAt: now }));
     localStorage.setItem(`${key}_lastSavedAt`, String(now));
   } catch (e) {
-    console.warn(`Failed to save ${key} to localStorage.`, e);
+    console.warn(`Failed to save ${key} to storage.`, e);
   }
 
-  // Dispatch custom event for real-time local updates
+  // Dispatch custom event for immediate UI updates
   window.dispatchEvent(new CustomEvent('db_updated', { detail: { key, data: cleanData } }));
 
   if (isFirebaseConfigured) {
     try {
       const singletonRef = doc(db, 'singletons', key);
-      await setDoc(singletonRef, { data: cleanData, updatedAt: now }, { merge: true });
+      await setDoc(singletonRef, { data: cleanData, updatedAt: now }, { merge: false });
 
-      // If this is an array of items with IDs (e.g. forms, students, zoomLinks, formSubmissions), also sync individual documents
+      // If key is students/forms/etc., sync individual documents cleanly
       if (Array.isArray(cleanData) && ['forms', 'students', 'zoomLinks', 'formSubmissions'].includes(key)) {
         for (const item of cleanData.slice(0, 100)) {
           if (item && item.id) {
@@ -668,94 +609,12 @@ export const deduplicateAndSanitizeStudents = (students: any[]): any[] => {
 };
 
 export const getStudents = async (): Promise<any[]> => {
-  const allCollected: any[] = [];
-
-  // 1. Fetch from main storage
-  try {
-    const raw = await getData('students', []);
-    if (Array.isArray(raw)) {
-      allCollected.push(...raw);
-    }
-  } catch (e) {
-    console.warn("Error reading students from main getData:", e);
+  // Read directly from database
+  const raw = await getData('students', []);
+  if (Array.isArray(raw)) {
+    return deduplicateAndSanitizeStudents(raw);
   }
-
-  // 2. Also fetch all documents from Firestore `students` collection to ensure every cloud student doc is included
-  if (isFirebaseConfigured) {
-    try {
-      const querySnapshot = await getDocs(collection(db, 'students'));
-      if (!querySnapshot.empty) {
-        querySnapshot.docs.forEach(d => {
-          const docData = d.data();
-          if (docData) {
-            allCollected.push({ ...docData, id: docData.id || d.id });
-          }
-        });
-      }
-    } catch (colErr) {
-      console.warn("Notice: could not query students collection:", colErr);
-    }
-  }
-
-  // 3. Check localStorage backups
-  try {
-    const backupRaw = localStorage.getItem('students_backup');
-    if (backupRaw) {
-      const parsedBackup = JSON.parse(backupRaw);
-      const bData = parsedBackup?.data !== undefined ? parsedBackup.data : parsedBackup;
-      if (Array.isArray(bData)) {
-        allCollected.push(...bData);
-      }
-    }
-  } catch (_) {}
-
-  // 4. Recover any enrolled student submissions from formSubmissions
-  try {
-    const subsRaw = localStorage.getItem('formSubmissions');
-    if (subsRaw) {
-      const subs = JSON.parse(subsRaw);
-      if (Array.isArray(subs)) {
-        subs.forEach((sub: any) => {
-          if (sub && (sub.status === 'enrolled' || sub.status === 'approved') && (sub.studentName || sub.name)) {
-            const name = sub.studentName || sub.name;
-            const rollNo = sub.rollNo || '';
-            const phone = sub.phone || sub.phoneNumber || '';
-            const grade = sub.grade || sub.className || '';
-            const district = sub.district || '';
-            const subId = sub.studentId || sub.studentCode || `STU_SUB_${sub.id}`;
-            allCollected.push({
-              id: subId,
-              name,
-              rollNo,
-              username: rollNo || phone || name,
-              password: '1234',
-              grade,
-              phone,
-              district,
-              subjects: sub.subjects || sub.enrolledClasses || [],
-              enrolledClasses: sub.subjects || sub.enrolledClasses || []
-            });
-          }
-        });
-      }
-    }
-  } catch (_) {}
-
-  // Clean and deduplicate strictly by ID
-  const sanitized = deduplicateAndSanitizeStudents(allCollected);
-
-  // Sync to memory cache and storage if list recovered
-  if (sanitized.length > 0) {
-    try {
-      localStorage.setItem('students', JSON.stringify(sanitized));
-      localStorage.setItem('students_backup', JSON.stringify({ data: sanitized, updatedAt: Date.now() }));
-      if (isFirebaseConfigured) {
-        setDoc(doc(db, 'singletons', 'students'), { data: sanitized, updatedAt: Date.now() }, { merge: true }).catch(() => {});
-      }
-    } catch (_) {}
-  }
-
-  return sanitized;
+  return [];
 };
 
 export const saveStudents = async (students: any) => {
@@ -773,9 +632,6 @@ export const deleteStudent = async (id: string | number) => {
     const sId = String(s.id || '').trim().toLowerCase();
     return sId !== targetId;
   });
-
-  // Clear memory cache so fresh reads immediately get updated state
-  delete memoryCache['students'];
 
   await saveData('students', updatedStudents);
 
@@ -1188,12 +1044,6 @@ const DEFAULT_FORMS: CustomForm[] = [
 
 // Instant Fast Form Fetch (Zero Delay for Students)
 export const getFastFormById = (formId: string): CustomForm | null => {
-  // Check memory cache
-  const cachedForms = memoryCache['forms']?.data;
-  if (Array.isArray(cachedForms)) {
-    const found = cachedForms.find((f: any) => f.id === formId);
-    if (found) return found;
-  }
   // Check local storage directly
   try {
     const raw = localStorage.getItem('forms');
@@ -1222,11 +1072,10 @@ export const getFormByIdAsync = async (formId: string): Promise<CustomForm | nul
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = { ...docSnap.data(), id: docSnap.id } as CustomForm;
-        // Cache it and update singleton list
+        // Update singleton list
         const currentForms = await getForms();
         if (!currentForms.some(f => f.id === formId)) {
           const updated = [data, ...currentForms];
-          memoryCache['forms'] = { data: updated, timestamp: Date.now() };
           try {
             localStorage.setItem('forms', JSON.stringify(updated));
           } catch (e) {}
@@ -1280,8 +1129,7 @@ export const getForms = async (): Promise<CustomForm[]> => {
   // 3. Fallback: Check if formSubmissions contain any formId (e.g. form_1787409164685) not in list
   try {
     const rawSubs = localStorage.getItem('formSubmissions');
-    const memorySubs = memoryCache['formSubmissions']?.data;
-    const subsToCheck = Array.isArray(memorySubs) ? memorySubs : (rawSubs ? JSON.parse(rawSubs) : []);
+    const subsToCheck = rawSubs ? JSON.parse(rawSubs) : [];
     if (Array.isArray(subsToCheck)) {
       for (const sub of subsToCheck) {
         if (sub && sub.formId && !list.some(f => f.id === sub.formId)) {
@@ -1327,8 +1175,6 @@ export const getForms = async (): Promise<CustomForm[]> => {
     await saveData('forms', DEFAULT_FORMS);
   }
 
-  // Update memoryCache & localStorage
-  memoryCache['forms'] = { data: list, timestamp: Date.now() };
   try {
     localStorage.setItem('forms', JSON.stringify(list));
   } catch (e) {}
@@ -1369,7 +1215,6 @@ export const deleteForm = async (formId: string): Promise<CustomForm[]> => {
     }
   }
 
-  delete memoryCache['forms'];
   await saveData('forms', updatedForms);
 
   // Also clean up and permanently delete submissions for this form
@@ -1385,7 +1230,6 @@ export const deleteForm = async (formId: string): Promise<CustomForm[]> => {
     }
   }
 
-  delete memoryCache['formSubmissions'];
   await saveData('formSubmissions', updatedSubmissions);
 
   return updatedForms;
@@ -1587,8 +1431,6 @@ export const getFormSubmissions = async (): Promise<FormSubmission[]> => {
   // Sort by newest submittedAt timestamp descending
   healed.sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
 
-  // Update memory cache and local storage
-  memoryCache['formSubmissions'] = { data: healed, timestamp: Date.now() };
   try {
     localStorage.setItem('formSubmissions', JSON.stringify(healed));
   } catch (e) {}
@@ -1636,16 +1478,12 @@ export const deleteFormSubmission = async (submissionId: string): Promise<FormSu
     }
   }
 
-  // 2. Clear memory cache so next read cannot return old data
-  delete memoryCache['formSubmissions'];
-
-  // 3. Clear and rewrite local storage
+  // 2. Clear and rewrite local storage
   try {
     localStorage.setItem('formSubmissions', JSON.stringify(updated));
-    localStorage.setItem('formSubmissions_backup', JSON.stringify({ data: updated, updatedAt: Date.now() }));
   } catch (e) {}
 
-  // 4. Overwrite singletons/formSubmissions in Firestore
+  // 3. Overwrite singletons/formSubmissions in Firestore
   if (isFirebaseConfigured) {
     try {
       const singletonRef = doc(db, 'singletons', 'formSubmissions');
@@ -1683,24 +1521,11 @@ export const deleteAllFormSubmissions = async (formId?: string): Promise<FormSub
     }
   }
 
-  // 2. Clear memory cache and rewrite storage
-  delete memoryCache['formSubmissions'];
   await saveData('formSubmissions', remaining);
   return remaining;
 };
 
 export const purgeDatabaseCache = async (): Promise<void> => {
-  // Clear in-memory cache
-  Object.keys(memoryCache).forEach(k => delete memoryCache[k]);
-  
-  // Clean up any stale keys from localStorage
-  try {
-    const allKeys = ['forms', 'formSubmissions', 'students', 'zoomLinks', 'classes', 'subjects'];
-    for (const k of allKeys) {
-      delete memoryCache[k];
-    }
-  } catch (e) {}
-
   // Trigger sync with Firestore
   if (isFirebaseConfigured) {
     try {
@@ -1819,11 +1644,8 @@ export const submitFormResponse = async (formId: string, payload: Record<string,
   return newSubmission;
 };
 
-export const syncDatabaseWithCloud = async (forceRefresh: boolean = false): Promise<void> => {
-  if (forceRefresh) {
-    Object.keys(memoryCache).forEach(k => delete memoryCache[k]);
-  }
-  // Re-fetch essential collections
+export const syncDatabaseWithCloud = async (_forceRefresh: boolean = false): Promise<void> => {
+  // Re-fetch essential collections directly from database
   await Promise.all([
     getData('students', []),
     getData('fees', []),

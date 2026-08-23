@@ -63,9 +63,9 @@ export default function Students() {
     try {
       const refreshed = await getStudents();
       setStudents(refreshed);
-      alert(`Database and cache successfully synchronized! (${refreshed.length} active students verified)`);
+      alert(`Database successfully refreshed directly from server! (${refreshed.length} active students loaded)`);
     } catch (err: any) {
-      alert("Error synchronizing student data: " + (err?.message || err));
+      alert("Error loading student data: " + (err?.message || err));
     } finally {
       setIsSyncing(false);
     }
