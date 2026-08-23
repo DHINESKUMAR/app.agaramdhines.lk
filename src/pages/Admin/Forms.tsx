@@ -331,16 +331,49 @@ export default function AdminForms() {
     try {
       const disp = getSubmissionDisplay(sub);
       const allStudents = await getStudents();
-      const existing = allStudents.find((s: any) => 
-        (s.phone && disp.phone && s.phone.replace(/[^0-9]/g, '') === disp.phone.replace(/[^0-9]/g, '')) ||
-        (s.rollNo && disp.rollNo && s.rollNo.toLowerCase() === disp.rollNo.toLowerCase()) ||
-        (s.name && disp.studentName && s.name.toLowerCase() === disp.studentName.toLowerCase())
-      );
+      const cleanPhone = disp.phone ? disp.phone.replace(/[^0-9]/g, '') : '';
+      const cleanName = disp.studentName ? disp.studentName.trim().toLowerCase().replace(/[\s_\-\.]+/g, '') : '';
+
+      const existing = allStudents.find((s: any) => {
+        if (!s) return false;
+        const sPhone = s.phone ? String(s.phone).replace(/[^0-9]/g, '') : '';
+        const sRoll = s.rollNo ? String(s.rollNo).trim().toLowerCase() : '';
+        const sName = s.name ? String(s.name).trim().toLowerCase().replace(/[\s_\-\.]+/g, '') : '';
+        const sUser = s.username ? String(s.username).trim().toLowerCase().replace(/[\s_\-\.]+/g, '') : '';
+
+        if (cleanPhone && sPhone && cleanPhone === sPhone) return true;
+        if (disp.rollNo && sRoll && sRoll === disp.rollNo.trim().toLowerCase()) return true;
+        if (cleanName && sName && cleanName === sName && (cleanPhone || sRoll || s.grade === disp.grade)) return true;
+        if (cleanName && sUser && cleanName === sUser) return true;
+        return false;
+      });
 
       if (existing) {
-        if (!window.confirm(`"${existing.name}" என்ற மாணவர் ஏற்கனவே பதிவு செய்யப்பட்டுள்ளார் (Roll: ${existing.rollNo || existing.id}). மீண்டும் புதியதாக சேர்க்க வேண்டுமா?`)) {
-          return;
-        }
+        // Update existing student with new data rather than creating a duplicate record
+        const updatedStudents = allStudents.map((s: any) => {
+          if (s.id === existing.id) {
+            return {
+              ...s,
+              phone: disp.phone || s.phone,
+              email: disp.email || s.email,
+              grade: disp.grade || s.grade,
+              district: disp.district || s.district,
+              updatedAt: new Date().toISOString()
+            };
+          }
+          return s;
+        });
+
+        await saveStudents(updatedStudents);
+
+        // Update submission status
+        const updatedSubs = submissions.map(s => s.id === sub.id ? { ...s, status: 'enrolled' as const } : s);
+        await saveFormSubmissions(updatedSubs);
+        setSubmissions(updatedSubs);
+
+        alert(`மாணவர் "${existing.name}" ஏற்கனவே பதிவு செய்யப்பட்டுள்ளார் (Roll No: ${existing.rollNo || existing.id}). விபரங்கள் வெற்றிகரமாக இணைக்கப்பட்டு புதுப்பிக்கப்பட்டது!`);
+        setEnrollingSubmission(null);
+        return;
       }
 
       const newRollNo = disp.rollNo || String(Math.floor(1000 + Math.random() * 9000));

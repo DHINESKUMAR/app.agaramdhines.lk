@@ -16,17 +16,17 @@ export const mergeArraysById = (primary: any[], secondary: any[]) => {
   const map = new Map<string, any>();
   
   // Add secondary first
-  secondary.forEach(item => {
+  secondary.forEach((item, index) => {
     if (!item) return;
-    const key = String(item.id || item.rollNo || item.username || item.phone || (item.grade && item.subject && item.title ? `${item.grade}_${item.subject}_${item.title}` : JSON.stringify(item))).trim().toLowerCase();
-    if (key) map.set(key, item);
+    const key = item.id ? String(item.id).trim().toLowerCase() : `item_sec_${index}_${JSON.stringify(item)}`;
+    map.set(key, item);
   });
 
   // Overwrite with primary (newer/primary source)
-  primary.forEach(item => {
+  primary.forEach((item, index) => {
     if (!item) return;
-    const key = String(item.id || item.rollNo || item.username || item.phone || (item.grade && item.subject && item.title ? `${item.grade}_${item.subject}_${item.title}` : JSON.stringify(item))).trim().toLowerCase();
-    if (key) map.set(key, item);
+    const key = item.id ? String(item.id).trim().toLowerCase() : `item_prim_${index}_${JSON.stringify(item)}`;
+    map.set(key, item);
   });
 
   return Array.from(map.values());
@@ -606,49 +606,184 @@ export const sanitizeSubjectList = (subs: any[]): string[] => {
   return Array.from(map.values());
 };
 
-export const getStudents = async () => {
-  const raw = await getData('students', []);
-  if (!Array.isArray(raw)) return [];
-  return raw.map((student: any) => {
-    if (!student) return student;
-    const subjects = sanitizeSubjectList(student.subjects || student.enrolledClasses || []);
-    return {
-      ...student,
-      subjects
-    };
+// --- Student Data Sanitization, Deduplication & Tombstone Registry ---
+
+// --- Student Data Sanitization & Lossless Persistence ---
+
+export const deduplicateAndSanitizeStudents = (students: any[]): any[] => {
+  if (!Array.isArray(students)) return [];
+
+  const map = new Map<string, any>();
+
+  students.forEach((student: any, index: number) => {
+    if (!student || typeof student !== 'object') return;
+
+    // Determine strict unique key: strictly unique student ID, or generated composite key
+    const rawId = student.id !== undefined && student.id !== null ? String(student.id).trim() : '';
+    const key = rawId ? rawId.toLowerCase() : `student_entry_${student.studentCode || ''}_${student.rollNo || ''}_${student.name || ''}_${student.grade || ''}_${student.phone || ''}_${index}`.toLowerCase();
+
+    const studentCleanSubjects = sanitizeSubjectList(student.subjects || student.enrolledClasses || []);
+
+    if (map.has(key)) {
+      const existing = map.get(key);
+      const mergedSubjects = sanitizeSubjectList([...(existing.subjects || existing.enrolledClasses || []), ...studentCleanSubjects]);
+      map.set(key, {
+        ...existing,
+        ...student,
+        id: existing.id || rawId || ("STU" + Math.floor(100000 + Math.random() * 900000)),
+        name: student.name || existing.name || "Student",
+        rollNo: student.rollNo !== undefined && student.rollNo !== null ? String(student.rollNo).trim() : (existing.rollNo || ''),
+        username: student.username || existing.username || student.rollNo || "student",
+        grade: student.grade || existing.grade || '',
+        subjects: mergedSubjects,
+        enrolledClasses: mergedSubjects,
+        zoomBlocked: Boolean(student.zoomBlocked !== undefined ? student.zoomBlocked : existing.zoomBlocked)
+      });
+    } else {
+      const cleanStudent = {
+        ...student,
+        id: rawId || ("STU" + Math.floor(100000 + Math.random() * 900000)),
+        name: student.name ? String(student.name).trim() : "Student",
+        rollNo: student.rollNo !== undefined && student.rollNo !== null ? String(student.rollNo).trim() : '',
+        username: student.username ? String(student.username).trim() : (student.rollNo ? String(student.rollNo).trim() : "student"),
+        password: student.password || "1234",
+        grade: student.grade ? String(student.grade).trim() : '',
+        phone: student.phone !== undefined && student.phone !== null ? String(student.phone).trim() : '',
+        email: student.email ? String(student.email).trim() : '',
+        district: student.district ? String(student.district).trim() : '',
+        guardianName: student.guardianName ? String(student.guardianName).trim() : '',
+        address: student.address ? String(student.address).trim() : '',
+        dob: student.dob ? String(student.dob).trim() : '',
+        gender: student.gender ? String(student.gender).trim() : '',
+        image: student.image || '',
+        subjects: studentCleanSubjects,
+        enrolledClasses: studentCleanSubjects,
+        zoomBlocked: Boolean(student.zoomBlocked)
+      };
+      map.set(key, cleanStudent);
+    }
   });
+
+  return Array.from(map.values());
+};
+
+export const getStudents = async (): Promise<any[]> => {
+  const allCollected: any[] = [];
+
+  // 1. Fetch from main storage
+  try {
+    const raw = await getData('students', []);
+    if (Array.isArray(raw)) {
+      allCollected.push(...raw);
+    }
+  } catch (e) {
+    console.warn("Error reading students from main getData:", e);
+  }
+
+  // 2. Also fetch all documents from Firestore `students` collection to ensure every cloud student doc is included
+  if (isFirebaseConfigured) {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'students'));
+      if (!querySnapshot.empty) {
+        querySnapshot.docs.forEach(d => {
+          const docData = d.data();
+          if (docData) {
+            allCollected.push({ ...docData, id: docData.id || d.id });
+          }
+        });
+      }
+    } catch (colErr) {
+      console.warn("Notice: could not query students collection:", colErr);
+    }
+  }
+
+  // 3. Check localStorage backups
+  try {
+    const backupRaw = localStorage.getItem('students_backup');
+    if (backupRaw) {
+      const parsedBackup = JSON.parse(backupRaw);
+      const bData = parsedBackup?.data !== undefined ? parsedBackup.data : parsedBackup;
+      if (Array.isArray(bData)) {
+        allCollected.push(...bData);
+      }
+    }
+  } catch (_) {}
+
+  // 4. Recover any enrolled student submissions from formSubmissions
+  try {
+    const subsRaw = localStorage.getItem('formSubmissions');
+    if (subsRaw) {
+      const subs = JSON.parse(subsRaw);
+      if (Array.isArray(subs)) {
+        subs.forEach((sub: any) => {
+          if (sub && (sub.status === 'enrolled' || sub.status === 'approved') && (sub.studentName || sub.name)) {
+            const name = sub.studentName || sub.name;
+            const rollNo = sub.rollNo || '';
+            const phone = sub.phone || sub.phoneNumber || '';
+            const grade = sub.grade || sub.className || '';
+            const district = sub.district || '';
+            const subId = sub.studentId || sub.studentCode || `STU_SUB_${sub.id}`;
+            allCollected.push({
+              id: subId,
+              name,
+              rollNo,
+              username: rollNo || phone || name,
+              password: '1234',
+              grade,
+              phone,
+              district,
+              subjects: sub.subjects || sub.enrolledClasses || [],
+              enrolledClasses: sub.subjects || sub.enrolledClasses || []
+            });
+          }
+        });
+      }
+    }
+  } catch (_) {}
+
+  // Clean and deduplicate strictly by ID
+  const sanitized = deduplicateAndSanitizeStudents(allCollected);
+
+  // Sync to memory cache and storage if list recovered
+  if (sanitized.length > 0) {
+    try {
+      localStorage.setItem('students', JSON.stringify(sanitized));
+      localStorage.setItem('students_backup', JSON.stringify({ data: sanitized, updatedAt: Date.now() }));
+      if (isFirebaseConfigured) {
+        setDoc(doc(db, 'singletons', 'students'), { data: sanitized, updatedAt: Date.now() }, { merge: true }).catch(() => {});
+      }
+    } catch (_) {}
+  }
+
+  return sanitized;
 };
 
 export const saveStudents = async (students: any) => {
-  const sanitized = (Array.isArray(students) ? students : []).map((student: any) => ({
-    ...student,
-    subjects: sanitizeSubjectList(student.subjects || student.enrolledClasses || []),
-    id: String(student.id || "STU" + Math.floor(100000 + Math.random() * 900000))
-  }));
-  return saveData('students', sanitized);
+  const cleanList = deduplicateAndSanitizeStudents(Array.isArray(students) ? students : []);
+  return saveData('students', cleanList);
 };
 
 export const deleteStudent = async (id: string | number) => {
   const targetId = String(id).trim().toLowerCase();
   const currentStudents = await getStudents();
+
+  // Strictly filter out only the exact student by ID
   const updatedStudents = (currentStudents || []).filter((s: any) => {
     if (!s) return false;
     const sId = String(s.id || '').trim().toLowerCase();
-    const sRoll = String(s.rollNo || '').trim().toLowerCase();
-    const sUser = String(s.username || '').trim().toLowerCase();
-    const sCode = String(s.studentCode || '').trim().toLowerCase();
-    return sId !== targetId && sRoll !== targetId && sUser !== targetId && sCode !== targetId;
+    return sId !== targetId;
   });
 
-  await saveStudents(updatedStudents);
+  // Clear memory cache so fresh reads immediately get updated state
+  delete memoryCache['students'];
+
+  await saveData('students', updatedStudents);
 
   try {
     const session = getUserSession();
     if (session) {
       const sessId = String(session?.id || session?.student_id || '').trim().toLowerCase();
-      const sessRoll = String(session?.rollNo || '').trim().toLowerCase();
-      const sessUser = String(session?.username || '').trim().toLowerCase();
-      if (sessId === targetId || sessRoll === targetId || sessUser === targetId) {
+      if (sessId === targetId) {
         clearUserSession();
       }
     }

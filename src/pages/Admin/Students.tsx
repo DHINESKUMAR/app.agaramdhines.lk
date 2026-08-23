@@ -3,7 +3,7 @@ import { getStudents, saveStudents, deleteStudent, getClasses, getAdminSettings,
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { secondaryAuth } from "../../lib/firebase";
 import * as XLSX from "xlsx";
-import { Printer, X, QrCode, Download, FileText, Copy, Check, User, LayoutGrid, List, Search, Eye, Edit, Trash2, ArrowLeft, BookOpen, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Printer, X, QrCode, Download, FileText, Copy, Check, User, LayoutGrid, List, Search, Eye, Edit, Trash2, ArrowLeft, BookOpen, ShieldCheck, ShieldAlert, RefreshCw } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
@@ -19,12 +19,57 @@ export default function Students() {
   const [filterSubject, setFilterSubject] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [importing, setImporting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [bulkImportGrade, setBulkImportGrade] = useState("");
   const [docModal, setDocModal] = useState<{ type: "idcard" | "certificate" | "details" | null, student: any }>({ type: null, student: null });
   const [adminSettings, setAdminSettings] = useState<any>(null);
   const [copiedIdAdmin, setCopiedIdAdmin] = useState(false);
   const [studentViewMode, setStudentViewMode] = useState<'grid' | 'table'>('grid');
   const printRef = useRef<HTMLDivElement>(null);
+
+  const checkStudentMatchesSearch = (s: any, queryStr: string) => {
+    if (!queryStr || !queryStr.trim()) return true;
+    if (!s) return false;
+
+    const rawQuery = queryStr.trim().toLowerCase();
+    const noSpaceQuery = rawQuery.replace(/[\s_\-\.]+/g, '');
+
+    const sName = (s.name || '').toLowerCase();
+    const sNameNoSpaces = sName.replace(/[\s_\-\.]+/g, '');
+    const sUser = (s.username || '').toLowerCase();
+    const sUserNoSpaces = sUser.replace(/[\s_\-\.]+/g, '');
+    const sRoll = (s.rollNo || '').toString().toLowerCase().trim();
+    const sId = (s.id || '').toString().toLowerCase().trim();
+    const sPhone = (s.phone || '').toString().replace(/[^0-9]/g, '');
+    const sGuardian = (s.guardianName || '').toLowerCase();
+
+    // Exact matches first
+    if (sRoll === rawQuery || sId === rawQuery || sUser === rawQuery) return true;
+
+    // Normalized matching
+    if (sUserNoSpaces === noSpaceQuery || sNameNoSpaces === noSpaceQuery) return true;
+    if (sName.includes(rawQuery) || sNameNoSpaces.includes(noSpaceQuery)) return true;
+    if (sUser.includes(rawQuery) || sUserNoSpaces.includes(noSpaceQuery)) return true;
+    if (sRoll.includes(rawQuery)) return true;
+    if (sId.includes(rawQuery)) return true;
+    if (sPhone && sPhone.includes(rawQuery)) return true;
+    if (sGuardian && sGuardian.includes(rawQuery)) return true;
+
+    return false;
+  };
+
+  const handleSyncAndCleanData = async () => {
+    setIsSyncing(true);
+    try {
+      const refreshed = await getStudents();
+      setStudents(refreshed);
+      alert(`Database and cache successfully synchronized! (${refreshed.length} active students verified)`);
+    } catch (err: any) {
+      alert("Error synchronizing student data: " + (err?.message || err));
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleDownloadDoc = async (format: 'png' | 'pdf') => {
     const element = printRef.current;
@@ -309,25 +354,33 @@ export default function Students() {
     try {
       const currentStudents = await getStudents();
       const targetUser = formData.username.trim().toLowerCase();
+      const targetUserNorm = targetUser.replace(/[\s_\-\.]+/g, '');
       const cleanRollNo = formData.rollNo ? formData.rollNo.toString().trim() : "";
+      const cleanNameNorm = formData.name.trim().toLowerCase().replace(/[\s_\-\.]+/g, '');
 
-      // Check if this student already exists by username or ID, if so update them
-      const existingStudentIndex = currentStudents.findIndex((s: any) => 
-        (s.username && s.username.toString().trim().toLowerCase() === targetUser) ||
-        (s.id && (formData as any).id && String(s.id).trim() === String((formData as any).id).trim())
-      );
+      // Check if this student already exists by exact ID or username
+      const existingStudentIndex = currentStudents.findIndex((s: any) => {
+        if (!s) return false;
+        const sUser = s.username ? String(s.username).trim().toLowerCase() : "";
+        const sId = s.id ? String(s.id).trim().toLowerCase() : "";
+
+        if ((formData as any).id && sId === String((formData as any).id).trim().toLowerCase()) return true;
+        if (targetUser && targetUser !== 'student' && sUser && sUser === targetUser) return true;
+        return false;
+      });
 
       let updatedStudents: any[];
 
       if (existingStudentIndex !== -1) {
-        // Update existing record
+        // Update existing record and preserve stable ID
+        const existingStudent = currentStudents[existingStudentIndex];
         updatedStudents = currentStudents.map((s: any, idx: number) => {
           if (idx === existingStudentIndex) {
             return {
-              ...s,
+              ...existingStudent,
               ...formData,
-              rollNo: cleanRollNo || s.rollNo || "",
-              id: String(s.id)
+              rollNo: cleanRollNo || existingStudent.rollNo || "",
+              id: existingStudent.id
             };
           }
           return s;
@@ -340,14 +393,14 @@ export default function Students() {
           rollNo: cleanRollNo,
           id: String(generatedId)
         };
-        updatedStudents = [...currentStudents.filter((s: any) => String(s.id) !== String(newStudent.id)), newStudent];
+        updatedStudents = [newStudent, ...currentStudents.filter((s: any) => String(s.id) !== String(newStudent.id))];
       }
       
       setUpdateProgress(70);
       
-      // Save to local storage and Firebase Database simultaneously
       await saveStudents(updatedStudents);
-      setStudents(updatedStudents);
+      const freshlySynced = await getStudents();
+      setStudents(freshlySynced);
       
       setUpdateProgress(100);
       
@@ -375,27 +428,31 @@ export default function Students() {
     
     try {
       const currentStudents = await getStudents();
-      const targetId = editingStudentId ? String(editingStudentId).trim() : "";
+      const targetId = editingStudentId ? String(editingStudentId).trim().toLowerCase() : "";
       const targetUser = formData.username ? formData.username.trim().toLowerCase() : "";
+      const targetUserNorm = targetUser.replace(/[\s_\-\.]+/g, '');
       const cleanRollNo = formData.rollNo ? formData.rollNo.toString().trim() : "";
 
       let matched = false;
       const updatedStudents = currentStudents.map((s: any) => {
-        const isMatch = (targetId && String(s.id).trim() === targetId) ||
-                        (targetUser && s.username && s.username.toString().trim().toLowerCase() === targetUser);
+        const sId = s.id ? String(s.id).trim().toLowerCase() : "";
+        const sUser = s.username ? String(s.username).trim().toLowerCase() : "";
+        const sUserNorm = sUser.replace(/[\s_\-\.]+/g, '');
+
+        const isMatch = (targetId && sId === targetId) ||
+                        (targetUser && (sUser === targetUser || sUserNorm === targetUserNorm));
         if (isMatch) {
           matched = true;
           return { 
             ...s, 
             ...formData, 
-            rollNo: cleanRollNo,
-            id: String(s.id || targetId || "STU" + Math.floor(100000 + Math.random() * 900000))
+            rollNo: cleanRollNo || s.rollNo || "",
+            id: s.id || targetId || "STU" + Math.floor(100000 + Math.random() * 900000)
           };
         }
         return s;
       });
 
-      // If for any reason the student wasn't in the list by ID, add/upsert the student
       if (!matched) {
         updatedStudents.push({
           ...formData,
@@ -406,7 +463,8 @@ export default function Students() {
       
       setUpdateProgress(70);
       await saveStudents(updatedStudents);
-      setStudents(updatedStudents);
+      const freshlySynced = await getStudents();
+      setStudents(freshlySynced);
       
       setUpdateProgress(100);
 
@@ -569,19 +627,7 @@ export default function Students() {
         ? true
         : studentSubs.some((sub: string) => sub === filterSubject.toLowerCase());
 
-      const searchLow = searchQuery.toLowerCase().trim();
-      const isNumericSearch = /^\d+$/.test(searchLow);
-
-      const matchesSearch = searchQuery 
-        ? s.name?.toLowerCase().includes(searchLow) || 
-          s.id?.toString().toLowerCase().includes(searchLow) ||
-          s.rollNo?.toString().toLowerCase().includes(searchLow) ||
-          (isNumericSearch && s.rollNo?.toString().endsWith(searchLow)) ||
-          (isNumericSearch && s.id?.toString().endsWith(searchLow)) ||
-          s.username?.toString().toLowerCase().includes(searchLow) ||
-          s.phone?.toString().includes(searchLow)
-        : true;
-      return matchesClass && matchesSubject && matchesSearch;
+      return matchesClass && matchesSubject && checkStudentMatchesSearch(s, searchQuery);
     });
 
     const dataToExport = filteredStudents.map(s => ({
@@ -621,19 +667,7 @@ export default function Students() {
         ? true
         : studentSubs.some((sub: string) => sub === filterSubject.toLowerCase());
 
-      const searchLow = searchQuery.toLowerCase().trim();
-      const isNumericSearch = /^\d+$/.test(searchLow);
-
-      const matchesSearch = searchQuery 
-        ? s.name?.toLowerCase().includes(searchLow) || 
-          s.id?.toString().toLowerCase().includes(searchLow) ||
-          s.rollNo?.toString().toLowerCase().includes(searchLow) ||
-          (isNumericSearch && s.rollNo?.toString().endsWith(searchLow)) ||
-          (isNumericSearch && s.id?.toString().endsWith(searchLow)) ||
-          s.username?.toString().toLowerCase().includes(searchLow) ||
-          s.phone?.toString().includes(searchLow)
-        : true;
-      return matchesClass && matchesSubject && matchesSearch;
+      return matchesClass && matchesSubject && checkStudentMatchesSearch(s, searchQuery);
     });
 
     const doc = new jsPDF();
@@ -1231,19 +1265,7 @@ export default function Students() {
         ? true
         : studentSubs.some((sub: string) => sub === filterSubject.toLowerCase());
 
-      const searchLow = searchQuery.toLowerCase().trim();
-      const isNumericSearch = /^\d+$/.test(searchLow);
-
-      const matchesSearch = searchQuery 
-        ? s.name?.toLowerCase().includes(searchLow) || 
-          s.id?.toString().toLowerCase().includes(searchLow) ||
-          s.rollNo?.toString().toLowerCase().includes(searchLow) ||
-          (isNumericSearch && s.rollNo?.toString().endsWith(searchLow)) ||
-          (isNumericSearch && s.id?.toString().endsWith(searchLow)) ||
-          s.username?.toString().toLowerCase().includes(searchLow) ||
-          s.phone?.toString().includes(searchLow)
-        : true;
-      return matchesClass && matchesSubject && matchesSearch;
+      return matchesClass && matchesSubject && checkStudentMatchesSearch(s, searchQuery);
     });
 
     const studentCountByClass = students.reduce((acc, s) => {
@@ -1331,6 +1353,17 @@ export default function Students() {
                   );
                 })}
               </select>
+
+              {/* Sync & Clean Button */}
+              <button
+                onClick={handleSyncAndCleanData}
+                disabled={isSyncing}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 shadow-2xs disabled:opacity-60"
+                title="Synchronize & Deduplicate Cache with Cloud Database"
+              >
+                <RefreshCw size={15} className={isSyncing ? "animate-spin text-indigo-600" : ""} />
+                {isSyncing ? "Syncing..." : "Sync & Clean"}
+              </button>
 
               {/* Bulk Assign Subjects Button */}
               <button
