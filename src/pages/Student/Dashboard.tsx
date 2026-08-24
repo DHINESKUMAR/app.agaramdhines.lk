@@ -47,7 +47,7 @@ import QrScanner from "../../components/QrScanner";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
-import RecordingSection from "../../components/RecordingSection";
+import RecordingSection, { deduplicateCourses } from "../../components/RecordingSection";
 
 import { getCourses, getCourseMaterials, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts, getStudentMenuLabels, DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels } from "../../lib/db";
 import { getUserSession, saveUserSession, clearUserSession } from "../../lib/authSession";
@@ -739,7 +739,7 @@ export default function StudentDashboard() {
         return filterItemByGradeAndSubject(item);
       };
 
-      setCourses(allCourses.filter(filterBySubjectAndGrade));
+      setCourses(deduplicateCourses(allCourses.filter(filterBySubjectAndGrade)));
       setCourseMaterials(allCourseMaterials.filter(filterBySubjectAndGrade));
       
       setZoomLinks(allZoomLinks.filter(filterBySubjectAndGrade));

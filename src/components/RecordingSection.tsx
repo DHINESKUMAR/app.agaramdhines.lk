@@ -244,6 +244,78 @@ export const doesItemMatchGrade = (item: RecordingItem, targetGrade: string): bo
   return false;
 };
 
+export const deduplicateCourses = (coursesList: any[]): any[] => {
+  if (!Array.isArray(coursesList)) return [];
+  const map = new Map<string, any>();
+
+  for (const item of coursesList) {
+    if (!item || !item.title) continue;
+    const cleanTitle = (item.title || '').trim().toLowerCase();
+    const cleanType = (item.type || (item.code ? 'html_code' : item.studentNames ? 'student_box' : item.gameType ? 'mobile_game' : item.imageUrl ? 'image_post' : 'webpost')).trim().toLowerCase();
+    const cleanCode = (item.code || '').trim();
+    const cleanContent = (item.content || '').trim();
+    // Unique key to merge duplicates while preserving distinct grade assignments
+    const key = `${cleanType}:::${cleanTitle}:::${cleanCode ? cleanCode.slice(0, 100) : cleanContent.slice(0, 50)}`;
+
+    const currentSubs = Array.from(new Set([
+      ...(Array.isArray(item.subjects) ? item.subjects : []),
+      item.subject
+    ].filter(Boolean)));
+
+    const currentGrades = Array.from(new Set([
+      ...(Array.isArray(item.grades) ? item.grades : []),
+      item.grade
+    ].filter(Boolean)));
+
+    if (!map.has(key)) {
+      map.set(key, {
+        ...item,
+        type: cleanType,
+        grades: currentGrades.length > 0 ? currentGrades : (item.grade ? [item.grade] : []),
+        grade: item.grade || currentGrades[0] || 'General',
+        subjects: currentSubs.length > 0 ? currentSubs : (item.subject ? [item.subject] : ['General']),
+        subject: currentSubs[0] || item.subject || 'General'
+      });
+    } else {
+      const existing = map.get(key)!;
+      // Merge subjects without duplication
+      const combinedSubs = Array.from(new Set([
+        ...(Array.isArray(existing.subjects) ? existing.subjects : []),
+        existing.subject,
+        ...currentSubs
+      ].filter(Boolean)));
+
+      // Merge grades without duplication
+      const combinedGrades = Array.from(new Set([
+        ...(Array.isArray(existing.grades) ? existing.grades : []),
+        existing.grade,
+        ...currentGrades
+      ].filter(Boolean)));
+
+      // Merge studentNames if student box
+      const combinedStudents = Array.from(new Set([
+        ...(Array.isArray(existing.studentNames) ? existing.studentNames : []),
+        ...(Array.isArray(item.studentNames) ? item.studentNames : [])
+      ].filter(Boolean)));
+
+      map.set(key, {
+        ...existing,
+        grades: combinedGrades,
+        grade: existing.grade || combinedGrades[0] || 'General',
+        subjects: combinedSubs,
+        subject: combinedSubs[0] || existing.subject || 'General',
+        studentNames: combinedStudents.length > 0 ? combinedStudents : existing.studentNames,
+        content: existing.content || item.content,
+        code: existing.code || item.code,
+        imageUrl: existing.imageUrl || item.imageUrl,
+        link: existing.link || item.link
+      });
+    }
+  }
+
+  return Array.from(map.values());
+};
+
 // Rectangular Card Color Palettes for Diverse Colorful Posts
 export const POST_COLOR_THEMES = [
   {
@@ -404,7 +476,7 @@ export default function RecordingSection({
       });
     }
 
-    return list;
+    return deduplicateCourses(list);
   }, [courses, webPosts]);
 
   // Extract count of posts for each grade
@@ -779,7 +851,10 @@ function ColorfulPostCard({
   onOpenCode,
   onPlayGame
 }: ColorfulPostCardProps) {
-  const [copied, setCopied] = useState(false);
+  const itemSubjects = Array.from(new Set([
+    ...(Array.isArray(item.subjects) ? item.subjects : []),
+    item.subject
+  ].filter(Boolean)));
 
   // 1. HTML / CODE LIVE WEB VIEW CARD
   if (item.type === 'html_code') {
@@ -792,7 +867,9 @@ function ColorfulPostCard({
               <Code size={12} />
               HTML Live Web View
             </span>
-            <span className="text-xs font-bold text-slate-500">{item.subject || 'Web / Code'}</span>
+            <span className="text-xs font-bold text-slate-500">
+              {itemSubjects.length > 1 ? `${itemSubjects.length} Classes` : (itemSubjects[0] || 'Web / Code')}
+            </span>
           </div>
 
           <h3 className={`text-lg sm:text-xl font-black ${theme.titleColor} leading-snug mb-3`}>
@@ -820,26 +897,24 @@ function ColorfulPostCard({
               className="w-full h-44 bg-white border-0"
             />
           </div>
+
+          {itemSubjects.length > 1 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {itemSubjects.map((sub, sIdx) => (
+                <span key={sIdx} className="text-[10px] font-bold px-2 py-0.5 bg-white/80 text-slate-700 rounded-md border border-slate-200">
+                  {sub}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="pt-4 border-t border-slate-200/60 flex items-center justify-between gap-2 mt-4">
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(rawCode);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            }}
-            className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1 transition-all"
-          >
-            {copied ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
-            {copied ? 'Copied' : 'Copy Code'}
-          </button>
-
+        <div className="pt-4 border-t border-slate-200/60 flex items-center justify-end gap-2 mt-4">
           <button
             onClick={onOpenCode}
-            className={`px-5 py-2 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer ${theme.btnBg}`}
+            className={`w-full py-2.5 font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer ${theme.btnBg}`}
           >
-            <Maximize2 size={13} />
+            <Maximize2 size={15} />
             முழுத்திரை / Fullscreen
           </button>
         </div>
@@ -894,7 +969,7 @@ function ColorfulPostCard({
         </div>
 
         <div className="pt-4 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-500 font-bold mt-3">
-          <span>{item.subject || 'All Subjects'}</span>
+          <span>{itemSubjects.length > 1 ? `${itemSubjects.length} Classes` : (itemSubjects[0] || 'All Subjects')}</span>
           <span className="text-indigo-600 font-black flex items-center gap-1">
             <Trophy size={14} /> Certified Excellence
           </span>
@@ -915,7 +990,7 @@ function ColorfulPostCard({
               <Gamepad2 size={12} />
               Educational Game
             </span>
-            <span className="text-xs font-bold text-indigo-300">{item.subject || 'Interactive'}</span>
+            <span className="text-xs font-bold text-indigo-300">{itemSubjects.length > 1 ? `${itemSubjects.length} Classes` : (itemSubjects[0] || 'Interactive')}</span>
           </div>
 
           <h3 className="text-lg sm:text-xl font-black text-white leading-snug mb-2 group-hover:text-amber-300 transition-colors">
@@ -968,7 +1043,7 @@ function ColorfulPostCard({
 
         <div className="flex items-center justify-between gap-2 mb-2">
           <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border border-white/60 ${theme.tagBg}`}>
-            {item.subject || 'Study Post'}
+            {itemSubjects.length > 1 ? `${itemSubjects.length} Classes` : (itemSubjects[0] || 'Study Post')}
           </span>
           <span className="text-xs font-bold text-slate-500">{item.grade || 'All'}</span>
         </div>

@@ -8,7 +8,7 @@ import {
 } from '../../lib/db';
 import { 
   GRADES_LIST, GRADE_COLOR_CONFIG, normalizeGradeString, doesItemMatchGrade,
-  POST_COLOR_THEMES, getPostTheme, RecordingItem
+  POST_COLOR_THEMES, getPostTheme, RecordingItem, deduplicateCourses
 } from '../../components/RecordingSection';
 import { 
   BookOpen, Plus, Trash2, ArrowLeft, ExternalLink, 
@@ -65,8 +65,13 @@ export default function Courses() {
     gameType: 'word_quiz' as 'word_quiz' | 'math_game' | 'memory_match' | 'flappy' | 'custom_url'
   });
 
-  const loadCoursesData = () => {
-    getCourses().then(setCourses);
+  const loadCoursesData = async () => {
+    const rawCourses = await getCourses();
+    const cleanCourses = deduplicateCourses(rawCourses);
+    setCourses(cleanCourses);
+    if (cleanCourses.length !== rawCourses.length) {
+      await saveCourses(cleanCourses);
+    }
     getClasses().then(setClasses);
     getStaffs().then(setStaffs);
     getSubjects().then(setAllSubjects);
@@ -254,42 +259,36 @@ export default function Courses() {
       });
       setEditingId(null);
     } else {
-      let count = 0;
+      // Create 1 post item per grade (with all selected subjects assigned), avoiding redundant duplicate entries
       const newItems: any[] = [];
       for (const g of selectedGrades) {
-        for (const s of selectedSubjects) {
-          newItems.push({
-            id: (Date.now() + count++).toString() + Math.random().toString().slice(2, 5),
-            type: itemType,
-            grade: g,
-            grades: [g],
-            subject: s,
-            subjects: [s],
-            title: formData.title,
-            link: cleanLink,
-            folder: formData.folder || 'General',
-            content: formData.content,
-            code: formData.code,
-            codeLanguage: formData.codeLanguage,
-            imageUrl: formData.imageUrl.trim(),
-            studentNames: parsedStudents,
-            gameType: formData.gameType,
-            createdAt: Date.now()
-          });
-        }
+        newItems.push({
+          id: Date.now().toString() + Math.random().toString().slice(2, 6),
+          type: itemType,
+          grade: g,
+          grades: selectedGrades,
+          subject: selectedSubjects[0] || 'General',
+          subjects: selectedSubjects,
+          title: formData.title,
+          link: cleanLink,
+          folder: formData.folder || 'General',
+          content: formData.content,
+          code: formData.code,
+          codeLanguage: formData.codeLanguage,
+          imageUrl: formData.imageUrl.trim(),
+          studentNames: parsedStudents,
+          gameType: formData.gameType,
+          createdAt: Date.now()
+        });
       }
       updatedCourses = [...newItems, ...updatedCourses];
     }
 
-    setCourses(updatedCourses);
-    await saveCourses(updatedCourses);
+    const cleanCourses = deduplicateCourses(updatedCourses);
+    setCourses(cleanCourses);
+    await saveCourses(cleanCourses);
 
-    const totalCreated = selectedGrades.length * selectedSubjects.length;
-    alert(
-      totalCreated === 1 
-        ? 'Post Item Saved Successfully! It is now visible inside the Grade page.' 
-        : `${totalCreated} Post Items Added Successfully across ${selectedGrades.length} Grades!`
-    );
+    alert(`Post Item Saved Successfully! Assigned to ${selectedGrades.length} Grade(s) and ${selectedSubjects.length} Subject(s).`);
 
     setSelectedGrades([]);
     setSelectedSubjects([]);
@@ -1006,7 +1005,7 @@ export default function Courses() {
         /* 2. DEDICATED GRADE POSTS HUB */
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => setSelectedLibraryGrade(null)}
                 className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl transition-all"
@@ -1016,6 +1015,19 @@ export default function Courses() {
               <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
                 {searchedCourses.length} Posts in {selectedLibraryGrade}
               </span>
+              <button
+                onClick={async () => {
+                  const raw = await getCourses();
+                  const deduped = deduplicateCourses(raw);
+                  setCourses(deduped);
+                  await saveCourses(deduped);
+                  alert(`Consolidated into ${deduped.length} unique posts with all subjects merged.`);
+                }}
+                className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl flex items-center gap-1 transition-all border border-indigo-200"
+                title="Consolidate duplicate posts"
+              >
+                <Sparkles size={13} /> Merge Duplicates
+              </button>
             </div>
 
             <div className="relative w-full sm:w-64">
@@ -1057,6 +1069,11 @@ export default function Courses() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {searchedCourses.map((course, idx) => {
                 const theme = getPostTheme(course, idx);
+                const itemSubjects = Array.from(new Set([
+                  ...(Array.isArray(course.subjects) ? course.subjects : []),
+                  course.subject
+                ].filter(Boolean)));
+
                 return (
                   <div
                     key={course.id || idx}
@@ -1076,9 +1093,24 @@ export default function Courses() {
                         {course.title}
                       </h3>
 
-                      <p className="text-xs text-slate-500 font-bold mb-2">
-                        Subject: <span className="text-indigo-600">{course.subject || 'General'}</span>
-                      </p>
+                      {itemSubjects.length > 1 ? (
+                        <div className="mb-2.5">
+                          <div className="text-[11px] font-bold text-slate-500 mb-1">
+                            Assigned Classes / Subjects ({itemSubjects.length}):
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {itemSubjects.map((sub, sIdx) => (
+                              <span key={sIdx} className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100/70 text-indigo-900 rounded-md border border-indigo-200/60">
+                                {sub}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-500 font-bold mb-2">
+                          Subject: <span className="text-indigo-600">{itemSubjects[0] || 'General'}</span>
+                        </p>
+                      )}
 
                       {course.content && (
                         <p className="text-xs text-slate-600 line-clamp-2 mb-3">{course.content}</p>
