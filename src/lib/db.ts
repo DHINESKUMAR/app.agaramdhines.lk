@@ -691,12 +691,12 @@ export interface StudentMenuLabels {
 
 export const DEFAULT_STUDENT_MENU_LABELS: StudentMenuLabels = {
   subjects: "My Subjects",
-  recording: "Recording",
+  recording: "Tamil Game",
   homework: "Homework",
   attendance: "Attendance",
   elearning: "E-Learning",
   marks: "Marks",
-  course_materials: "Course Material",
+  course_materials: "Course Material & PDF",
   rules: "Rules",
   fees: "Fees",
   chat: "Live Chat",

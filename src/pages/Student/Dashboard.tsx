@@ -8,6 +8,7 @@ import {
   DollarSign,
   User,
   Link,
+  Gamepad2,
   Video,
   Globe,
   Bell,
@@ -1582,10 +1583,10 @@ export default function StudentDashboard() {
                 onClick={() => handleTabSelect("courses")}
                 className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"
               >
-                <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-indigo-100 transition-colors">
-                  <Link size={28} />
+                <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-indigo-100 group-hover:scale-105 transition-all shadow-sm">
+                  <Gamepad2 size={28} />
                 </div>
-                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.recording || "Recording"}</span>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.recording || "Tamil Game"}</span>
               </div>
 
               <div

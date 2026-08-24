@@ -435,7 +435,7 @@ export default function Courses() {
   if (view === 'menu_labels') {
     const menuItemsConfig = [
       { key: 'subjects', defaultName: 'My Subjects', icon: <BookOpen className="text-pink-600" size={20} />, bg: 'bg-pink-50' },
-      { key: 'recording', defaultName: 'Recording', icon: <Play className="text-indigo-600" size={20} />, bg: 'bg-indigo-50' },
+      { key: 'recording', defaultName: 'Tamil Game / Recording', icon: <Gamepad2 className="text-indigo-600" size={20} />, bg: 'bg-indigo-50' },
       { key: 'homework', defaultName: 'Homework', icon: <FileText className="text-blue-600" size={20} />, bg: 'bg-blue-50' },
       { key: 'attendance', defaultName: 'Attendance', icon: <Calendar className="text-emerald-600" size={20} />, bg: 'bg-emerald-50' },
       { key: 'elearning', defaultName: 'E-Learning', icon: <Play className="text-rose-600" size={20} />, bg: 'bg-rose-50' },

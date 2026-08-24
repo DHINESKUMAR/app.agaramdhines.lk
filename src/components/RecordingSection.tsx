@@ -837,10 +837,10 @@ function ColorfulPostCard({
 
           <button
             onClick={onOpenCode}
-            className={`px-5 py-2 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md transition-all ${theme.btnBg}`}
+            className={`px-5 py-2 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer ${theme.btnBg}`}
           >
-            <Play size={13} fill="currentColor" />
-            Open Web View Runner
+            <Maximize2 size={13} />
+            முழுத்திரை / Fullscreen
           </button>
         </div>
       </div>
@@ -1031,97 +1031,111 @@ function ColorfulPostCard({
 // -------------------------------------------------------------
 
 function CodeLiveViewModal({ item, onClose }: { item: RecordingItem; onClose: () => void }) {
-  const [deviceMode, setDeviceMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [key, setKey] = useState(0);
+  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const containerWidths = {
-    desktop: 'w-full',
-    tablet: 'max-w-2xl',
-    mobile: 'max-w-sm'
+  const toggleBrowserFullscreen = () => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen?.().catch(() => {});
+      setIsBrowserFullscreen(true);
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+      setIsBrowserFullscreen(false);
+    }
   };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsBrowserFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // Format code to ensure full-width mobile responsive viewport and seamless rendering
+  const preparedCode = React.useMemo(() => {
+    let code = item.code || '';
+    if (!code) return '<!DOCTYPE html><html><body><p style="padding:20px;text-align:center;font-family:sans-serif;">பதிவு செய்யப்பட்ட வினாக்கள் எதுவும் இல்லை.</p></body></html>';
+    
+    // Check if viewport meta is included; if not, inject it for seamless mobile viewing
+    if (!code.includes('viewport') && !code.includes('width=device-width')) {
+      if (code.includes('<head>')) {
+        code = code.replace('<head>', '<head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">');
+      } else if (code.includes('<html>')) {
+        code = code.replace('<html>', '<html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes"></head>');
+      } else {
+        code = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes"><style>body{margin:0;padding:12px;box-sizing:border-box;}</style></head><body>${code}</body></html>`;
+      }
+    }
+    return code;
+  }, [item.code]);
 
   return (
     <motion.div
+      ref={containerRef}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md p-4 sm:p-6 flex items-center justify-center"
-      onClick={onClose}
+      className="fixed inset-0 z-[9999] bg-white flex flex-col w-full h-full m-0 p-0 overflow-hidden"
     >
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        onClick={(e) => e.stopPropagation()}
-        className="bg-slate-900 rounded-[2rem] border border-slate-700 w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden shadow-2xl"
-      >
-        {/* Modal Topbar */}
-        <div className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
-              <Code size={20} />
-            </div>
-            <div>
-              <h3 className="font-black text-white text-base leading-snug">{item.title}</h3>
-              <p className="text-xs text-emerald-400 font-mono flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Interactive Sandbox Runner
-              </p>
-            </div>
-          </div>
+      {/* Sleek Edge-to-Edge Top Bar with Back Button */}
+      <div className="bg-slate-900 text-white px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-4 border-b border-slate-800 shadow-md shrink-0">
+        {/* Prominent Back Button */}
+        <button
+          onClick={onClose}
+          className="px-3.5 sm:px-5 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl flex items-center gap-1.5 sm:gap-2 shadow-sm transition-all shrink-0 cursor-pointer"
+        >
+          <ArrowLeft size={18} />
+          <span>← பின்செல்க (Back)</span>
+        </button>
 
-          <div className="flex items-center gap-2">
-            <div className="hidden sm:flex items-center bg-slate-800 rounded-xl p-1 border border-slate-700">
-              <button
-                onClick={() => setDeviceMode('desktop')}
-                className={`p-1.5 rounded-lg text-xs font-bold ${deviceMode === 'desktop' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-              >
-                <Monitor size={14} />
-              </button>
-              <button
-                onClick={() => setDeviceMode('tablet')}
-                className={`p-1.5 rounded-lg text-xs font-bold ${deviceMode === 'tablet' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-              >
-                <Tablet size={14} />
-              </button>
-              <button
-                onClick={() => setDeviceMode('mobile')}
-                className={`p-1.5 rounded-lg text-xs font-bold ${deviceMode === 'mobile' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-              >
-                <Smartphone size={14} />
-              </button>
-            </div>
-
-            <button
-              onClick={() => setKey(prev => prev + 1)}
-              className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-all"
-              title="Reload Sandbox"
-            >
-              <RefreshCw size={16} />
-            </button>
-
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl transition-all"
-            >
-              Close
-            </button>
-          </div>
+        {/* Title and Info */}
+        <div className="flex-1 min-w-0 mx-2 text-center sm:text-left">
+          <h3 className="font-black text-white text-xs sm:text-base leading-tight truncate">
+            {item.title}
+          </h3>
+          <p className="text-[10px] sm:text-xs text-slate-400 font-bold truncate flex items-center justify-center sm:justify-start gap-1.5 mt-0.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+            <span className="text-emerald-300 font-semibold">{item.subject || 'நிகழ்நிலை வினாத்தாள்'}</span>
+            {item.grade && <span className="text-slate-400">• {item.grade}</span>}
+          </p>
         </div>
 
-        {/* Live Runner iframe */}
-        <div className="flex-1 bg-slate-950 flex items-center justify-center p-4 overflow-hidden">
-          <div className={`h-full transition-all duration-300 rounded-2xl overflow-hidden shadow-2xl border border-slate-700 bg-white ${containerWidths[deviceMode]}`}>
-            <iframe
-              key={key}
-              title={item.title}
-              srcDoc={item.code || ''}
-              sandbox="allow-scripts allow-modals allow-same-origin"
-              className="w-full h-full border-0 bg-white"
-            />
-          </div>
+        {/* Action Controls */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <button
+            onClick={() => setKey(prev => prev + 1)}
+            className="p-2 sm:px-3 sm:py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl border border-slate-700 flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer"
+            title="Reload Sandbox / மீண்டும் ஏற்று"
+          >
+            <RefreshCw size={15} />
+            <span className="hidden md:inline">மீண்டும் ஏற்று (Reload)</span>
+          </button>
+
+          <button
+            onClick={toggleBrowserFullscreen}
+            className="p-2 sm:px-3 sm:py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl border border-slate-700 flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer"
+            title="Toggle Device Fullscreen"
+          >
+            {isBrowserFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+            <span className="hidden lg:inline">{isBrowserFullscreen ? 'Exit Fullscreen' : 'முழுத்திரை (Fullscreen)'}</span>
+          </button>
         </div>
-      </motion.div>
+      </div>
+
+      {/* 100% True Edge-to-Edge Full Screen Iframe without Side Borders */}
+      <div className="flex-1 w-full h-full min-h-0 bg-white relative overflow-hidden m-0 p-0">
+        <iframe
+          key={key}
+          title={item.title}
+          srcDoc={preparedCode}
+          sandbox="allow-scripts allow-modals allow-same-origin allow-forms allow-popups allow-downloads"
+          allow="fullscreen; clipboard-read; clipboard-write"
+          className="w-full h-full border-0 bg-white m-0 p-0 block"
+          style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+        />
+      </div>
     </motion.div>
   );
 }
