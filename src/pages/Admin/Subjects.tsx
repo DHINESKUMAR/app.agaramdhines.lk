@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { getSubjects, saveSubjects, getClasses, saveClasses } from "../../lib/db";
-import { Plus, Trash2, BookOpen, Edit2, Check, X, IndianRupee, GraduationCap } from "lucide-react";
+import { getSubjects, saveSubjects, getClasses, saveClasses, getStudents } from "../../lib/db";
+import { Plus, Trash2, BookOpen, Edit2, Check, X, IndianRupee, GraduationCap, Search, RefreshCw } from "lucide-react";
 
 export default function SubjectsGrades() {
   const [subjects, setSubjects] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const [newSubject, setNewSubject] = useState("");
   const [newFee, setNewFee] = useState("");
@@ -15,10 +17,40 @@ export default function SubjectsGrades() {
   const [editingCategory, setEditingCategory] = useState<"Main" | "Sub">("Main");
   const [editingFees, setEditingFees] = useState<{[key: string]: string}>({});
 
+  const loadData = async () => {
+    const subs = await getSubjects();
+    setSubjects(subs);
+    const cls = await getClasses();
+    setClasses(cls);
+  };
+
   useEffect(() => {
-    getSubjects().then(setSubjects);
-    getClasses().then(setClasses);
+    loadData();
+
+    const handleDbUpdate = (e: any) => {
+      const key = e.detail?.key;
+      if (!key || key === 'subjects' || key === 'classes' || key === 'students') {
+        loadData();
+      }
+    };
+
+    window.addEventListener('db_updated', handleDbUpdate);
+    return () => window.removeEventListener('db_updated', handleDbUpdate);
   }, []);
+
+  const handleSyncSubjects = async () => {
+    setIsSyncing(true);
+    try {
+      const updated = await getSubjects();
+      setSubjects(updated);
+      await saveSubjects(updated);
+      alert(`அனைத்து பாடங்களும் வெற்றிகரமாக ஒருங்கிணைக்கப்பட்டன! / All subjects (${updated.length}) synced successfully!`);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleAddSubject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,14 +190,55 @@ export default function SubjectsGrades() {
           </div>
         </form>
 
+        {/* Search & Sync Header */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-6">
+          <div className="relative w-full sm:w-72">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search subjects (e.g. தமிழ், tamil)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery("")} 
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg">
+              Total: {subjects.length} Subjects
+            </span>
+            <button
+              onClick={handleSyncSubjects}
+              disabled={isSyncing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+              title="Sync subjects from all students, classes & courses"
+            >
+              <RefreshCw size={13} className={isSyncing ? "animate-spin" : ""} />
+              {isSyncing ? "Syncing..." : "Sync All"}
+            </button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {subjects.length === 0 ? (
+          {subjects.filter(s => !searchQuery || String(s?.name || "").toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
             <div className="col-span-full text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
               <BookOpen size={48} className="mx-auto text-gray-300 mb-3" />
-              <p className="text-gray-500 font-medium">No subjects added yet.</p>
+              <p className="text-gray-500 font-medium">
+                {searchQuery ? `No subjects found matching "${searchQuery}".` : "No subjects added yet."}
+              </p>
             </div>
           ) : (
-            subjects.map(subject => (
+            subjects
+              .filter(s => !searchQuery || String(s?.name || "").toLowerCase().includes(searchQuery.toLowerCase()))
+              .map(subject => (
               <div key={subject.id} className="group relative flex flex-col p-5 border border-gray-100 rounded-2xl bg-white shadow-sm hover:shadow-xl hover:border-blue-200 transition-all duration-300">
                 {editingId === subject.id ? (
                   <div className="space-y-3">

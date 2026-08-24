@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getClasses, saveClasses, getStudents, getStaffs, getSubjects } from '../../lib/db';
-import { Edit2, Trash2, Plus, GraduationCap } from 'lucide-react';
+import { getClasses, saveClasses, getStudents, getStaffs, getSubjects, saveSubjects } from '../../lib/db';
+import { Edit2, Trash2, Plus, GraduationCap, Check } from 'lucide-react';
 
 const GRADES = [
   "தரம் 01", "தரம் 02", "தரம் 03", "தரம் 04", "தரம் 05", 
@@ -58,12 +58,53 @@ export default function Classes() {
     handleTabChange('new');
   };
 
+  const [customSubjectInput, setCustomSubjectInput] = useState('');
+
   useEffect(() => {
-    getClasses().then(setClasses);
-    getStudents().then(setStudents);
-    getStaffs().then(setStaffs);
-    getSubjects().then(setAvailableSubjects);
+    const loadData = () => {
+      getClasses().then(setClasses);
+      getStudents().then(setStudents);
+      getStaffs().then(setStaffs);
+      getSubjects().then(setAvailableSubjects);
+    };
+
+    loadData();
+
+    const handleDbUpdate = (e: any) => {
+      const key = e.detail?.key;
+      if (!key || key === 'classes' || key === 'subjects' || key === 'students') {
+        loadData();
+      }
+    };
+
+    window.addEventListener('db_updated', handleDbUpdate);
+    return () => window.removeEventListener('db_updated', handleDbUpdate);
   }, [activeTab]);
+
+  const handleAddCustomSubject = async () => {
+    if (!customSubjectInput.trim()) return;
+    const cleanName = customSubjectInput.trim();
+    
+    // Check if already in available subjects
+    const existing = availableSubjects.find(s => s?.name?.toLowerCase() === cleanName.toLowerCase());
+    if (!existing) {
+      const newSub = {
+        id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        name: cleanName,
+        category: 'Main' as const,
+        fee: '0',
+        grade: formData.name || 'தரம் 11'
+      };
+      const updated = [...availableSubjects, newSub];
+      setAvailableSubjects(updated);
+      await saveSubjects(updated);
+    }
+
+    if (!formData.subjects.includes(cleanName)) {
+      setFormData(prev => ({ ...prev, subjects: [...prev.subjects, cleanName] }));
+    }
+    setCustomSubjectInput('');
+  };
 
   const handleAddClass = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -382,24 +423,79 @@ export default function Classes() {
             </div>
             
             <div className="relative">
-              <label className="absolute -top-2.5 left-3 bg-white px-1 text-xs font-medium text-blue-600">
-                Select Subjects*
-              </label>
-              <div className="w-full border border-blue-200 rounded-2xl px-4 py-4 text-sm bg-white grid grid-cols-2 md:grid-cols-3 gap-3">
-                {availableSubjects.map(subject => (
-                  <label key={subject.id} className="flex items-center space-x-2 cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={formData.subjects.includes(subject.name)}
-                      onChange={() => handleSubjectToggle(subject.name)}
-                      className="rounded text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-gray-700">{subject.name}</span>
-                  </label>
-                ))}
-                {availableSubjects.length === 0 && (
-                  <p className="text-gray-500 col-span-full">No subjects available. Please add subjects in "Manage Subjects" first.</p>
-                )}
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold text-blue-600">
+                  Select Subjects* ({formData.subjects.length} selected)
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, subjects: availableSubjects.map(s => s.name) }))}
+                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, subjects: [] }))}
+                    className="text-[11px] font-bold text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div className="w-full border border-blue-200 rounded-2xl p-4 text-sm bg-white space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-60 overflow-y-auto pr-1">
+                  {availableSubjects.map(subject => {
+                    const isChecked = formData.subjects.includes(subject.name);
+                    return (
+                      <label 
+                        key={subject.id || subject.name} 
+                        className={`flex items-center space-x-2 p-2 rounded-xl border cursor-pointer transition-all ${
+                          isChecked 
+                            ? 'bg-blue-50 border-blue-300 text-blue-900 font-bold' 
+                            : 'bg-slate-50/70 border-slate-200/80 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <input 
+                          type="checkbox" 
+                          checked={isChecked}
+                          onChange={() => handleSubjectToggle(subject.name)}
+                          className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+                        />
+                        <span className="text-xs">{subject.name}</span>
+                      </label>
+                    );
+                  })}
+                  {availableSubjects.length === 0 && (
+                    <p className="text-gray-500 col-span-full text-xs">No subjects available yet. Use the field below to add one.</p>
+                  )}
+                </div>
+
+                {/* Quick Add Subject inline */}
+                <div className="pt-3 border-t border-slate-100 flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter new subject name (e.g. தமிழ் வினா விடை)..."
+                    value={customSubjectInput}
+                    onChange={(e) => setCustomSubjectInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCustomSubject();
+                      }
+                    }}
+                    className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCustomSubject}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1 shadow-xs"
+                  >
+                    <Plus size={14} /> Add Subject
+                  </button>
+                </div>
               </div>
             </div>
             

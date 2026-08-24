@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   getCourses, saveCourses, getClasses, getStaffs, 
-  getSubjects, saveSubjects,
+  getSubjects, saveSubjects, getStudents,
   getStudentMenuLabels, saveStudentMenuLabels,
   DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels,
   mergeArraysById
@@ -25,6 +25,7 @@ export default function Courses() {
   const [courses, setCourses] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [staffs, setStaffs] = useState<any[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
   const [allSubjects, setAllSubjects] = useState<any[]>([]);
   const [menuLabels, setMenuLabels] = useState<StudentMenuLabels>(DEFAULT_STUDENT_MENU_LABELS);
   const [selectedLibraryGrade, setSelectedLibraryGrade] = useState<string | null>(null);
@@ -74,6 +75,7 @@ export default function Courses() {
     }
     getClasses().then(setClasses);
     getStaffs().then(setStaffs);
+    getStudents().then(setStudents);
     getSubjects().then(setAllSubjects);
     getStudentMenuLabels().then(setMenuLabels);
   };
@@ -81,9 +83,10 @@ export default function Courses() {
   useEffect(() => {
     loadCoursesData();
 
-    const handleDbUpdate = (e: CustomEvent) => {
-      if (e.detail?.key === 'courses' && Array.isArray(e.detail?.data)) {
-        setCourses(e.detail.data);
+    const handleDbUpdate = (e: any) => {
+      const key = e.detail?.key;
+      if (!key || key === 'courses' || key === 'subjects' || key === 'classes' || key === 'students') {
+        loadCoursesData();
       }
     };
     window.addEventListener('db_updated', handleDbUpdate as EventListener);
@@ -101,6 +104,7 @@ export default function Courses() {
     "History",
     ...classes.flatMap(c => c.subjects || []),
     ...staffs.flatMap(s => s.assignedClasses?.map((c: any) => c.subject) || []),
+    ...students.flatMap(s => s.subjects || s.enrolledClasses || []),
     ...allSubjects.map(s => s.name)
   ])).filter(Boolean);
 

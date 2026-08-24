@@ -619,7 +619,44 @@ export const getStudents = async (): Promise<any[]> => {
 
 export const saveStudents = async (students: any) => {
   const cleanList = deduplicateAndSanitizeStudents(Array.isArray(students) ? students : []);
-  return saveData('students', cleanList);
+  const res = await saveData('students', cleanList);
+
+  // Synchronize any new student subjects into the master subjects database
+  try {
+    const rawSubs = await getData('subjects', []);
+    const subMap = new Map<string, any>();
+    (Array.isArray(rawSubs) ? rawSubs : []).forEach((s: any) => {
+      if (s?.name) subMap.set(String(s.name).trim().toLowerCase(), s);
+    });
+
+    let hasNew = false;
+    cleanList.forEach((s: any) => {
+      const subs = Array.isArray(s.subjects) ? s.subjects : (s.enrolledClasses || []);
+      subs.forEach((subName: any) => {
+        if (!subName || typeof subName !== 'string') return;
+        const clean = subName.trim();
+        if (!clean) return;
+        const key = clean.toLowerCase();
+        if (!subMap.has(key)) {
+          hasNew = true;
+          subMap.set(key, {
+            id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            name: clean,
+            category: 'Sub',
+            fee: '0',
+            grade: s.grade || 'தரம் 11'
+          });
+        }
+      });
+    });
+
+    if (hasNew) {
+      const updatedList = Array.from(subMap.values());
+      await saveData('subjects', updatedList);
+    }
+  } catch (_) {}
+
+  return res;
 };
 
 export const deleteStudent = async (id: string | number) => {
@@ -763,7 +800,46 @@ export const getClasses = async () => {
   }
   return deduped;
 };
-export const saveClasses = (classes: any) => saveData('classes', classes);
+export const saveClasses = async (classes: any) => {
+  const res = await saveData('classes', classes);
+
+  // Synchronize any new class subjects into the master subjects database
+  try {
+    const rawSubs = await getData('subjects', []);
+    const subMap = new Map<string, any>();
+    (Array.isArray(rawSubs) ? rawSubs : []).forEach((s: any) => {
+      if (s?.name) subMap.set(String(s.name).trim().toLowerCase(), s);
+    });
+
+    let hasNew = false;
+    (Array.isArray(classes) ? classes : []).forEach((c: any) => {
+      const subs = Array.isArray(c.subjects) ? c.subjects : (c.subject ? [c.subject] : []);
+      subs.forEach((subName: any) => {
+        if (!subName || typeof subName !== 'string') return;
+        const clean = subName.trim();
+        if (!clean) return;
+        const key = clean.toLowerCase();
+        if (!subMap.has(key)) {
+          hasNew = true;
+          subMap.set(key, {
+            id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            name: clean,
+            category: 'Main',
+            fee: '0',
+            grade: c.name || 'தரம் 11'
+          });
+        }
+      });
+    });
+
+    if (hasNew) {
+      const updatedList = Array.from(subMap.values());
+      await saveData('subjects', updatedList);
+    }
+  } catch (_) {}
+
+  return res;
+};
 
 export const getHomework = () => getData('homework', []);
 export const saveHomework = (homework: any) => saveData('homework', homework);
@@ -787,12 +863,7 @@ export const getSubjects = async () => {
     { id: "sub_7", name: "தமிழ்", category: "Main", fee: "0" }
   ];
 
-  if (rawList === null || rawList === undefined) {
-    await saveData('subjects', defaultSubjects);
-    return defaultSubjects;
-  }
-
-  const listArray = Array.isArray(rawList) ? rawList : [];
+  const listArray = Array.isArray(rawList) ? rawList : (rawList === null || rawList === undefined ? defaultSubjects : []);
 
   // Deduplicate and sanitize list array
   const map = new Map<string, any>();
@@ -804,42 +875,106 @@ export const getSubjects = async () => {
     "தமிழ் இலக்கிய நயம் (தரம் 11)"
   ]);
 
-  for (const item of listArray) {
-    if (!item || !item.name) continue;
-    let rawName = String(item.name).replace(/\s+/g, ' ').trim();
-    if (!rawName) continue;
+  const addSubjectToMap = (item: any, defaultCat: "Main" | "Sub" = "Sub", defaultGrade = "தரம் 11") => {
+    if (!item) return;
+    const nameStr = typeof item === 'string' ? item : item.name;
+    if (!nameStr) return;
+    let rawName = String(nameStr).replace(/\s+/g, ' ').trim();
+    if (!rawName) return;
 
     // Consolidate redundant variants into single "தமிழ் இலக்கிய நயம்"
     if (redundantIlakkiaNayamVariants.has(rawName)) {
       rawName = "தமிழ் இலக்கிய நயம்";
-      item.name = "தமிழ் இலக்கிய நயம்";
     }
 
     const nameKey = rawName.toLowerCase();
 
     if (!map.has(nameKey)) {
-      map.set(nameKey, item);
-    } else {
+      map.set(nameKey, {
+        id: (typeof item === 'object' && item.id) ? item.id : `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        name: rawName,
+        category: (typeof item === 'object' && item.category) ? item.category : defaultCat,
+        fee: (typeof item === 'object' && item.fee) ? String(item.fee) : "0",
+        grade: (typeof item === 'object' && item.grade) ? item.grade : defaultGrade
+      });
+    } else if (typeof item === 'object') {
       const existing = map.get(nameKey);
       if ((!existing.fee || existing.fee === "0") && item.fee && item.fee !== "0") {
-        map.set(nameKey, item);
+        map.set(nameKey, { ...existing, ...item, name: rawName });
       }
     }
+  };
+
+  // 1. Process stored subjects
+  for (const item of listArray) {
+    addSubjectToMap(item);
   }
 
-  // Ensure default main subjects exist
+  // 2. Ensure default main subjects exist
   defaultSubjects.forEach(def => {
-    const key = def.name.toLowerCase();
-    if (!map.has(key)) {
-      map.set(key, def);
-    }
+    addSubjectToMap(def, def.category as any, def.grade);
   });
+
+  // 3. Harvest any subjects from students records so no assigned subject ever disappears
+  try {
+    const rawStudents = await getData('students', []);
+    if (Array.isArray(rawStudents)) {
+      rawStudents.forEach((s: any) => {
+        const subs = Array.isArray(s?.subjects) ? s.subjects : (s?.enrolledClasses || []);
+        subs.forEach((subName: any) => addSubjectToMap(subName, 'Sub', s?.grade || 'தரம் 11'));
+      });
+    }
+  } catch (_) {}
+
+  // 4. Harvest subjects from classes records
+  try {
+    const rawClasses = await getData('classes', []);
+    if (Array.isArray(rawClasses)) {
+      rawClasses.forEach((c: any) => {
+        const subs = Array.isArray(c?.subjects) ? c.subjects : (c?.subject ? [c.subject] : []);
+        subs.forEach((subName: any) => addSubjectToMap(subName, 'Main', c?.name || 'தரம் 11'));
+      });
+    }
+  } catch (_) {}
+
+  // 5. Harvest subjects from courses records
+  try {
+    const rawCourses = await getData('courses', []);
+    if (Array.isArray(rawCourses)) {
+      rawCourses.forEach((cr: any) => {
+        const subs = Array.isArray(cr?.subjects) ? cr.subjects : (cr?.subject ? [cr.subject] : []);
+        subs.forEach((subName: any) => addSubjectToMap(subName, 'Main', cr?.grade || 'தரம் 11'));
+      });
+    }
+  } catch (_) {}
+
+  // 6. Harvest subjects from youtubeLinks & webPosts
+  try {
+    const rawYoutube = await getData('youtubeLinks', []);
+    if (Array.isArray(rawYoutube)) {
+      rawYoutube.forEach((y: any) => {
+        const subs = Array.isArray(y?.subjects) ? y.subjects : (y?.subject ? [y.subject] : []);
+        subs.forEach((subName: any) => addSubjectToMap(subName, 'Main', y?.grade || 'தரம் 11'));
+      });
+    }
+  } catch (_) {}
+
+  // 7. Harvest subjects from courseMaterials
+  try {
+    const rawMats = await getData('courseMaterials', []);
+    if (Array.isArray(rawMats)) {
+      rawMats.forEach((m: any) => {
+        const subs = Array.isArray(m?.subjects) ? m.subjects : (m?.subject ? [m.subject] : []);
+        subs.forEach((subName: any) => addSubjectToMap(subName, 'Main', m?.grade || 'தரம் 11'));
+      });
+    }
+  } catch (_) {}
 
   const deduplicated = Array.from(map.values());
 
   // If cleanup or addition changed the stored list, persist the cleaned list
-  if (deduplicated.length !== listArray.length) {
-    saveData('subjects', deduplicated);
+  if (deduplicated.length !== listArray.length || rawList === null || rawList === undefined) {
+    saveData('subjects', deduplicated).catch(() => {});
   }
 
   return deduplicated;
