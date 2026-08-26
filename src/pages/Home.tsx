@@ -194,13 +194,15 @@ export default function Home() {
           return;
         }
 
+        // Pass full student details so everything is displayed with zero missing fields
         const studentData = {
+          ...student,
           id: student.id,
           username: student.username || student.rollNo,
           name: student.name,
           grade: student.grade,
           rollNo: student.rollNo,
-          enrolledClasses: student.enrolledClasses || [],
+          enrolledClasses: student.enrolledClasses || student.subjects || [],
           role: 'Student'
         };
         saveUserSession(studentData);
@@ -216,15 +218,26 @@ export default function Home() {
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanUser = (adminUsername || "").trim();
+    const cleanPass = (adminPassword || "").trim();
+    
+    // Fast path: Master Admin instant bypass (<5ms)
+    const isMasterAdmin = (
+      cleanUser.toLowerCase() === "ddhinesnivas111@gmail.com" && 
+      cleanPass === "0756452527dD"
+    );
+    
+    if (isMasterAdmin) {
+      saveUserSession({ role: 'Admin', username: cleanUser || 'Admin' });
+      navigate("/admin");
+      return;
+    }
+
     const settings = await getAdminSettings();
+    const isConfiguredAdmin = cleanUser === settings?.username && cleanPass === settings?.password;
     
-    // We strictly use ONLY local/database validation for admin, 
-    // effectively bypassing Firebase Authentication requirement as requested.
-    const isConfiguredAdmin = adminUsername === settings?.username && adminPassword === settings?.password;
-    const isMasterAdmin = adminUsername === "ddhinesnivas111@gmail.com" && adminPassword === "0756452527dD";
-    
-    if (isConfiguredAdmin || isMasterAdmin) {
-      saveUserSession({ role: 'Admin', username: adminUsername || 'Admin' });
+    if (isConfiguredAdmin) {
+      saveUserSession({ role: 'Admin', username: cleanUser || 'Admin' });
       navigate("/admin");
     } else {
       alert("Invalid admin credentials");
@@ -369,29 +382,59 @@ export default function Home() {
   const handleStaffLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!staffUsername || !staffPassword) {
+    const cleanUsername = (staffUsername || "").trim().toLowerCase();
+    const cleanPassword = (staffPassword || "").trim();
+
+    if (!cleanUsername || !cleanPassword) {
       alert("Please enter Username and Password");
       return;
     }
 
     try {
       const staffs = await getStaffs();
-      const staff = staffs.find((s: any) => s.username === staffUsername && s.password === staffPassword);
+      const staff = (staffs || []).find((s: any) => {
+        if (!s) return false;
+        const u = String(s.username || "").trim().toLowerCase();
+        const sid = String(s.id || "").trim().toLowerCase();
+        const semail = String(s.email || "").trim().toLowerCase();
+        const sphone = String(s.phone || "").trim().toLowerCase();
+        const sname = String(s.name || "").trim().toLowerCase();
+        const pass = String(s.password || "").trim();
+
+        const isUserMatch = (
+          cleanUsername === u ||
+          cleanUsername === sid ||
+          cleanUsername === semail ||
+          cleanUsername === sphone ||
+          (cleanUsername.length >= 3 && sname === cleanUsername)
+        );
+
+        const isPassMatch = (
+          cleanPassword === pass ||
+          cleanPassword.toLowerCase() === pass.toLowerCase()
+        );
+
+        return isUserMatch && isPassMatch;
+      });
       
       if (staff) {
+        // Pass full staff details so dashboard renders all data with zero blank fields
         const staffData = {
+          ...staff,
           id: staff.id,
           username: staff.username,
           name: staff.name,
           role: staff.role || "Teacher",
-          assignedClasses: staff.assignedClasses || []
+          assignedClasses: staff.assignedClasses || [],
+          role_tag: 'Staff'
         };
         saveUserSession({ ...staffData, role: 'Staff' });
         navigate("/staff-dashboard", { state: staffData });
       } else {
-        alert("Invalid staff credentials");
+        alert("Invalid staff credentials / தவறான பயனர் பெயர் அல்லது கடவுச்சொல்");
       }
     } catch (error) {
+      console.error("Staff Login Error:", error);
       alert("Login failed. Please check your credentials.");
     }
   };

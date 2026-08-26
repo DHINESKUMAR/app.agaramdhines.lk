@@ -21,9 +21,11 @@ import {
 import { 
   getDailyWorkUploads, 
   saveDailyWorkUploads, 
+  deleteDailyWorkUpload,
   DailyWorkUpload, 
   getStaffs 
 } from "../../lib/db";
+import { getFileFromIndexedDB } from "../../lib/fileStorage";
 
 export default function StaffWorkSubmissions() {
   const [uploads, setUploads] = useState<DailyWorkUpload[]>([]);
@@ -73,19 +75,44 @@ export default function StaffWorkSubmissions() {
   };
 
   // Download Handler for PDF, Word, JPG, PNG
-  const handleDownloadFile = (item: DailyWorkUpload) => {
-    if (!item.fileData) {
-      alert("File binary is not available. Please ask staff to re-upload.");
-      return;
-    }
-
+  const handleDownloadFile = async (item: DailyWorkUpload) => {
     try {
-      const link = document.createElement('a');
-      link.href = item.fileData;
-      link.download = item.fileName || `${item.title || 'work_file'}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // 1. If Firebase Storage URL or HTTPS link exists
+      if (item.fileUrl && item.fileUrl.startsWith('http')) {
+        window.open(item.fileUrl, '_blank');
+        return;
+      }
+
+      // 2. If Base64 data exists
+      if (item.fileData && item.fileData.startsWith('data:')) {
+        const link = document.createElement('a');
+        link.href = item.fileData;
+        link.download = item.fileName || `${item.title || 'work_file'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // 3. Try IndexedDB cache
+      const cached = await getFileFromIndexedDB(item.id);
+      if (cached && cached.fileData) {
+        const link = document.createElement('a');
+        link.href = cached.fileData;
+        link.download = cached.fileName || item.fileName || `${item.title || 'work_file'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // 4. If Google Drive link exists
+      if (item.driveLink) {
+        window.open(item.driveLink, '_blank');
+        return;
+      }
+
+      alert("கோப்பு இணைப்பை திறக்க முடியவில்லை / File binary is not available. Please ask staff to re-upload.");
     } catch (err) {
       console.error("Failed to download:", err);
       alert("Failed to download file.");
@@ -120,8 +147,7 @@ export default function StaffWorkSubmissions() {
   const handleDelete = async (itemId: string) => {
     if (!window.confirm("Are you sure you want to delete this work submission?")) return;
     try {
-      const updated = uploads.filter(u => u.id !== itemId);
-      await saveDailyWorkUploads(updated);
+      const updated = await deleteDailyWorkUpload(itemId);
       setUploads(updated);
     } catch (err) {
       console.error("Error deleting:", err);
@@ -379,10 +405,10 @@ export default function StaffWorkSubmissions() {
 
                       <td className="px-6 py-4 whitespace-nowrap text-right space-x-1.5">
                         {/* Instant Download Button */}
-                        {item.fileData ? (
+                        {(item.fileData || item.fileUrl || (item.fileName && item.fileName !== "Google Drive Link")) ? (
                           <button
                             onClick={() => handleDownloadFile(item)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
                             title="Download submitted file (PDF/Word/JPG/PNG)"
                           >
                             <Download size={14} /> Download

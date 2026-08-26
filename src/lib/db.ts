@@ -40,6 +40,21 @@ const setupRealtimeListener = (key: string) => {
     }, (err) => {
       console.warn(`Realtime snapshot error for ${key}:`, err);
     });
+
+    // Also listen to collection changes for dailyWorkUploads
+    if (key === 'dailyWorkUploads') {
+      const colUnsub = onSnapshot(collection(db, 'dailyWorkUploads'), (colSnap) => {
+        if (!colSnap.empty) {
+          const list = colSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+          list.sort((a: any, b: any) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+          window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'dailyWorkUploads', data: list } }));
+        }
+      }, (err) => {
+        console.warn("Realtime dailyWorkUploads collection error:", err);
+      });
+      activeListeners[`${key}_col`] = colUnsub;
+    }
+
     activeListeners[key] = unsub;
   } catch (e) {
     console.warn(`Failed to setup realtime listener for ${key}:`, e);
@@ -959,8 +974,33 @@ export interface DailyWorkUpload {
 }
 
 export const getDailyWorkUploads = async (): Promise<DailyWorkUpload[]> => {
+  setupRealtimeListener('dailyWorkUploads');
+
+  if (isFirebaseConfigured) {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'dailyWorkUploads'));
+      if (!querySnapshot.empty) {
+        const colUploads: DailyWorkUpload[] = querySnapshot.docs.map((docSnap) => ({
+          ...(docSnap.data() as DailyWorkUpload),
+          id: docSnap.id
+        }));
+
+        colUploads.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+
+        // Cache safe version locally
+        try {
+          localStorage.setItem('dailyWorkUploads', JSON.stringify(colUploads));
+        } catch (_) {}
+
+        return colUploads;
+      }
+    } catch (fbErr) {
+      console.warn("Firestore collection query for dailyWorkUploads:", fbErr);
+    }
+  }
+
   const raw = await getData('dailyWorkUploads', null);
-  if (raw && Array.isArray(raw)) return raw;
+  if (raw && Array.isArray(raw) && raw.length > 0) return raw;
 
   // Sample initial daily uploads
   const sampleUploads: DailyWorkUpload[] = [
@@ -1003,7 +1043,71 @@ export const getDailyWorkUploads = async (): Promise<DailyWorkUpload[]> => {
   return sampleUploads;
 };
 
-export const saveDailyWorkUploads = (uploads: DailyWorkUpload[]) => saveData('dailyWorkUploads', uploads);
+export const saveDailyWorkUploads = async (uploads: DailyWorkUpload[]) => {
+  // 1. Safe local storage save (strip heavy base64 if quota is tight)
+  try {
+    const safeList = uploads.map(u => {
+      if (u.fileData && u.fileData.length > 100000 && (u.fileUrl || u.driveLink)) {
+        const { fileData, ...rest } = u;
+        return rest;
+      }
+      return u;
+    });
+    localStorage.setItem('dailyWorkUploads', JSON.stringify(safeList));
+    localStorage.setItem('dailyWorkUploads_lastSavedAt', String(Date.now()));
+  } catch (e) {
+    console.warn("LocalStorage save warning:", e);
+  }
+
+  // 2. Dispatch UI update
+  window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'dailyWorkUploads', data: uploads } }));
+
+  // 3. Save to Firebase Firestore collection and singleton
+  if (isFirebaseConfigured) {
+    try {
+      const cleanUploads = uploads.map(item => {
+        const copy: any = { ...item };
+        // If file has fileUrl, omit giant base64 to guarantee Firestore 1MB doc limit is never exceeded
+        if (copy.fileData && (copy.fileData.length > 200000 || copy.fileUrl)) {
+          delete copy.fileData;
+        }
+        return copy;
+      });
+
+      // Write each item to Firestore collection
+      for (const item of cleanUploads.slice(0, 100)) {
+        if (item && item.id) {
+          await setDoc(doc(db, 'dailyWorkUploads', String(item.id)), {
+            ...item,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        }
+      }
+
+      // Update singleton
+      await setDoc(doc(db, 'singletons', 'dailyWorkUploads'), {
+        data: cleanUploads,
+        updatedAt: Date.now()
+      }, { merge: false });
+    } catch (fbErr: any) {
+      console.warn("Firebase saveDailyWorkUploads warning:", fbErr?.message || fbErr);
+    }
+  }
+};
+
+export const deleteDailyWorkUpload = async (id: string) => {
+  const current = await getDailyWorkUploads();
+  const updated = current.filter(u => u.id !== id);
+  await saveDailyWorkUploads(updated);
+
+  if (isFirebaseConfigured) {
+    try {
+      await deleteDoc(doc(db, 'dailyWorkUploads', id));
+    } catch (_) {}
+  }
+  return updated;
+};
+
 
 
 export const getSubjects = async () => {

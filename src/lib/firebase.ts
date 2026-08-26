@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { initializeFirestore, getFirestore } from "firebase/firestore";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -31,6 +32,32 @@ try {
 }
 export const db = firestoreDb;
 
+let firebaseStorage;
+try {
+  firebaseStorage = getStorage(app);
+} catch (e) {
+  console.warn("Firebase Storage initialization warning:", e);
+}
+export const storage = firebaseStorage;
+
+/**
+ * Uploads a file directly to Firebase Storage and returns its permanent download URL.
+ * Automatically handles PDF, Word, JPG, PNG up to 10MB.
+ */
+export const uploadFileToFirebaseStorage = async (
+  file: File | Blob, 
+  path: string,
+  onProgress?: (percent: number) => void
+): Promise<string> => {
+  if (!storage) {
+    throw new Error("Firebase Storage is not initialized.");
+  }
+  const fileRef = storageRef(storage, path);
+  const snapshot = await uploadBytes(fileRef, file);
+  const downloadUrl = await getDownloadURL(snapshot.ref);
+  return downloadUrl;
+};
+
 export const googleProvider = new GoogleAuthProvider();
 
 // Secondary app for creating users without signing out the admin
@@ -46,4 +73,5 @@ export const signInWithGoogle = async () => {
     throw error;
   }
 };
+
 

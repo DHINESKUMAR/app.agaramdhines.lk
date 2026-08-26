@@ -25,12 +25,14 @@ import {
   getEmployeeTasks, 
   getDailyWorkUploads, 
   saveDailyWorkUploads, 
+  deleteDailyWorkUpload,
   DailyWorkUpload, 
   EmployeeTask, 
   getStaffAttendance, 
   saveStaffAttendance 
 } from "../../../lib/db";
 import { jsPDF } from "jspdf";
+import { processAndUploadWorkFile, getFileFromIndexedDB } from "../../../lib/fileStorage";
 
 interface DesignWorkerHomeProps {
   staff: any;
@@ -188,6 +190,8 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
   };
 
   // File Upload Handlers (PDF, Word, JPG, PNG)
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB per upload
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUploadError(null);
     if (e.target.files) {
@@ -203,18 +207,26 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
         setUploadError("⚠️ Large video files cannot be uploaded directly. Direct upload is supported for Documents (Word .doc, .docx), PDFs (.pdf), and Images (JPG, JPEG, PNG). For video files, please paste your Google Drive link in the Google Drive Link field below.");
       }
 
+      // Check for oversized files (> 5MB)
+      const oversizedFiles = files.filter(f => f.size > MAX_FILE_SIZE);
+      if (oversizedFiles.length > 0) {
+        const sizeMb = (oversizedFiles[0].size / (1024 * 1024)).toFixed(1);
+        setUploadError(`⚠️ கோப்பின் அளவு 5 MB-ஐ விட அதிகமாக உள்ளது (${sizeMb} MB). ஒரு பதிவேற்றத்திற்கு 5 MB-க்கு உட்பட்ட கோப்புகளை மட்டுமே நேரடியாகப் பதிவேற்ற முடியும் (தினசரி எத்தனை முறை வேண்டுமானாலும் பதிவேற்றலாம்). 5 MB-க்கு மேல் உள்ள கோப்புகளுக்கு Google Drive இணைப்பைப் பயன்படுத்தவும்.`);
+      }
+
       // Allowed extensions: Documents, PDFs, Images
       const allowedExts = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
       const validFiles: File[] = files.filter((file: File) => {
         const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-        return allowedExts.includes(ext) && !file.type.startsWith('video/');
+        return allowedExts.includes(ext) && !file.type.startsWith('video/') && file.size <= MAX_FILE_SIZE;
       });
 
-      if (validFiles.length !== files.length && !hasVideo) {
-        setUploadError("Some files were skipped. Direct upload supports PDF, Word (.doc, .docx), JPG, and PNG files.");
+      if (validFiles.length !== files.length && !hasVideo && oversizedFiles.length === 0) {
+        setUploadError("Some files were skipped. Direct upload supports PDF, Word (.doc, .docx), JPG, and PNG files up to 5 MB.");
       }
 
       setSelectedFiles(validFiles);
+
       if (!uploadTitle && validFiles.length > 0) {
         const rawName = validFiles[0].name.replace(/\.[^/.]+$/, "");
         setUploadTitle(rawName);
@@ -225,7 +237,7 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedFiles.length === 0 && !uploadDriveLink.trim()) {
-      setUploadError("Please select at least one PDF, Word document, JPG, or PNG file for direct upload, or provide a Google Drive link.");
+      setUploadError("Please select at least one PDF, Word document, JPG, or PNG file (under 5 MB) for direct upload, or provide a Google Drive link.");
       return;
     }
 
@@ -238,16 +250,13 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
 
       if (selectedFiles.length > 0) {
         for (const file of selectedFiles) {
-          // Convert file to Base64 data URL for direct instant offline/online downloads
-          const base64Data = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = (err) => reject(err);
-            reader.readAsDataURL(file);
-          });
+          const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+          
+          // Process and upload file with IndexedDB cache + Firebase Storage
+          const { fileUrl, base64Data } = await processAndUploadWorkFile(file, uploadId, staff.id);
 
           const uploadEntry: DailyWorkUpload = {
-            id: `upload_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            id: uploadId,
             staffId: staff.id,
             staffName: staff.name,
             title: uploadTitle || file.name,
@@ -256,9 +265,9 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
             fileName: file.name,
             fileType: file.type || 'application/octet-stream',
             fileSize: file.size,
-            fileData: base64Data,
+            fileData: file.size < 500000 ? base64Data : undefined, // Keep base64 directly if small (<500KB)
             driveLink: uploadDriveLink.trim() || undefined,
-            fileUrl: uploadDriveLink.trim() || undefined,
+            fileUrl: fileUrl || uploadDriveLink.trim() || undefined,
             workCount: Number(workCount) || 1,
             workUnit: workUnit,
             notes: uploadNotes,
@@ -301,7 +310,7 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
       setUploadDriveLink("");
       setUploadNotes("");
       setWorkCount(1);
-      setUploadSuccess(`Successfully submitted ${newUploads.length} work record(s)! Admin will review and download your direct file.`);
+      setUploadSuccess(`கோப்பு வெற்றிகரமாகப் பதிவேற்றப்பட்டது! (${newUploads.length} work record submitted). Admin will review and download your file directly.`);
     } catch (err: any) {
       console.error("Upload error:", err);
       setUploadError("Failed to upload file. " + (err?.message || "Please check file size and try again."));
@@ -311,19 +320,44 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
   };
 
   // Direct File Download
-  const handleDownloadFile = (upload: DailyWorkUpload) => {
-    if (!upload.fileData) {
-      alert("File data is not available for offline download. Please re-upload.");
-      return;
-    }
-
+  const handleDownloadFile = async (upload: DailyWorkUpload) => {
     try {
-      const link = document.createElement('a');
-      link.href = upload.fileData;
-      link.download = upload.fileName || `${upload.title}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // 1. If Firebase Storage URL or HTTPS link exists
+      if (upload.fileUrl && upload.fileUrl.startsWith('http')) {
+        window.open(upload.fileUrl, '_blank');
+        return;
+      }
+
+      // 2. If base64 data URI is embedded in object
+      if (upload.fileData && upload.fileData.startsWith('data:')) {
+        const link = document.createElement('a');
+        link.href = upload.fileData;
+        link.download = upload.fileName || `${upload.title || 'work_file'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // 3. Try to load from IndexedDB local storage cache
+      const cached = await getFileFromIndexedDB(upload.id);
+      if (cached && cached.fileData) {
+        const link = document.createElement('a');
+        link.href = cached.fileData;
+        link.download = cached.fileName || upload.fileName || `${upload.title || 'work_file'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // 4. If Google Drive link exists
+      if (upload.driveLink) {
+        window.open(upload.driveLink, '_blank');
+        return;
+      }
+
+      alert("கோப்பு இணைப்பை திறக்க முடியவில்லை / File source could not be opened.");
     } catch (err) {
       console.error("Download failed:", err);
       alert("Failed to download file.");
@@ -334,9 +368,7 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
   const handleDeleteUpload = async (uploadId: string) => {
     if (!window.confirm("Are you sure you want to delete this uploaded work file?")) return;
     try {
-      const allUploads = await getDailyWorkUploads();
-      const updated = allUploads.filter(u => u.id !== uploadId);
-      await saveDailyWorkUploads(updated);
+      const updated = await deleteDailyWorkUpload(uploadId);
       setUploads(updated.filter(u => u.staffId === staff.id || u.staffName === staff.name));
     } catch (err) {
       console.error("Delete failed:", err);
@@ -608,9 +640,14 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
 
           {/* File Picker Zone */}
           <div>
-            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-              Select Work File(s) to Upload
-            </label>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                Select Work File to Upload (Max 5 MB per File)
+              </label>
+              <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-md border border-indigo-100">
+                Unlimited Daily Uploads • 5 MB per File / நாள் ஒன்றுக்கு எத்தனை முறை வேண்டுமானாலும் பதிவேற்றலாம் (Max 5 MB)
+              </span>
+            </div>
             <div className="relative border-2 border-dashed border-blue-300 hover:border-blue-500 rounded-2xl p-6 text-center bg-white transition-colors cursor-pointer group">
               <input
                 type="file"
@@ -625,10 +662,10 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
                 </div>
                 <div>
                   <p className="text-sm font-bold text-gray-800">
-                    {selectedFiles.length > 0 ? `${selectedFiles.length} file(s) selected` : "Click or drag & drop files here"}
+                    {selectedFiles.length > 0 ? `${selectedFiles.length} file(s) selected` : "Click or drag & drop files here (Max 5 MB per file)"}
                   </p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Supports PDF, Microsoft Word (.doc, .docx), JPG (JPEG), and PNG files
+                    Supports <strong>PDF, Word (.doc, .docx), JPG (JPEG), and PNG</strong> • Limit: 5 MB per upload (Unlimited uploads per day)
                   </p>
                 </div>
               </div>

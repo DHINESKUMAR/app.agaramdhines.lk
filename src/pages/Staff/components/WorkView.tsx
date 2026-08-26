@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { getEmployeeTasks, saveEmployeeTasks, EmployeeTask } from "../../../lib/db";
 import { jsPDF } from "jspdf";
+import { processAndUploadWorkFile, getFileFromIndexedDB } from "../../../lib/fileStorage";
 
 interface WorkViewProps {
   staff: any;
@@ -109,6 +110,8 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
     setShowAddModal(true);
   };
 
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB per upload
+
   const handleModalFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setModalFileError(null);
     if (e.target.files && e.target.files[0]) {
@@ -121,27 +124,31 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
         return;
       }
 
+      // File size check (> 5MB)
+      if (file.size > MAX_FILE_SIZE) {
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+        setModalFileError(`⚠️ கோப்பின் அளவு 5 MB-ஐ விட அதிகமாக உள்ளது (${sizeMb} MB). ஒரு முறை பதிவேற்றத்திற்கு 5 MB-க்கு உட்பட்ட கோப்புகளை மட்டுமே நேரடியாகப் பதிவேற்ற முடியும் (எத்தனை முறை வேண்டுமானாலும் பதிவேற்றலாம்). 5 MB-க்கு மேற்பட்ட கோப்புகளுக்கு Google Drive இணைப்பைப் பயன்படுத்தவும்.`);
+        return;
+      }
+
       // Valid extensions
       const allowedExts = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
       if (!allowedExts.includes(ext)) {
-        setModalFileError("Only PDF documents, Microsoft Word (.doc, .docx), JPG, and PNG files are supported for direct upload.");
+        setModalFileError("Only PDF documents, Microsoft Word (.doc, .docx), JPG, and PNG files (Max 5 MB) are supported for direct upload.");
         return;
       }
 
       try {
-        const base64Data = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = (err) => reject(err);
-          reader.readAsDataURL(file);
-        });
+        const tempTaskId = editingTask ? editingTask.id : `task_${Date.now()}`;
+        const { fileUrl, base64Data } = await processAndUploadWorkFile(file, tempTaskId, staff.id);
 
         setFormData(prev => ({
           ...prev,
           fileName: file.name,
           fileType: file.type || 'application/octet-stream',
           fileSize: file.size,
-          fileData: base64Data,
+          fileData: file.size < 500000 ? base64Data : undefined,
+          driveLink: fileUrl || prev.driveLink,
           title: prev.title || file.name.replace(/\.[^/.]+$/, "")
         }));
       } catch (err) {
@@ -151,23 +158,38 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
     }
   };
 
-  const handleDownloadTaskFile = (task: EmployeeTask) => {
-    if (!task.fileData) {
-      if (task.driveLink) {
+  const handleDownloadTaskFile = async (task: EmployeeTask) => {
+    try {
+      // 1. If driveLink or HTTPS file URL exists
+      if (task.driveLink && task.driveLink.startsWith('http')) {
         window.open(task.driveLink, '_blank');
         return;
       }
-      alert("No direct file attachment found for this task.");
-      return;
-    }
 
-    try {
-      const link = document.createElement('a');
-      link.href = task.fileData;
-      link.download = task.fileName || `${task.title || 'work_file'}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // 2. If Base64 data exists
+      if (task.fileData && task.fileData.startsWith('data:')) {
+        const link = document.createElement('a');
+        link.href = task.fileData;
+        link.download = task.fileName || `${task.title || 'work_file'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // 3. Try IndexedDB cache
+      const cached = await getFileFromIndexedDB(task.id);
+      if (cached && cached.fileData) {
+        const link = document.createElement('a');
+        link.href = cached.fileData;
+        link.download = cached.fileName || task.fileName || `${task.title || 'work_file'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      alert("No downloadable file found for this task.");
     } catch (err) {
       console.error("Failed to download:", err);
       alert("Failed to download file.");
