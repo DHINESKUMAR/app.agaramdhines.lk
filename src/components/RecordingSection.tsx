@@ -220,25 +220,41 @@ export const doesItemMatchGrade = (item: RecordingItem, targetGrade: string): bo
   const normTarget = normalizeGradeString(targetGrade);
   const targetNum = targetGrade.replace(/[^0-9]/g, '');
 
-  // 1. If item has a specific grade assigned (and it's not "All" or "General")
+  // 1. Check direct grade property
   if (item.grade && typeof item.grade === 'string' && item.grade.trim()) {
-    const isGeneric = item.grade.toLowerCase().includes('all') || item.grade.toLowerCase().includes('general');
-    if (!isGeneric) {
-      const normGrade = normalizeGradeString(item.grade);
-      const itemNum = item.grade.replace(/[^0-9]/g, '');
-      // When a specific single grade is defined, only match if it matches the target grade
-      return normGrade === normTarget || Boolean(targetNum && itemNum && itemNum === targetNum);
+    const isGeneric = item.grade.toLowerCase().includes('all') || 
+                      item.grade.toLowerCase().includes('general') || 
+                      item.grade.toLowerCase().includes('public') || 
+                      item.grade.toLowerCase().includes('அனைத்து') ||
+                      item.grade.trim() === '';
+    if (isGeneric) return true;
+    const normGrade = normalizeGradeString(item.grade);
+    const itemNum = item.grade.replace(/[^0-9]/g, '');
+    if (normGrade === normTarget || Boolean(targetNum && itemNum && itemNum === targetNum)) {
+      return true;
     }
   }
 
-  // 2. If item.grade is not set or generic, check the grades array
+  // 2. Check grades array
   if (Array.isArray(item.grades) && item.grades.length > 0) {
     for (const g of item.grades) {
       if (!g) continue;
+      const isGeneric = String(g).toLowerCase().includes('all') || 
+                        String(g).toLowerCase().includes('general') || 
+                        String(g).toLowerCase().includes('public') || 
+                        String(g).toLowerCase().includes('அனைத்து');
+      if (isGeneric) return true;
       const normG = normalizeGradeString(g);
-      const gNum = g.toString().replace(/[^0-9]/g, '');
-      if (normG === normTarget || Boolean(targetNum && gNum && gNum === targetNum)) return true;
+      const gNum = String(g).replace(/[^0-9]/g, '');
+      if (normG === normTarget || Boolean(targetNum && gNum && gNum === targetNum)) {
+        return true;
+      }
     }
+  }
+
+  // 3. If item does not specify any grade, default to showing in all grades
+  if (!item.grade && (!Array.isArray(item.grades) || item.grades.length === 0)) {
+    return true;
   }
 
   return false;
@@ -249,13 +265,10 @@ export const deduplicateCourses = (coursesList: any[]): any[] => {
   const map = new Map<string, any>();
 
   for (const item of coursesList) {
-    if (!item || !item.title) continue;
-    const cleanTitle = (item.title || '').trim().toLowerCase();
-    const cleanType = (item.type || (item.code ? 'html_code' : item.studentNames ? 'student_box' : item.gameType ? 'mobile_game' : item.imageUrl ? 'image_post' : 'webpost')).trim().toLowerCase();
-    const cleanCode = (item.code || '').trim();
-    const cleanContent = (item.content || '').trim();
-    // Unique key to merge duplicates while preserving distinct grade assignments
-    const key = `${cleanType}:::${cleanTitle}:::${cleanCode ? cleanCode.slice(0, 100) : cleanContent.slice(0, 50)}`;
+    if (!item || (!item.title && !item.id)) continue;
+    
+    // Key by unique ID if available so that user posts are never deleted!
+    const key = item.id ? String(item.id).trim().toLowerCase() : `item_${item.title}_${item.type}_${item.createdAt || ''}`;
 
     const currentSubs = Array.from(new Set([
       ...(Array.isArray(item.subjects) ? item.subjects : []),
@@ -267,50 +280,14 @@ export const deduplicateCourses = (coursesList: any[]): any[] => {
       item.grade
     ].filter(Boolean)));
 
-    if (!map.has(key)) {
-      map.set(key, {
-        ...item,
-        type: cleanType,
-        grades: currentGrades.length > 0 ? currentGrades : (item.grade ? [item.grade] : []),
-        grade: item.grade || currentGrades[0] || 'General',
-        subjects: currentSubs.length > 0 ? currentSubs : (item.subject ? [item.subject] : ['General']),
-        subject: currentSubs[0] || item.subject || 'General'
-      });
-    } else {
-      const existing = map.get(key)!;
-      // Merge subjects without duplication
-      const combinedSubs = Array.from(new Set([
-        ...(Array.isArray(existing.subjects) ? existing.subjects : []),
-        existing.subject,
-        ...currentSubs
-      ].filter(Boolean)));
-
-      // Merge grades without duplication
-      const combinedGrades = Array.from(new Set([
-        ...(Array.isArray(existing.grades) ? existing.grades : []),
-        existing.grade,
-        ...currentGrades
-      ].filter(Boolean)));
-
-      // Merge studentNames if student box
-      const combinedStudents = Array.from(new Set([
-        ...(Array.isArray(existing.studentNames) ? existing.studentNames : []),
-        ...(Array.isArray(item.studentNames) ? item.studentNames : [])
-      ].filter(Boolean)));
-
-      map.set(key, {
-        ...existing,
-        grades: combinedGrades,
-        grade: existing.grade || combinedGrades[0] || 'General',
-        subjects: combinedSubs,
-        subject: combinedSubs[0] || existing.subject || 'General',
-        studentNames: combinedStudents.length > 0 ? combinedStudents : existing.studentNames,
-        content: existing.content || item.content,
-        code: existing.code || item.code,
-        imageUrl: existing.imageUrl || item.imageUrl,
-        link: existing.link || item.link
-      });
-    }
+    map.set(key, {
+      ...item,
+      id: item.id || `post_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      grades: currentGrades.length > 0 ? currentGrades : (item.grade ? [item.grade] : []),
+      grade: item.grade || currentGrades[0] || 'General',
+      subjects: currentSubs.length > 0 ? currentSubs : (item.subject ? [item.subject] : ['General']),
+      subject: currentSubs[0] || item.subject || 'General'
+    });
   }
 
   return Array.from(map.values());
@@ -445,10 +422,12 @@ export default function RecordingSection({
     // Add courses
     if (Array.isArray(courses)) {
       courses.forEach(c => {
-        if (c && c.title) {
+        if (c && (c.title || c.code || c.content)) {
+          const detectedType = c.type || (c.code ? 'html_code' : (c.studentNames && c.studentNames.length > 0) ? 'student_box' : c.gameType ? 'mobile_game' : c.imageUrl ? 'image_post' : 'webpost');
           list.push({
             ...c,
-            type: c.type || (c.code ? 'html_code' : c.studentNames ? 'student_box' : c.gameType ? 'mobile_game' : c.imageUrl ? 'image_post' : 'webpost')
+            title: c.title || (detectedType === 'html_code' ? 'HTML Live Post' : 'Post Item'),
+            type: detectedType
           });
         }
       });
@@ -519,7 +498,7 @@ export default function RecordingSection({
       // Content Type filter
       if (activeContentType !== "all") {
         if (activeContentType === "webpost" && item.type !== "webpost") return false;
-        if (activeContentType === "html_code" && item.type !== "html_code") return false;
+        if (activeContentType === "html_code" && item.type !== "html_code" && !item.code) return false;
         if (activeContentType === "student_box" && item.type !== "student_box") return false;
         if (activeContentType === "mobile_game" && item.type !== "mobile_game") return false;
         if (activeContentType === "image_post" && item.type !== "image_post") return false;
@@ -857,7 +836,7 @@ function ColorfulPostCard({
   ].filter(Boolean)));
 
   // 1. HTML / CODE LIVE WEB VIEW CARD
-  if (item.type === 'html_code') {
+  if (item.type === 'html_code' || Boolean(item.code && item.code.trim())) {
     const rawCode = item.code || '';
     return (
       <div className={`p-6 rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between shadow-sm hover:shadow-xl ${theme.bg} ${theme.border} ${theme.accentBorder}`}>

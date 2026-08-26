@@ -74,6 +74,43 @@ const setupRealtimeListener = (key: string) => {
       activeListeners[`${key}_col`] = colUnsub;
     }
 
+    // Also listen to collection changes for courses / post library
+    if (key === 'courses') {
+      const colUnsub = onSnapshot(collection(db, 'courses'), (colSnap) => {
+        if (!colSnap.empty) {
+          const list = colSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+          
+          let deletedIds: string[] = [];
+          try {
+            const rawDeleted = localStorage.getItem('courses_deleted');
+            if (rawDeleted) deletedIds = JSON.parse(rawDeleted);
+          } catch (_) {}
+
+          let localCourses: any[] = [];
+          try {
+            const rawLocal = localStorage.getItem('courses');
+            if (rawLocal) localCourses = JSON.parse(rawLocal);
+          } catch (_) {}
+
+          const merged = mergeArraysById(list, localCourses).filter(u => !deletedIds.includes(String(u.id)));
+          merged.sort((a: any, b: any) => {
+            const timeA = new Date(a.createdAt || a.date || a.updatedAt || 0).getTime() || 0;
+            const timeB = new Date(b.createdAt || b.date || b.updatedAt || 0).getTime() || 0;
+            return timeB - timeA;
+          });
+          
+          try {
+            localStorage.setItem('courses', JSON.stringify(merged));
+          } catch (_) {}
+
+          window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'courses', data: merged } }));
+        }
+      }, (err) => {
+        console.warn("Realtime courses collection error:", err);
+      });
+      activeListeners[`${key}_col`] = colUnsub;
+    }
+
     activeListeners[key] = unsub;
   } catch (e) {
     console.warn(`Failed to setup realtime listener for ${key}:`, e);
@@ -731,8 +768,148 @@ export const getZoomLinks = async () => {
 };
 export const saveZoomLinks = (links: any) => saveData('zoomLinks', Array.isArray(links) ? links : []);
 
-export const getCourses = () => getData('courses', []);
-export const saveCourses = (courses: any) => saveData('courses', courses);
+export const getCourses = async (): Promise<any[]> => {
+  setupRealtimeListener('courses');
+
+  let deletedIds: string[] = [];
+  try {
+    const rawDeleted = localStorage.getItem('courses_deleted');
+    if (rawDeleted) deletedIds = JSON.parse(rawDeleted);
+  } catch (_) {}
+
+  let localCourses: any[] = [];
+  try {
+    const rawLocal = localStorage.getItem('courses');
+    if (rawLocal) {
+      localCourses = JSON.parse(rawLocal);
+    }
+  } catch (_) {}
+
+  let remoteCourses: any[] = [];
+
+  if (isFirebaseConfigured) {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'courses'));
+      if (!querySnapshot.empty) {
+        remoteCourses = querySnapshot.docs.map((docSnap) => ({
+          ...docSnap.data(),
+          id: docSnap.id
+        }));
+      }
+    } catch (fbErr) {
+      console.warn("Firestore collection query for courses:", fbErr);
+    }
+
+    try {
+      const singletonSnap = await getDoc(doc(db, 'singletons', 'courses'));
+      if (singletonSnap.exists() && Array.isArray(singletonSnap.data()?.data)) {
+        remoteCourses = mergeArraysById(remoteCourses, singletonSnap.data().data);
+      }
+    } catch (_) {}
+  }
+
+  // Merge remote and local so newly created posts in local are NEVER discarded
+  let combined = mergeArraysById(remoteCourses, localCourses);
+  if (deletedIds.length > 0) {
+    combined = combined.filter(c => !deletedIds.includes(String(c.id)));
+  }
+
+  if (combined.length > 0) {
+    combined.sort((a, b) => {
+      const timeA = new Date(a.createdAt || a.date || a.updatedAt || 0).getTime() || 0;
+      const timeB = new Date(b.createdAt || b.date || b.updatedAt || 0).getTime() || 0;
+      return timeB - timeA;
+    });
+    try {
+      localStorage.setItem('courses', JSON.stringify(combined));
+    } catch (_) {}
+    return combined;
+  }
+
+  const raw = await getData('courses', null);
+  if (raw && Array.isArray(raw) && raw.length > 0) {
+    return raw.filter(c => !deletedIds.includes(String(c.id)));
+  }
+
+  return [];
+};
+
+export const saveCourses = async (courses: any[]) => {
+  const cleanList = Array.isArray(courses) ? courses : [];
+
+  // Remove saved item IDs from deleted tombstone list if they were re-saved
+  try {
+    const rawDeleted = localStorage.getItem('courses_deleted');
+    if (rawDeleted) {
+      const deletedIds: string[] = JSON.parse(rawDeleted);
+      const savedIds = cleanList.map(s => String(s.id));
+      const cleanedDeleted = deletedIds.filter(d => !savedIds.includes(d));
+      localStorage.setItem('courses_deleted', JSON.stringify(cleanedDeleted));
+    }
+
+    localStorage.setItem('courses', JSON.stringify(cleanList));
+    localStorage.setItem('courses_lastSavedAt', String(Date.now()));
+  } catch (e) {
+    console.warn("Error caching courses locally:", e);
+  }
+
+  // Dispatch UI update immediately with cleanList
+  window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'courses', data: cleanList } }));
+
+  // Fast Parallel Save to Firebase Firestore collection and singleton
+  if (isFirebaseConfigured) {
+    try {
+      const savePromises = cleanList.map(item => {
+        if (item && item.id) {
+          return setDoc(doc(db, 'courses', String(item.id)), {
+            ...item,
+            updatedAt: Date.now()
+          }, { merge: true });
+        }
+        return Promise.resolve();
+      });
+
+      // Also update singleton in background
+      savePromises.push(
+        setDoc(doc(db, 'singletons', 'courses'), {
+          data: cleanList,
+          updatedAt: Date.now()
+        }, { merge: false })
+      );
+
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
+      await Promise.race([Promise.all(savePromises), timeoutPromise]);
+    } catch (fbErr: any) {
+      console.warn("Firebase saveCourses warning:", fbErr?.message || fbErr);
+    }
+  }
+};
+
+export const deleteCourse = async (id: string) => {
+  const targetId = String(id);
+  // Mark in tombstone
+  try {
+    const rawDeleted = localStorage.getItem('courses_deleted') || '[]';
+    const deletedIds: string[] = JSON.parse(rawDeleted);
+    if (!deletedIds.includes(targetId)) {
+      deletedIds.push(targetId);
+      localStorage.setItem('courses_deleted', JSON.stringify(deletedIds.slice(-200)));
+    }
+  } catch (_) {}
+
+  const current = await getCourses();
+  const updated = current.filter(c => String(c.id) !== targetId);
+  await saveCourses(updated);
+
+  if (isFirebaseConfigured) {
+    try {
+      await deleteDoc(doc(db, 'courses', targetId));
+    } catch (e) {
+      console.warn("Error deleting course document from Firebase:", e);
+    }
+  }
+  return updated;
+};
 
 export const getCourseMaterials = async () => {
   const raw = await getData('courseMaterials', []);

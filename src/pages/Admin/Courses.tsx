@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  getCourses, saveCourses, getClasses, getStaffs, 
+  getCourses, saveCourses, deleteCourse, getClasses, getStaffs, 
   getSubjects, saveSubjects, getStudents,
   getStudentMenuLabels, saveStudentMenuLabels,
   DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels,
@@ -31,6 +31,7 @@ export default function Courses() {
   const [selectedLibraryGrade, setSelectedLibraryGrade] = useState<string | null>(null);
   const [librarySearch, setLibrarySearch] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [previewItem, setPreviewItem] = useState<any | null>(null);
 
   const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
@@ -68,11 +69,7 @@ export default function Courses() {
 
   const loadCoursesData = async () => {
     const rawCourses = await getCourses();
-    const cleanCourses = deduplicateCourses(rawCourses);
-    setCourses(cleanCourses);
-    if (cleanCourses.length !== rawCourses.length) {
-      await saveCourses(cleanCourses);
-    }
+    setCourses(rawCourses);
     getClasses().then(setClasses);
     getStaffs().then(setStaffs);
     getStudents().then(setStudents);
@@ -247,7 +244,7 @@ export default function Courses() {
             grade: selectedGrades[0] || c.grade,
             subjects: selectedSubjects,
             subject: selectedSubjects[0] || c.subject,
-            title: formData.title,
+            title: formData.title.trim(),
             link: cleanLink,
             folder: formData.folder || 'General',
             content: formData.content,
@@ -263,34 +260,29 @@ export default function Courses() {
       });
       setEditingId(null);
     } else {
-      // Create 1 post item per grade (with all selected subjects assigned), avoiding redundant duplicate entries
-      const newItems: any[] = [];
-      for (const g of selectedGrades) {
-        newItems.push({
-          id: Date.now().toString() + Math.random().toString().slice(2, 6),
-          type: itemType,
-          grade: g,
-          grades: selectedGrades,
-          subject: selectedSubjects[0] || 'General',
-          subjects: selectedSubjects,
-          title: formData.title,
-          link: cleanLink,
-          folder: formData.folder || 'General',
-          content: formData.content,
-          code: formData.code,
-          codeLanguage: formData.codeLanguage,
-          imageUrl: formData.imageUrl.trim(),
-          studentNames: parsedStudents,
-          gameType: formData.gameType,
-          createdAt: Date.now()
-        });
-      }
-      updatedCourses = [...newItems, ...updatedCourses];
+      const newItem = {
+        id: `post_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        type: itemType,
+        grade: selectedGrades[0] || 'General',
+        grades: selectedGrades,
+        subject: selectedSubjects[0] || 'General',
+        subjects: selectedSubjects,
+        title: formData.title.trim(),
+        link: cleanLink,
+        folder: formData.folder || 'General',
+        content: formData.content,
+        code: formData.code,
+        codeLanguage: formData.codeLanguage,
+        imageUrl: formData.imageUrl.trim(),
+        studentNames: parsedStudents,
+        gameType: formData.gameType,
+        createdAt: Date.now()
+      };
+      updatedCourses = [newItem, ...updatedCourses];
     }
 
-    const cleanCourses = deduplicateCourses(updatedCourses);
-    setCourses(cleanCourses);
-    await saveCourses(cleanCourses);
+    setCourses(updatedCourses);
+    await saveCourses(updatedCourses);
 
     alert(`Post Item Saved Successfully! Assigned to ${selectedGrades.length} Grade(s) and ${selectedSubjects.length} Subject(s).`);
 
@@ -314,18 +306,16 @@ export default function Courses() {
 
   const handleDelete = async (id: string) => {
     if (window.confirm("Delete this post item?")) {
-      const freshDbCourses = await getCourses();
-      const baseCourses = mergeArraysById(freshDbCourses, courses);
-      const updatedCourses = baseCourses.filter(c => c.id !== id);
-      setCourses(updatedCourses);
-      await saveCourses(updatedCourses);
+      const updated = await deleteCourse(id);
+      setCourses(updated);
     }
   };
 
   const handleEdit = (course: any) => {
     setSelectedGrades(course.grades || (course.grade ? [course.grade] : []));
     setSelectedSubjects(course.subjects || (course.subject ? [course.subject] : []));
-    setItemType(course.type || 'webpost');
+    const detectedType = course.type || (course.code ? 'html_code' : (course.studentNames && course.studentNames.length > 0) ? 'student_box' : course.gameType ? 'mobile_game' : 'webpost');
+    setItemType(detectedType as any);
     setFormData({
       grade: course.grade || '',
       subject: course.subject || '',
@@ -913,12 +903,46 @@ export default function Courses() {
     return (
       c.title?.toLowerCase().includes(q) ||
       c.subject?.toLowerCase().includes(q) ||
-      c.content?.toLowerCase().includes(q)
+      c.content?.toLowerCase().includes(q) ||
+      c.code?.toLowerCase().includes(q)
     );
   });
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6 animate-fade-in">
+      {/* Code Live Preview Modal */}
+      {previewItem && (
+        <div className="fixed inset-0 z-[9999] bg-white flex flex-col w-full h-full m-0 p-0 overflow-hidden">
+          <div className="bg-slate-900 text-white px-4 sm:px-6 py-3 flex items-center justify-between gap-4 border-b border-slate-800 shrink-0">
+            <button
+              onClick={() => setPreviewItem(null)}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl flex items-center gap-2 transition-all cursor-pointer"
+            >
+              <ArrowLeft size={18} />
+              <span>← பின்செல்க (Back)</span>
+            </button>
+            <div className="flex-1 text-center truncate">
+              <h3 className="font-black text-white text-sm sm:text-base truncate">{previewItem.title}</h3>
+              <p className="text-[11px] text-emerald-400 font-mono">HTML Live Web View Preview</p>
+            </div>
+            <button
+              onClick={() => setPreviewItem(null)}
+              className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="flex-1 w-full h-full bg-white">
+            <iframe
+              title={previewItem.title || 'Live Preview'}
+              srcDoc={previewItem.code || ''}
+              sandbox="allow-scripts allow-modals"
+              className="w-full h-full border-0"
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button 
@@ -1119,6 +1143,30 @@ export default function Courses() {
                       {course.content && (
                         <p className="text-xs text-slate-600 line-clamp-2 mb-3">{course.content}</p>
                       )}
+
+                      {(course.type === 'html_code' || Boolean(course.code && course.code.trim())) && (
+                        <div className="my-2.5 rounded-xl border border-slate-300 overflow-hidden bg-slate-900 shadow-inner">
+                          <div className="bg-slate-800 px-3 py-1 flex items-center justify-between text-[11px] text-emerald-400 font-mono border-b border-slate-700">
+                            <span className="flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                              HTML Live View Sandbox
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewItem(course)}
+                              className="text-[10px] text-indigo-300 hover:text-white font-bold"
+                            >
+                              Fullscreen ↗
+                            </button>
+                          </div>
+                          <iframe
+                            title={course.title}
+                            srcDoc={course.code || ''}
+                            sandbox="allow-scripts allow-modals"
+                            className="w-full h-32 bg-white border-0"
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div className="pt-3 border-t border-slate-200/60 flex items-center justify-between mt-2">
@@ -1129,6 +1177,14 @@ export default function Courses() {
                         >
                           <Edit3 size={13} /> Edit
                         </button>
+                        {(course.type === 'html_code' || Boolean(course.code)) && (
+                          <button
+                            onClick={() => setPreviewItem(course)}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1 transition-all shadow-xs"
+                          >
+                            <Eye size={13} /> Live View
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDelete(course.id)}
                           className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
