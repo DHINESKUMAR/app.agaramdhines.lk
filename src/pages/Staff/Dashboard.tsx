@@ -19,7 +19,8 @@ import {
   CreditCard,
   Sparkles,
   CheckCircle2,
-  Clock
+  Clock,
+  Home
 } from "lucide-react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
 import { QRCodeSVG } from "qrcode.react";
@@ -39,6 +40,9 @@ import WorkView from "./components/WorkView";
 import EnhancedSalaryView from "./components/EnhancedSalaryView";
 import StaffIdCardView from "./components/StaffIdCardView";
 import StaffCertificateView from "./components/StaffCertificateView";
+import DesignWorkerHome from "./components/DesignWorkerHome";
+import TeacherHome from "./components/TeacherHome";
+import ManagementStaffHome from "./components/ManagementStaffHome";
 
 export default function StaffDashboard() {
   const location = useLocation();
@@ -48,16 +52,26 @@ export default function StaffDashboard() {
   
   const [staff, setStaff] = useState<any>(location.state);
 
+  const roleLower = String(staff?.role || "").toLowerCase();
+
   const isDesignWorker = 
     staff?.role === "Design Worker" || 
     staff?.role === "Technical Staff" || 
-    String(staff?.role || "").toLowerCase().includes("design") || 
-    String(staff?.role || "").toLowerCase().includes("typist") || 
-    String(staff?.role || "").toLowerCase().includes("worker") ||
-    String(staff?.role || "").toLowerCase().includes("வடிவமைப்பு") ||
-    String(staff?.role || "").toLowerCase().includes("தட்டச்சு");
+    roleLower.includes("design") || 
+    roleLower.includes("typist") || 
+    roleLower.includes("worker") ||
+    roleLower.includes("வடிவமைப்பு") ||
+    roleLower.includes("தட்டச்சு");
 
-  const [activeTab, setActiveTab] = useState(isDesignWorker ? "work" : "website");
+  const isManagement = 
+    staff?.role === "Management" || 
+    staff?.role === "Admin Staff" || 
+    staff?.role === "Principal" || 
+    staff?.role === "Director" ||
+    roleLower.includes("management") ||
+    roleLower.includes("admin");
+
+  const [activeTab, setActiveTab] = useState("home");
 
   useEffect(() => {
     if (staff) {
@@ -180,6 +194,7 @@ export default function StaffDashboard() {
   };
 
   const navItems = isDesignWorker ? [
+    { id: "home", name: "Homepage", icon: <Home size={20} /> },
     { id: "work", name: "My Work & Tasks", icon: <Briefcase size={20} /> },
     { id: "salary", name: "Salary Details", icon: <DollarSign size={20} /> },
     { id: "my-attendance", name: "Attendance Log", icon: <Calendar size={20} /> },
@@ -187,8 +202,17 @@ export default function StaffDashboard() {
     { id: "certificate", name: "My Certificate", icon: <Award size={20} /> },
     { id: "chat", name: "Live Chat", icon: <WhatsAppIcon size={20} /> },
     { id: "profile", name: "Profile", icon: <User size={20} /> },
+  ] : isManagement ? [
+    { id: "home", name: "Homepage", icon: <Home size={20} /> },
+    { id: "work", name: "Daily Work Submissions", icon: <Briefcase size={20} /> },
+    { id: "salary", name: "Salary Details", icon: <DollarSign size={20} /> },
+    { id: "my-attendance", name: "Attendance Log", icon: <Calendar size={20} /> },
+    { id: "idcard", name: "Staff ID Card", icon: <CreditCard size={20} /> },
+    { id: "certificate", name: "My Certificate", icon: <Award size={20} /> },
+    { id: "chat", name: "Live Chat", icon: <WhatsAppIcon size={20} /> },
+    { id: "profile", name: "Profile", icon: <User size={20} /> },
   ] : [
-    { id: "website", name: "Agaram Website", icon: <Globe size={20} /> },
+    { id: "home", name: "Homepage", icon: <Home size={20} /> },
     { id: "timetable", name: "My Timetable", icon: <Calendar size={20} /> },
     { id: "zoom", name: "Add Zoom Links", icon: <Video size={20} /> },
     { id: "homework", name: "Assign Homework", icon: <BookOpen size={20} /> },
@@ -353,8 +377,29 @@ export default function StaffDashboard() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
+          {activeTab === "home" && (
+            isDesignWorker ? (
+              <DesignWorkerHome 
+                staff={staff} 
+                adminSettings={adminSettings} 
+                onNavigateTab={setActiveTab} 
+                onRefreshStaff={refreshStaffData} 
+              />
+            ) : isManagement ? (
+              <ManagementStaffHome 
+                staff={staff} 
+                adminSettings={adminSettings} 
+                onNavigateTab={setActiveTab} 
+              />
+            ) : (
+              <TeacherHome 
+                staff={staff} 
+                adminSettings={adminSettings} 
+                onNavigateTab={setActiveTab} 
+              />
+            )
+          )}
           {activeTab === "work" && <WorkView staff={staff} adminSettings={adminSettings} />}
-          {activeTab === "website" && <WebsiteView />}
           {activeTab === "timetable" && <TimetableManager staff={staff} />}
           {activeTab === "zoom" && <ZoomManager staff={staff} />}
           {activeTab === "homework" && <HomeworkManager staff={staff} />}

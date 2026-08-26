@@ -25,6 +25,7 @@ import Timetable from "./pages/Admin/Timetable";
 import Accounts from "./pages/Admin/Accounts";
 import AddEmployee from "./pages/Admin/AddEmployee";
 import ManageStaffLogin from "./pages/Admin/ManageStaffLogin";
+import StaffWorkSubmissions from "./pages/Admin/StaffWorkSubmissions";
 import Salary from "./pages/Admin/Salary";
 import AddIncomeExpense from "./pages/Admin/AddIncomeExpense";
 import AccountStatement from "./pages/Admin/AccountStatement";
@@ -102,6 +103,7 @@ export default function App() {
           <Route path="add-employee" element={<AddEmployee />} />
           <Route path="edit-employee/:id" element={<AddEmployee />} />
           <Route path="manage-staff-login" element={<ManageStaffLogin />} />
+          <Route path="staff-submissions" element={<StaffWorkSubmissions />} />
           <Route path="salary" element={<Salary />} />
           <Route path="accounts" element={<Accounts />} />
           <Route path="add-income-expense" element={<AddIncomeExpense />} />

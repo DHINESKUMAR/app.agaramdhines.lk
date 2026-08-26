@@ -112,6 +112,7 @@ export default function AdminDashboard() {
       subItems: [
         { name: "All Employees", path: "/admin/staffs" },
         { name: "Add Employee", path: "/admin/add-employee" },
+        { name: "Daily Work Submissions", path: "/admin/staff-submissions" },
         { name: "Manage Staff Login", path: "/admin/manage-staff-login" },
         { name: "Salary", path: "/admin/salary" },
       ]
@@ -252,6 +253,14 @@ export default function AdminDashboard() {
         
         <div className="flex items-center space-x-4">
           <div className="hidden md:flex items-center space-x-2">
+            <button 
+              onClick={() => navigate('/admin/manage-staff-login')}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-1.5 shadow-xs transition-colors"
+              title="Staff / Stop Panel"
+            >
+              <Briefcase size={14} />
+              <span>Staff Panel</span>
+            </button>
             <button className="bg-[#4285f4] text-white text-xs px-3 py-1.5 rounded-full font-medium flex items-center gap-1">
               APP STORE
             </button>

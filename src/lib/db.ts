@@ -240,7 +240,7 @@ const saveData = async (key: string, data: any) => {
       await setDoc(singletonRef, { data: cleanData, updatedAt: now }, { merge: false });
 
       // If key is students/forms/staffs/etc., sync individual documents cleanly
-      if (Array.isArray(cleanData) && ['forms', 'students', 'staffs', 'employeeTasks', 'zoomLinks', 'formSubmissions'].includes(key)) {
+      if (Array.isArray(cleanData) && ['forms', 'students', 'staffs', 'employeeTasks', 'dailyWorkUploads', 'zoomLinks', 'formSubmissions'].includes(key)) {
         for (const item of cleanData.slice(0, 100)) {
           if (item && item.id) {
             setDoc(doc(db, key, String(item.id)), { ...item, updatedAt: item.updatedAt || new Date().toISOString() }, { merge: true }).catch(() => {});
@@ -866,6 +866,10 @@ export interface EmployeeTask {
   workUnit?: string; // e.g. 'Pages', 'Banners', 'Papers', 'Videos'
   fileUrl?: string; // attachment or output link
   driveLink?: string;
+  fileName?: string;
+  fileType?: string;
+  fileSize?: number;
+  fileData?: string; // base64 data URL for direct download
   completionNotes?: string;
   verifiedByAdmin?: boolean;
 }
@@ -932,6 +936,75 @@ export const getEmployeeTasks = async (): Promise<EmployeeTask[]> => {
 };
 
 export const saveEmployeeTasks = (tasks: EmployeeTask[]) => saveData('employeeTasks', tasks);
+
+export interface DailyWorkUpload {
+  id: string;
+  staffId: string;
+  staffName: string;
+  title: string;
+  category: 'Typing & Data Entry' | 'Graphic Design' | 'Question Paper' | 'Course Material' | 'Thumbnails & Media' | 'Other';
+  date: string; // YYYY-MM-DD
+  fileName: string;
+  fileType: string; // 'application/pdf' | 'application/msword' | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' | 'image/jpeg' | 'image/png'
+  fileSize: number; // in bytes
+  fileData?: string; // base64 data URI
+  fileUrl?: string; // drive/cloud link if applicable
+  driveLink?: string; // Optional Google Drive link alongside direct file upload
+  workCount?: number; // e.g. 5 pages / 2 banners
+  workUnit?: string; // 'Pages', 'Banners', 'Papers', 'Designs', 'Files'
+  notes?: string;
+  status: 'Pending' | 'Approved' | 'Needs Revision';
+  adminNotes?: string;
+  createdAt: string; // ISO string
+}
+
+export const getDailyWorkUploads = async (): Promise<DailyWorkUpload[]> => {
+  const raw = await getData('dailyWorkUploads', null);
+  if (raw && Array.isArray(raw)) return raw;
+
+  // Sample initial daily uploads
+  const sampleUploads: DailyWorkUpload[] = [
+    {
+      id: 'upload_1',
+      staffId: '1773337820220',
+      staffName: 'Dhivya',
+      title: 'Grade 11 Tamil Model Paper - Section A & B',
+      category: 'Question Paper',
+      date: new Date().toISOString().slice(0, 10),
+      fileName: 'Grade11_Tamil_Model_Paper_2026.pdf',
+      fileType: 'application/pdf',
+      fileSize: 245000,
+      workCount: 8,
+      workUnit: 'Pages',
+      notes: 'தரம் 11 மாதிரி வினாத்தாள் தட்டச்சு முடிந்து சரிபார்க்கப்பட்டுள்ளது.',
+      status: 'Approved',
+      adminNotes: 'Excellent work. Formatting is clean.',
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'upload_2',
+      staffId: '1773337820220',
+      staffName: 'Dhivya',
+      title: 'YouTube Thumbnail Design - Day 15 Course',
+      category: 'Graphic Design',
+      date: new Date().toISOString().slice(0, 10),
+      fileName: 'Tamil_Course_Day15_Thumbnail.png',
+      fileType: 'image/png',
+      fileSize: 850000,
+      workCount: 2,
+      workUnit: 'Thumbnails',
+      notes: 'YouTube Banner & Poster exported in 1080p HD format.',
+      status: 'Approved',
+      createdAt: new Date(Date.now() - 3600000).toISOString()
+    }
+  ];
+
+  await saveData('dailyWorkUploads', sampleUploads);
+  return sampleUploads;
+};
+
+export const saveDailyWorkUploads = (uploads: DailyWorkUpload[]) => saveData('dailyWorkUploads', uploads);
+
 
 export const getSubjects = async () => {
   const rawList = await getData('subjects', null);
@@ -1968,7 +2041,7 @@ export const ALL_BACKUP_COLLECTIONS = [
   'classes', 'homework', 'staffs', 'staffAttendance', 'subjects',
   'incomeExpense', 'grades', 'timetable', 'examMarks', 'webPosts',
   'examSettings', 'announcements', 'behaviourRecords', 'questionPapers',
-  'chatMessages', 'forms', 'formSubmissions', 'employeeTasks'
+  'chatMessages', 'forms', 'formSubmissions', 'employeeTasks', 'dailyWorkUploads'
 ];
 
 export interface BackupOptions {

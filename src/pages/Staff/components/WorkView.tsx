@@ -16,7 +16,10 @@ import {
   Layers,
   Award,
   AlertCircle,
-  FileCheck
+  FileCheck,
+  UploadCloud,
+  File as FileIcon,
+  Image as ImageIcon
 } from "lucide-react";
 import { getEmployeeTasks, saveEmployeeTasks, EmployeeTask } from "../../../lib/db";
 import { jsPDF } from "jspdf";
@@ -38,6 +41,7 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTask, setEditingTask] = useState<EmployeeTask | null>(null);
+  const [modalFileError, setModalFileError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Partial<EmployeeTask>>({
     title: "",
@@ -51,6 +55,10 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
     workCount: 1,
     workUnit: "Pages",
     driveLink: "",
+    fileName: "",
+    fileType: "",
+    fileSize: 0,
+    fileData: "",
     completionNotes: ""
   });
 
@@ -73,6 +81,7 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
   };
 
   const handleOpenAddModal = (task?: EmployeeTask) => {
+    setModalFileError(null);
     if (task) {
       setEditingTask(task);
       setFormData({ ...task });
@@ -90,10 +99,79 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
         workCount: 1,
         workUnit: "Pages",
         driveLink: "",
+        fileName: "",
+        fileType: "",
+        fileSize: 0,
+        fileData: "",
         completionNotes: ""
       });
     }
     setShowAddModal(true);
+  };
+
+  const handleModalFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setModalFileError(null);
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+      
+      // Video check
+      if (['.mp4', '.mov', '.avi', '.mkv', '.webm', '.wmv', '.flv', '.m4v', '.3gp'].includes(ext) || file.type.startsWith('video/')) {
+        setModalFileError("⚠️ Large video files cannot be uploaded directly. Direct upload is supported for Documents (Word .doc, .docx), PDFs (.pdf), and Images (JPG, JPEG, PNG). For video files, please paste your Google Drive link in the Google Drive link field below.");
+        return;
+      }
+
+      // Valid extensions
+      const allowedExts = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+      if (!allowedExts.includes(ext)) {
+        setModalFileError("Only PDF documents, Microsoft Word (.doc, .docx), JPG, and PNG files are supported for direct upload.");
+        return;
+      }
+
+      try {
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file);
+        });
+
+        setFormData(prev => ({
+          ...prev,
+          fileName: file.name,
+          fileType: file.type || 'application/octet-stream',
+          fileSize: file.size,
+          fileData: base64Data,
+          title: prev.title || file.name.replace(/\.[^/.]+$/, "")
+        }));
+      } catch (err) {
+        console.error("Error reading file:", err);
+        setModalFileError("Failed to read file.");
+      }
+    }
+  };
+
+  const handleDownloadTaskFile = (task: EmployeeTask) => {
+    if (!task.fileData) {
+      if (task.driveLink) {
+        window.open(task.driveLink, '_blank');
+        return;
+      }
+      alert("No direct file attachment found for this task.");
+      return;
+    }
+
+    try {
+      const link = document.createElement('a');
+      link.href = task.fileData;
+      link.download = task.fileName || `${task.title || 'work_file'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Failed to download:", err);
+      alert("Failed to download file.");
+    }
   };
 
   const handleSaveTask = async (e: React.FormEvent) => {
@@ -127,6 +205,10 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
           workCount: Number(formData.workCount) || 1,
           workUnit: formData.workUnit || "Items",
           driveLink: formData.driveLink,
+          fileName: formData.fileName,
+          fileType: formData.fileType,
+          fileSize: formData.fileSize,
+          fileData: formData.fileData,
           completionNotes: formData.completionNotes
         };
         updatedAll = [newTask, ...allTasks];
@@ -525,6 +607,12 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
                   {task.completedDate && (
                     <span className="text-emerald-700">Completed: <strong>{task.completedDate}</strong></span>
                   )}
+                  {task.fileName && (
+                    <span className="inline-flex items-center gap-1 font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
+                      <FileIcon size={12} className="text-blue-600" />
+                      {task.fileName}
+                    </span>
+                  )}
                   {task.driveLink && (
                     <a
                       href={task.driveLink}
@@ -540,6 +628,15 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
 
               {/* Actions */}
               <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                {task.fileData && (
+                  <button
+                    onClick={() => handleDownloadTaskFile(task)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors inline-flex items-center gap-1"
+                    title="Download attached file"
+                  >
+                    <Download size={14} /> Download
+                  </button>
+                )}
                 <button
                   onClick={() => handleToggleStatus(task)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
@@ -587,6 +684,37 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
             </div>
 
             <form onSubmit={handleSaveTask} className="space-y-4 mt-4">
+              {modalFileError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-bold flex items-start gap-2">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                  <span>{modalFileError}</span>
+                </div>
+              )}
+
+              {/* Direct File Attachment Zone */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                  Attach Work File (PDF, Word, JPG, PNG)
+                </label>
+                <div className="relative border-2 border-dashed border-gray-300 hover:border-blue-500 rounded-xl p-4 text-center bg-gray-50/50 hover:bg-blue-50/30 transition-colors cursor-pointer">
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png"
+                    onChange={handleModalFileChange}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <div className="flex items-center justify-center gap-2 text-xs font-semibold text-gray-700">
+                    <UploadCloud size={18} className="text-blue-600" />
+                    <span>
+                      {formData.fileName ? `Selected: ${formData.fileName}` : "Click or drag to attach PDF, Word (.doc/.docx), or JPG/PNG"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Direct instant download for admin. (For large video files, paste Google Drive link below)
+                  </p>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
                   Work / Task Title <span className="text-red-500">*</span>
@@ -675,7 +803,7 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
 
               <div>
                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                  Google Drive / Output Link
+                  Google Drive / Output Link (Optional / விருப்பத்திற்கேற்ப)
                 </label>
                 <input
                   type="url"
