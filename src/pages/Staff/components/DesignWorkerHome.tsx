@@ -32,7 +32,7 @@ import {
   saveStaffAttendance 
 } from "../../../lib/db";
 import { jsPDF } from "jspdf";
-import { processAndUploadWorkFile, getFileFromIndexedDB } from "../../../lib/fileStorage";
+import { processAndUploadWorkFile, downloadAnyWorkFile } from "../../../lib/fileStorage";
 
 interface DesignWorkerHomeProps {
   staff: any;
@@ -252,8 +252,8 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
         for (const file of selectedFiles) {
           const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
           
-          // Process and upload file with IndexedDB cache + Firebase Storage
-          const { fileUrl, base64Data } = await processAndUploadWorkFile(file, uploadId, staff.id);
+          // Ultra-fast Process and upload file with IndexedDB cache + Firestore chunks + Firebase Storage race
+          const { fileUrl, base64Data, chunkCount, hasChunks } = await processAndUploadWorkFile(file, uploadId, staff.id);
 
           const uploadEntry: DailyWorkUpload = {
             id: uploadId,
@@ -265,9 +265,11 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
             fileName: file.name,
             fileType: file.type || 'application/octet-stream',
             fileSize: file.size,
-            fileData: file.size < 500000 ? base64Data : undefined, // Keep base64 directly if small (<500KB)
+            fileData: file.size < 60000 ? base64Data : undefined, // Keep tiny base64 only if <60KB
             driveLink: uploadDriveLink.trim() || undefined,
             fileUrl: fileUrl || uploadDriveLink.trim() || undefined,
+            hasChunks: hasChunks,
+            chunkCount: chunkCount,
             workCount: Number(workCount) || 1,
             workUnit: workUnit,
             notes: uploadNotes,
@@ -310,58 +312,18 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
       setUploadDriveLink("");
       setUploadNotes("");
       setWorkCount(1);
-      setUploadSuccess(`கோப்பு வெற்றிகரமாகப் பதிவேற்றப்பட்டது! (${newUploads.length} work record submitted). Admin will review and download your file directly.`);
+      setUploadSuccess(`கோப்பு உடனடியாக பதிவேற்றப்பட்டது! (${newUploads.length} work record synced). Admin can now view & download your file instantly.`);
     } catch (err: any) {
       console.error("Upload error:", err);
-      setUploadError("Failed to upload file. " + (err?.message || "Please check file size and try again."));
+      setUploadError("Failed to upload file. " + (err?.message || "Please try again."));
     } finally {
       setIsUploading(false);
     }
   };
 
-  // Direct File Download
+  // Direct Universal File Download (Word, PDF, PNG, JPG)
   const handleDownloadFile = async (upload: DailyWorkUpload) => {
-    try {
-      // 1. If Firebase Storage URL or HTTPS link exists
-      if (upload.fileUrl && upload.fileUrl.startsWith('http')) {
-        window.open(upload.fileUrl, '_blank');
-        return;
-      }
-
-      // 2. If base64 data URI is embedded in object
-      if (upload.fileData && upload.fileData.startsWith('data:')) {
-        const link = document.createElement('a');
-        link.href = upload.fileData;
-        link.download = upload.fileName || `${upload.title || 'work_file'}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        return;
-      }
-
-      // 3. Try to load from IndexedDB local storage cache
-      const cached = await getFileFromIndexedDB(upload.id);
-      if (cached && cached.fileData) {
-        const link = document.createElement('a');
-        link.href = cached.fileData;
-        link.download = cached.fileName || upload.fileName || `${upload.title || 'work_file'}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        return;
-      }
-
-      // 4. If Google Drive link exists
-      if (upload.driveLink) {
-        window.open(upload.driveLink, '_blank');
-        return;
-      }
-
-      alert("கோப்பு இணைப்பை திறக்க முடியவில்லை / File source could not be opened.");
-    } catch (err) {
-      console.error("Download failed:", err);
-      alert("Failed to download file.");
-    }
+    await downloadAnyWorkFile(upload);
   };
 
   // Delete Upload

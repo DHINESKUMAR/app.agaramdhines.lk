@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { getEmployeeTasks, saveEmployeeTasks, EmployeeTask } from "../../../lib/db";
 import { jsPDF } from "jspdf";
-import { processAndUploadWorkFile, getFileFromIndexedDB } from "../../../lib/fileStorage";
+import { processAndUploadWorkFile, downloadAnyWorkFile } from "../../../lib/fileStorage";
 
 interface WorkViewProps {
   staff: any;
@@ -140,14 +140,14 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
 
       try {
         const tempTaskId = editingTask ? editingTask.id : `task_${Date.now()}`;
-        const { fileUrl, base64Data } = await processAndUploadWorkFile(file, tempTaskId, staff.id);
+        const { fileUrl, base64Data, chunkCount, hasChunks } = await processAndUploadWorkFile(file, tempTaskId, staff.id);
 
         setFormData(prev => ({
           ...prev,
           fileName: file.name,
           fileType: file.type || 'application/octet-stream',
           fileSize: file.size,
-          fileData: file.size < 500000 ? base64Data : undefined,
+          fileData: file.size < 60000 ? base64Data : undefined,
           driveLink: fileUrl || prev.driveLink,
           title: prev.title || file.name.replace(/\.[^/.]+$/, "")
         }));
@@ -159,41 +159,7 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
   };
 
   const handleDownloadTaskFile = async (task: EmployeeTask) => {
-    try {
-      // 1. If driveLink or HTTPS file URL exists
-      if (task.driveLink && task.driveLink.startsWith('http')) {
-        window.open(task.driveLink, '_blank');
-        return;
-      }
-
-      // 2. If Base64 data exists
-      if (task.fileData && task.fileData.startsWith('data:')) {
-        const link = document.createElement('a');
-        link.href = task.fileData;
-        link.download = task.fileName || `${task.title || 'work_file'}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        return;
-      }
-
-      // 3. Try IndexedDB cache
-      const cached = await getFileFromIndexedDB(task.id);
-      if (cached && cached.fileData) {
-        const link = document.createElement('a');
-        link.href = cached.fileData;
-        link.download = cached.fileName || task.fileName || `${task.title || 'work_file'}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        return;
-      }
-
-      alert("No downloadable file found for this task.");
-    } catch (err) {
-      console.error("Failed to download:", err);
-      alert("Failed to download file.");
-    }
+    await downloadAnyWorkFile(task as any);
   };
 
   const handleSaveTask = async (e: React.FormEvent) => {

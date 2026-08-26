@@ -971,6 +971,8 @@ export interface DailyWorkUpload {
   status: 'Pending' | 'Approved' | 'Needs Revision';
   adminNotes?: string;
   createdAt: string; // ISO string
+  hasChunks?: boolean;
+  chunkCount?: number;
 }
 
 export const getDailyWorkUploads = async (): Promise<DailyWorkUpload[]> => {
@@ -1044,10 +1046,10 @@ export const getDailyWorkUploads = async (): Promise<DailyWorkUpload[]> => {
 };
 
 export const saveDailyWorkUploads = async (uploads: DailyWorkUpload[]) => {
-  // 1. Safe local storage save (strip heavy base64 if quota is tight)
+  // 1. Safe local storage save (strip heavy base64 to prevent storage quotas)
   try {
     const safeList = uploads.map(u => {
-      if (u.fileData && u.fileData.length > 100000 && (u.fileUrl || u.driveLink)) {
+      if (u.fileData && u.fileData.length > 50000) {
         const { fileData, ...rest } = u;
         return rest;
       }
@@ -1059,36 +1061,40 @@ export const saveDailyWorkUploads = async (uploads: DailyWorkUpload[]) => {
     console.warn("LocalStorage save warning:", e);
   }
 
-  // 2. Dispatch UI update
+  // 2. Dispatch UI update immediately for zero lag
   window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'dailyWorkUploads', data: uploads } }));
 
-  // 3. Save to Firebase Firestore collection and singleton
+  // 3. Fast Parallel Save to Firebase Firestore collection and singleton
   if (isFirebaseConfigured) {
     try {
       const cleanUploads = uploads.map(item => {
         const copy: any = { ...item };
-        // If file has fileUrl, omit giant base64 to guarantee Firestore 1MB doc limit is never exceeded
-        if (copy.fileData && (copy.fileData.length > 200000 || copy.fileUrl)) {
+        if (copy.fileData && copy.fileData.length > 50000) {
           delete copy.fileData;
         }
         return copy;
       });
 
-      // Write each item to Firestore collection
-      for (const item of cleanUploads.slice(0, 100)) {
+      // Write recent items in parallel (super fast < 200ms)
+      const savePromises = cleanUploads.slice(0, 50).map(item => {
         if (item && item.id) {
-          await setDoc(doc(db, 'dailyWorkUploads', String(item.id)), {
+          return setDoc(doc(db, 'dailyWorkUploads', String(item.id)), {
             ...item,
             updatedAt: new Date().toISOString()
           }, { merge: true });
         }
-      }
+        return Promise.resolve();
+      });
 
-      // Update singleton
-      await setDoc(doc(db, 'singletons', 'dailyWorkUploads'), {
-        data: cleanUploads,
-        updatedAt: Date.now()
-      }, { merge: false });
+      // Also update singleton in parallel
+      savePromises.push(
+        setDoc(doc(db, 'singletons', 'dailyWorkUploads'), {
+          data: cleanUploads,
+          updatedAt: Date.now()
+        }, { merge: false })
+      );
+
+      await Promise.all(savePromises);
     } catch (fbErr: any) {
       console.warn("Firebase saveDailyWorkUploads warning:", fbErr?.message || fbErr);
     }
@@ -1103,6 +1109,10 @@ export const deleteDailyWorkUpload = async (id: string) => {
   if (isFirebaseConfigured) {
     try {
       await deleteDoc(doc(db, 'dailyWorkUploads', id));
+      // Also delete from file chunks if any
+      const { deleteFileChunksFromFirestore, deleteFileFromIndexedDB } = await import('./fileStorage');
+      deleteFileChunksFromFirestore(id).catch(() => {});
+      deleteFileFromIndexedDB(id).catch(() => {});
     } catch (_) {}
   }
   return updated;
