@@ -46,8 +46,27 @@ const setupRealtimeListener = (key: string) => {
       const colUnsub = onSnapshot(collection(db, 'dailyWorkUploads'), (colSnap) => {
         if (!colSnap.empty) {
           const list = colSnap.docs.map(d => ({ ...d.data(), id: d.id }));
-          list.sort((a: any, b: any) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
-          window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'dailyWorkUploads', data: list } }));
+          
+          let deletedIds: string[] = [];
+          try {
+            const rawDeleted = localStorage.getItem('dailyWorkUploads_deleted');
+            if (rawDeleted) deletedIds = JSON.parse(rawDeleted);
+          } catch (_) {}
+
+          let localUploads: any[] = [];
+          try {
+            const rawLocal = localStorage.getItem('dailyWorkUploads');
+            if (rawLocal) localUploads = JSON.parse(rawLocal);
+          } catch (_) {}
+
+          const merged = mergeArraysById(list, localUploads).filter(u => !deletedIds.includes(u.id));
+          merged.sort((a: any, b: any) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+          
+          try {
+            localStorage.setItem('dailyWorkUploads', JSON.stringify(merged));
+          } catch (_) {}
+
+          window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'dailyWorkUploads', data: merged } }));
         }
       }, (err) => {
         console.warn("Realtime dailyWorkUploads collection error:", err);
@@ -978,31 +997,61 @@ export interface DailyWorkUpload {
 export const getDailyWorkUploads = async (): Promise<DailyWorkUpload[]> => {
   setupRealtimeListener('dailyWorkUploads');
 
+  let deletedIds: string[] = [];
+  try {
+    const rawDeleted = localStorage.getItem('dailyWorkUploads_deleted');
+    if (rawDeleted) deletedIds = JSON.parse(rawDeleted);
+  } catch (_) {}
+
+  let localUploads: DailyWorkUpload[] = [];
+  try {
+    const rawLocal = localStorage.getItem('dailyWorkUploads');
+    if (rawLocal) {
+      localUploads = JSON.parse(rawLocal);
+    }
+  } catch (_) {}
+
+  let remoteUploads: DailyWorkUpload[] = [];
+
   if (isFirebaseConfigured) {
     try {
       const querySnapshot = await getDocs(collection(db, 'dailyWorkUploads'));
       if (!querySnapshot.empty) {
-        const colUploads: DailyWorkUpload[] = querySnapshot.docs.map((docSnap) => ({
+        remoteUploads = querySnapshot.docs.map((docSnap) => ({
           ...(docSnap.data() as DailyWorkUpload),
           id: docSnap.id
         }));
-
-        colUploads.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
-
-        // Cache safe version locally
-        try {
-          localStorage.setItem('dailyWorkUploads', JSON.stringify(colUploads));
-        } catch (_) {}
-
-        return colUploads;
       }
     } catch (fbErr) {
       console.warn("Firestore collection query for dailyWorkUploads:", fbErr);
     }
+
+    try {
+      const singletonSnap = await getDoc(doc(db, 'singletons', 'dailyWorkUploads'));
+      if (singletonSnap.exists() && Array.isArray(singletonSnap.data()?.data)) {
+        remoteUploads = mergeArraysById(remoteUploads, singletonSnap.data().data);
+      }
+    } catch (_) {}
+  }
+
+  // Merge remote and local so newly uploaded items in local are NEVER discarded
+  let combined = mergeArraysById(remoteUploads, localUploads);
+  if (deletedIds.length > 0) {
+    combined = combined.filter(u => !deletedIds.includes(u.id));
+  }
+
+  if (combined.length > 0) {
+    combined.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+    try {
+      localStorage.setItem('dailyWorkUploads', JSON.stringify(combined));
+    } catch (_) {}
+    return combined;
   }
 
   const raw = await getData('dailyWorkUploads', null);
-  if (raw && Array.isArray(raw) && raw.length > 0) return raw;
+  if (raw && Array.isArray(raw) && raw.length > 0) {
+    return raw.filter(u => !deletedIds.includes(u.id));
+  }
 
   // Sample initial daily uploads
   const sampleUploads: DailyWorkUpload[] = [
@@ -1047,27 +1096,38 @@ export const getDailyWorkUploads = async (): Promise<DailyWorkUpload[]> => {
 
 export const saveDailyWorkUploads = async (uploads: DailyWorkUpload[]) => {
   // 1. Safe local storage save (strip heavy base64 to prevent storage quotas)
+  let safeList: DailyWorkUpload[] = [];
   try {
-    const safeList = uploads.map(u => {
+    safeList = uploads.map(u => {
       if (u.fileData && u.fileData.length > 50000) {
         const { fileData, ...rest } = u;
         return rest;
       }
       return u;
     });
+
+    // Remove saved item IDs from deleted tombstone list if they were re-saved
+    const rawDeleted = localStorage.getItem('dailyWorkUploads_deleted');
+    if (rawDeleted) {
+      const deletedIds: string[] = JSON.parse(rawDeleted);
+      const savedIds = safeList.map(s => s.id);
+      const cleanedDeleted = deletedIds.filter(d => !savedIds.includes(d));
+      localStorage.setItem('dailyWorkUploads_deleted', JSON.stringify(cleanedDeleted));
+    }
+
     localStorage.setItem('dailyWorkUploads', JSON.stringify(safeList));
     localStorage.setItem('dailyWorkUploads_lastSavedAt', String(Date.now()));
   } catch (e) {
     console.warn("LocalStorage save warning:", e);
   }
 
-  // 2. Dispatch UI update immediately for zero lag
-  window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'dailyWorkUploads', data: uploads } }));
+  // 2. Dispatch UI update immediately with safeList
+  window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'dailyWorkUploads', data: safeList } }));
 
   // 3. Fast Parallel Save to Firebase Firestore collection and singleton
   if (isFirebaseConfigured) {
     try {
-      const cleanUploads = uploads.map(item => {
+      const cleanUploads = safeList.map(item => {
         const copy: any = { ...item };
         if (copy.fileData && copy.fileData.length > 50000) {
           delete copy.fileData;
@@ -1075,8 +1135,8 @@ export const saveDailyWorkUploads = async (uploads: DailyWorkUpload[]) => {
         return copy;
       });
 
-      // Write recent items in parallel (super fast < 200ms)
-      const savePromises = cleanUploads.slice(0, 50).map(item => {
+      // Write recent items in parallel
+      const savePromises = cleanUploads.slice(0, 100).map(item => {
         if (item && item.id) {
           return setDoc(doc(db, 'dailyWorkUploads', String(item.id)), {
             ...item,
@@ -1094,7 +1154,7 @@ export const saveDailyWorkUploads = async (uploads: DailyWorkUpload[]) => {
         }, { merge: false })
       );
 
-      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2000));
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
       await Promise.race([Promise.all(savePromises), timeoutPromise]);
     } catch (fbErr: any) {
       console.warn("Firebase saveDailyWorkUploads warning:", fbErr?.message || fbErr);
@@ -1103,6 +1163,16 @@ export const saveDailyWorkUploads = async (uploads: DailyWorkUpload[]) => {
 };
 
 export const deleteDailyWorkUpload = async (id: string) => {
+  // Mark in tombstone
+  try {
+    const rawDeleted = localStorage.getItem('dailyWorkUploads_deleted') || '[]';
+    const deletedIds: string[] = JSON.parse(rawDeleted);
+    if (!deletedIds.includes(id)) {
+      deletedIds.push(id);
+      localStorage.setItem('dailyWorkUploads_deleted', JSON.stringify(deletedIds.slice(-200)));
+    }
+  } catch (_) {}
+
   const current = await getDailyWorkUploads();
   const updated = current.filter(u => u.id !== id);
   await saveDailyWorkUploads(updated);

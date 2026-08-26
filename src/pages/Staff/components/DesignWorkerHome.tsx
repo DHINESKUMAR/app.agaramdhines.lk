@@ -71,7 +71,10 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
     loadAllData();
 
     const handleDbUpdate = (e: any) => {
-      if (['dailyWorkUploads', 'employeeTasks', 'staffAttendance', 'staffs'].includes(e.detail?.key)) {
+      if (e.detail?.key === 'dailyWorkUploads' && Array.isArray(e.detail?.data)) {
+        const myUploads = e.detail.data.filter((u: any) => u.staffId === staff.id || u.staffName === staff.name);
+        setUploads(myUploads);
+      } else if (['employeeTasks', 'staffAttendance', 'staffs'].includes(e.detail?.key)) {
         loadAllData();
       }
     };

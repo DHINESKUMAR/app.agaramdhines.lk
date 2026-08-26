@@ -65,6 +65,19 @@ export default function WorkView({ staff, adminSettings }: WorkViewProps) {
 
   useEffect(() => {
     loadTasks();
+
+    const handleDbUpdate = (e: any) => {
+      if (e.detail?.key === 'employeeTasks') {
+        if (Array.isArray(e.detail?.data)) {
+          const myTasks = e.detail.data.filter((t: any) => t.staffId === staff.id || t.staffName === staff.name || t.staffId === 'general');
+          setTasks(myTasks);
+        } else {
+          loadTasks();
+        }
+      }
+    };
+    window.addEventListener('db_updated', handleDbUpdate);
+    return () => window.removeEventListener('db_updated', handleDbUpdate);
   }, [staff.id]);
 
   const loadTasks = async () => {
