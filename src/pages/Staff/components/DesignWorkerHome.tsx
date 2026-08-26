@@ -368,46 +368,53 @@ export default function DesignWorkerHome({ staff, adminSettings, onNavigateTab, 
     doc.setTextColor(30, 58, 138);
     doc.text(instName, 105, 18, { align: "center" });
 
-    doc.setFontSize(13);
+    doc.setFontSize(12);
     doc.setTextColor(75, 85, 99);
     doc.text(`STAFF SALARY SLIP - ${currentMonthName.toUpperCase()}`, 105, 26, { align: "center" });
 
-    doc.line(14, 30, 196, 30);
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Official Helpline / Accounts: +94778054232 • Email: ${adminSettings?.email || "info@agaramacademy.lk"}`, 105, 31, { align: "center" });
 
-    doc.setFontSize(10);
+    doc.line(14, 34, 196, 34);
+
+    doc.setFontSize(9.5);
     doc.setTextColor(30, 41, 59);
-    doc.text(`Staff Name: ${staff.name}`, 14, 38);
-    doc.text(`Role: ${staff.role || "Design Worker"}`, 14, 44);
-    doc.text(`Staff ID: ${staff.id}`, 14, 50);
+    doc.text(`Staff Name: ${staff.name}`, 14, 42);
+    doc.text(`Role: ${staff.role || "Design Worker"}`, 14, 48);
+    doc.text(`Staff ID: ${staff.id}`, 14, 54);
+    doc.text(`Phone: ${staff.phone || "+94778054232"}`, 14, 60);
 
-    doc.text(`Month: ${currentMonthName}`, 130, 38);
-    doc.text(`Status: ${isPaidThisMonth ? "PAID" : "PENDING"}`, 130, 44);
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, 130, 50);
+    doc.text(`Month: ${currentMonthName}`, 130, 42);
+    doc.text(`Status: ${isPaidThisMonth ? "PAID IN FULL" : "PENDING"}`, 130, 48);
+    doc.text(`Helpline: +94778054232`, 130, 54);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 130, 60);
 
-    doc.line(14, 55, 196, 55);
+    doc.line(14, 65, 196, 65);
 
-    doc.setFontSize(12);
+    doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.text("Earnings & Disbursal Breakdown:", 14, 65);
+    doc.text("Earnings & Disbursal Breakdown:", 14, 75);
 
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     doc.setFont("helvetica", "normal");
-    doc.text("1. Monthly Base Salary", 14, 75);
-    doc.text(`Rs. ${baseSalary.toLocaleString()}`, 160, 75);
+    doc.text("1. Monthly Base Salary", 14, 85);
+    doc.text(`Rs. ${baseSalary.toLocaleString()}`, 160, 85);
 
     if (currentMonthPayment?.bonus) {
-      doc.text("2. Performance Bonus / Allowance", 14, 82);
-      doc.text(`Rs. ${Number(currentMonthPayment.bonus).toLocaleString()}`, 160, 82);
+      doc.text("2. Performance Bonus / Allowance", 14, 93);
+      doc.text(`Rs. ${Number(currentMonthPayment.bonus).toLocaleString()}`, 160, 93);
     }
 
-    doc.line(14, 90, 196, 90);
+    doc.line(14, 102, 196, 102);
     doc.setFont("helvetica", "bold");
-    doc.text("Net Total Amount:", 14, 98);
-    doc.text(`Rs. ${(isPaidThisMonth ? paidAmount : baseSalary).toLocaleString()}`, 160, 98);
+    doc.text("Net Total Payable:", 14, 110);
+    doc.text(`Rs. ${(isPaidThisMonth ? paidAmount : baseSalary).toLocaleString()}`, 160, 110);
 
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setFont("helvetica", "italic");
-    doc.text("This is a computer-generated salary slip from Agaram Online Academy.", 105, 130, { align: "center" });
+    doc.setTextColor(100, 116, 139);
+    doc.text("Official Helpline: +94778054232 | This is a computer-generated salary slip from Agaram Online Academy.", 105, 135, { align: "center" });
 
     doc.save(`${staff.name}_Salary_Slip_${currentMonthStr}.pdf`);
   };

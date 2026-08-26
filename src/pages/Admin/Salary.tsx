@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getStaffs, saveStaffs } from '../../lib/db';
+import { jsPDF } from 'jspdf';
 import { 
   Search, 
   DollarSign, 
@@ -16,7 +17,8 @@ import {
   Users,
   CheckCircle2,
   AlertCircle,
-  Filter
+  Filter,
+  Download
 } from 'lucide-react';
 
 export default function Salary() {
@@ -165,6 +167,144 @@ export default function Salary() {
     if (historyModalStaff && historyModalStaff.id === staffId) {
       setHistoryModalStaff(updatedStaffs.find(s => s.id === staffId));
     }
+  };
+
+  // Download Official PDF Payslip with phone number +94778054232
+  const handleDownloadAdminPayslip = (staff: any, targetMonth: string, paymentRecord?: any) => {
+    const doc = new jsPDF();
+    const instName = "AGARAM DHINES ACADEMY";
+    const instPhone = "+94778054232";
+    const instEmail = "info@agaramacademy.lk";
+    const baseSalary = Number(staff.salary) || 0;
+    const amount = paymentRecord ? Number(paymentRecord.amount) : baseSalary;
+    const paymentDate = paymentRecord?.date ? new Date(paymentRecord.date).toLocaleDateString() : new Date().toLocaleDateString();
+
+    // Header Accent
+    doc.setFillColor(30, 58, 138);
+    doc.rect(0, 0, 210, 32, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(255, 255, 255);
+    doc.text(instName.toUpperCase(), 105, 14, { align: "center" });
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(219, 234, 254);
+    doc.text(`Official Salary Payslip & Payment Voucher • Tel / WhatsApp: +94778054232 • ${instEmail}`, 105, 22, { align: "center" });
+
+    // Document Title Banner
+    doc.setFillColor(243, 244, 246);
+    doc.roundedRect(14, 38, 182, 14, 2, 2, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(30, 58, 138);
+    doc.text(`SALARY SLIP FOR THE MONTH: ${targetMonth.toUpperCase()}`, 105, 47, { align: "center" });
+
+    // Staff Details Table Container
+    doc.setDrawColor(229, 231, 235);
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(14, 56, 182, 42, 2, 2, "FD");
+
+    doc.setFontSize(9.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Staff Name:", 18, 64);
+    doc.text("Staff ID:", 18, 71);
+    doc.text("Phone Number:", 18, 78);
+    doc.text("Designation / Role:", 18, 85);
+    doc.text("Date of Joining:", 18, 92);
+
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text(staff.name || "N/A", 60, 64);
+    doc.text(staff.id || "STF-" + Math.floor(Math.random() * 8999 + 1000), 60, 71);
+    doc.text(staff.phone || "+94778054232", 60, 78);
+    doc.text(staff.role || "Staff Member", 60, 85);
+    doc.text(staff.joinDate || "N/A", 60, 92);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 116, 139);
+    doc.text("Payment Status:", 120, 64);
+    doc.text("Payment Date:", 120, 71);
+    doc.text("Official Helpline:", 120, 78);
+    doc.text("Payment Mode:", 120, 85);
+    doc.text("Category:", 120, 92);
+
+    doc.setFont("helvetica", "bold");
+    if (paymentRecord) {
+      doc.setTextColor(16, 185, 129);
+      doc.text("PAID IN FULL", 158, 64);
+    } else {
+      doc.setTextColor(217, 119, 6);
+      doc.text("PROCESSED / PENDING", 158, 64);
+    }
+
+    doc.setTextColor(15, 23, 42);
+    doc.text(paymentDate, 158, 71);
+    doc.text("+94778054232", 158, 78);
+    doc.text(paymentRecord?.paymentMethod || "Bank Transfer", 158, 85);
+    doc.text(staff.specialization || "Online Academy Staff", 158, 92);
+
+    // Earnings Table Header
+    doc.setFillColor(239, 246, 255);
+    doc.rect(14, 104, 182, 9, "F");
+    doc.setDrawColor(191, 219, 254);
+    doc.rect(14, 104, 182, 9, "S");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(30, 58, 138);
+    doc.text("EARNINGS & ALLOWANCES", 18, 110);
+    doc.text("AMOUNT (LKR)", 190, 110, { align: "right" });
+
+    let rowY = 120;
+    const drawRow = (label: string, val: string, isBold: boolean = false) => {
+      doc.setFont("helvetica", isBold ? "bold" : "normal");
+      doc.setTextColor(15, 23, 42);
+      doc.text(label, 18, rowY);
+      doc.text(val, 190, rowY, { align: "right" });
+      doc.setDrawColor(241, 245, 249);
+      doc.line(14, rowY + 3, 196, rowY + 3);
+      rowY += 10;
+    };
+
+    drawRow("Basic Monthly Salary", `Rs. ${baseSalary.toLocaleString()}`);
+    if (paymentRecord?.bonus) {
+      drawRow("Performance Bonus & Allowances", `Rs. ${Number(paymentRecord.bonus).toLocaleString()}`);
+    }
+
+    doc.setFillColor(248, 250, 252);
+    doc.rect(14, rowY, 182, 11, "F");
+    doc.setDrawColor(226, 232, 240);
+    doc.rect(14, rowY, 182, 11, "S");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(30, 58, 138);
+    doc.text("NET SALARY DISBURSED", 18, rowY + 7);
+    doc.setTextColor(16, 185, 129);
+    doc.text(`Rs. ${amount.toLocaleString()}.00`, 190, rowY + 7, { align: "right" });
+
+    rowY += 40;
+    doc.setDrawColor(156, 163, 175);
+    doc.line(24, rowY, 74, rowY);
+    doc.line(136, rowY, 186, rowY);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(51, 65, 85);
+    doc.text("Employee Signature", 49, rowY + 6, { align: "center" });
+    doc.text("Authorized Signatory & Stamp", 161, rowY + 6, { align: "center" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Official Helpline / Accounts: +94778054232 • ${instEmail}`, 105, 276, { align: "center" });
+    doc.setFontSize(7.5);
+    doc.setTextColor(156, 163, 175);
+    doc.text(`This is an authentic computer generated payslip issued by ${instName}. Verified securely.`, 105, 282, { align: "center" });
+
+    doc.save(`Payslip_${(staff.name || "Staff").replace(/\s+/g, '_')}_${targetMonth.replace(/\s+/g, '_')}.pdf`);
   };
 
   // Filter & Search
@@ -374,6 +514,14 @@ export default function Salary() {
                       </td>
 
                       <td className="px-6 py-4 whitespace-nowrap text-right space-x-2">
+                        <button
+                          onClick={() => handleDownloadAdminPayslip(staff, month, paymentForMonth)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-colors"
+                          title="Download Official Salary Payslip (+94778054232)"
+                        >
+                          <Download size={14} /> Payslip
+                        </button>
+
                         {isPaid ? (
                           <button 
                             onClick={() => {
@@ -640,11 +788,18 @@ export default function Salary() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
+                    <div className="flex items-center gap-2">
+                      <div className="text-right mr-1">
                         <p className="text-base font-black text-emerald-600">Rs. {Number(p.amount).toLocaleString()}</p>
                         <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">Paid</span>
                       </div>
+                      <button
+                        onClick={() => handleDownloadAdminPayslip(historyModalStaff, p.month, p)}
+                        className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-xl transition-colors inline-flex items-center gap-1 text-xs font-bold"
+                        title="Download Payslip (+94778054232)"
+                      >
+                        <Download size={15} /> Payslip
+                      </button>
                       <button
                         onClick={() => handleDeletePayment(historyModalStaff.id, p.id)}
                         className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"

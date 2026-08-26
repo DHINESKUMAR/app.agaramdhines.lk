@@ -1094,7 +1094,8 @@ export const saveDailyWorkUploads = async (uploads: DailyWorkUpload[]) => {
         }, { merge: false })
       );
 
-      await Promise.all(savePromises);
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2000));
+      await Promise.race([Promise.all(savePromises), timeoutPromise]);
     } catch (fbErr: any) {
       console.warn("Firebase saveDailyWorkUploads warning:", fbErr?.message || fbErr);
     }

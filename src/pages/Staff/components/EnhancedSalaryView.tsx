@@ -71,7 +71,7 @@ export default function EnhancedSalaryView({ staff, adminSettings, onRefresh }: 
 
     const doc = new jsPDF();
     const instName = adminSettings?.instituteName || "AGARAM DHINES ACADEMY";
-    const instPhone = adminSettings?.phone || "+94 77 123 4567";
+    const instPhone = "+94778054232";
     const instEmail = adminSettings?.email || "info@agaramacademy.lk";
 
     // Header Background Accent
@@ -86,7 +86,7 @@ export default function EnhancedSalaryView({ staff, adminSettings, onRefresh }: 
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(219, 234, 254);
-    doc.text(`Official Salary Payslip & Payment Voucher • ${instPhone} • ${instEmail}`, 105, 22, { align: "center" });
+    doc.text(`Official Salary Payslip & Payment Voucher • Tel / WhatsApp: +94778054232 • ${instEmail}`, 105, 22, { align: "center" });
 
     // Document Title Banner
     doc.setFillColor(243, 244, 246);
@@ -99,42 +99,46 @@ export default function EnhancedSalaryView({ staff, adminSettings, onRefresh }: 
     // Staff Details Table Container
     doc.setDrawColor(229, 231, 235);
     doc.setFillColor(255, 255, 255);
-    doc.roundedRect(14, 56, 182, 40, 2, 2, "FD");
+    doc.roundedRect(14, 56, 182, 42, 2, 2, "FD");
 
     doc.setFontSize(9.5);
     doc.setTextColor(100, 116, 139);
-    doc.text("Staff Name:", 18, 65);
-    doc.text("Staff ID:", 18, 73);
-    doc.text("Designation / Role:", 18, 81);
-    doc.text("Date of Joining:", 18, 89);
+    doc.text("Staff Name:", 18, 64);
+    doc.text("Staff ID:", 18, 71);
+    doc.text("Phone Number:", 18, 78);
+    doc.text("Designation / Role:", 18, 85);
+    doc.text("Date of Joining:", 18, 92);
 
     doc.setFont("helvetica", "bold");
     doc.setTextColor(15, 23, 42);
-    doc.text(staff.name, 60, 65);
-    doc.text(staff.id || "STF-" + Math.floor(Math.random() * 8999 + 1000), 60, 73);
-    doc.text(staff.role || "Design Worker / Staff", 60, 81);
-    doc.text(staff.joinDate || "N/A", 60, 89);
+    doc.text(staff.name, 60, 64);
+    doc.text(staff.id || "STF-" + Math.floor(Math.random() * 8999 + 1000), 60, 71);
+    doc.text(staff.phone || "+94778054232", 60, 78);
+    doc.text(staff.role || "Design Worker / Staff", 60, 85);
+    doc.text(staff.joinDate || "N/A", 60, 92);
 
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100, 116, 139);
-    doc.text("Payment Status:", 115, 65);
-    doc.text("Payment Date:", 115, 73);
-    doc.text("Payment Mode:", 115, 81);
-    doc.text("Specialization:", 115, 89);
+    doc.text("Payment Status:", 120, 64);
+    doc.text("Payment Date:", 120, 71);
+    doc.text("Official Helpline:", 120, 78);
+    doc.text("Payment Mode:", 120, 85);
+    doc.text("Specialization:", 120, 92);
 
     doc.setFont("helvetica", "bold");
     if (payment) {
       doc.setTextColor(16, 185, 129);
-      doc.text("PAID IN FULL", 155, 65);
+      doc.text("PAID IN FULL", 158, 64);
     } else {
       doc.setTextColor(217, 119, 6);
-      doc.text("PENDING / PROCESSED", 155, 65);
+      doc.text("PENDING / PROCESSED", 158, 64);
     }
 
     doc.setTextColor(15, 23, 42);
-    doc.text(paymentDate, 155, 73);
-    doc.text("Bank Transfer / Cash", 155, 81);
-    doc.text(staff.specialization || "Creative & Typing", 155, 89);
+    doc.text(paymentDate, 158, 71);
+    doc.text("+94778054232", 158, 78);
+    doc.text("Bank Transfer / Cash", 158, 85);
+    doc.text(staff.specialization || "Creative & Typing", 158, 92);
 
     // Earnings Table Header
     doc.setFillColor(239, 246, 255);
@@ -199,8 +203,11 @@ export default function EnhancedSalaryView({ staff, adminSettings, onRefresh }: 
     // Footer note
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Official Helpline / Accounts: +94778054232 • ${instEmail}`, 105, 276, { align: "center" });
+    doc.setFontSize(7.5);
     doc.setTextColor(156, 163, 175);
-    doc.text(`This is an authentic system generated payslip issued by ${instName}. Verified securely.`, 105, 280, { align: "center" });
+    doc.text(`This is an authentic computer generated payslip issued by ${instName}. Verified securely.`, 105, 282, { align: "center" });
 
     doc.save(`Payslip_${staff.name.replace(/\s+/g, '_')}_${monthToDownload.replace(/\s+/g, '_')}.pdf`);
   };
