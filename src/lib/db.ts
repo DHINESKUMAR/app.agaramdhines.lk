@@ -239,8 +239,8 @@ const saveData = async (key: string, data: any) => {
       const singletonRef = doc(db, 'singletons', key);
       await setDoc(singletonRef, { data: cleanData, updatedAt: now }, { merge: false });
 
-      // If key is students/forms/etc., sync individual documents cleanly
-      if (Array.isArray(cleanData) && ['forms', 'students', 'zoomLinks', 'formSubmissions'].includes(key)) {
+      // If key is students/forms/staffs/etc., sync individual documents cleanly
+      if (Array.isArray(cleanData) && ['forms', 'students', 'staffs', 'employeeTasks', 'zoomLinks', 'formSubmissions'].includes(key)) {
         for (const item of cleanData.slice(0, 100)) {
           if (item && item.id) {
             setDoc(doc(db, key, String(item.id)), { ...item, updatedAt: item.updatedAt || new Date().toISOString() }, { merge: true }).catch(() => {});
@@ -849,6 +849,89 @@ export const saveStaffs = (staffs: any) => saveData('staffs', staffs);
 
 export const getStaffAttendance = () => getData('staffAttendance', []);
 export const saveStaffAttendance = (attendance: any) => saveData('staffAttendance', attendance);
+
+export interface EmployeeTask {
+  id: string;
+  staffId: string;
+  staffName: string;
+  title: string;
+  category: 'Typing & Data Entry' | 'Graphic Design' | 'Question Paper' | 'Course Material' | 'Thumbnails & Media' | 'Other';
+  description?: string;
+  assignedDate: string; // YYYY-MM-DD
+  dueDate?: string; // YYYY-MM-DD
+  completedDate?: string; // YYYY-MM-DD
+  status: 'Pending' | 'In Progress' | 'Completed' | 'Under Review';
+  priority: 'Low' | 'Medium' | 'High' | 'Urgent';
+  workCount?: number; // e.g. 10 pages, 5 banners
+  workUnit?: string; // e.g. 'Pages', 'Banners', 'Papers', 'Videos'
+  fileUrl?: string; // attachment or output link
+  driveLink?: string;
+  completionNotes?: string;
+  verifiedByAdmin?: boolean;
+}
+
+export const getEmployeeTasks = async (): Promise<EmployeeTask[]> => {
+  const raw = await getData('employeeTasks', null);
+  if (raw && Array.isArray(raw)) return raw;
+
+  // Sample initial tasks for demonstration
+  const initialTasks: EmployeeTask[] = [
+    {
+      id: 'task_1',
+      staffId: '1773337820220',
+      staffName: 'Dhivya',
+      title: 'தரம் 11 தமிழ் வினாத்தாள் தட்டச்சு (Grade 11 Tamil Model Paper Typing)',
+      category: 'Question Paper',
+      description: 'தரம் 11 முதலாம் தவணை தமிழ் மாதிரி வினாத்தாள் 8 பக்கங்கள் தட்டச்சு செய்து PDF வடிவமைப்பு செய்தல்.',
+      assignedDate: '2026-08-01',
+      dueDate: '2026-08-10',
+      completedDate: '2026-08-08',
+      status: 'Completed',
+      priority: 'High',
+      workCount: 8,
+      workUnit: 'Pages',
+      driveLink: 'https://drive.google.com/',
+      completionNotes: 'முழுமையாக தட்டச்சு செய்து பிழைதிருத்தம் முடிக்கப்பட்டது.'
+    },
+    {
+      id: 'task_2',
+      staffId: '1773337820220',
+      staffName: 'Dhivya',
+      title: 'YouTube தம்பனைல் & பதாகை வடிவமைப்பு (YouTube Thumbnail & Social Poster)',
+      category: 'Graphic Design',
+      description: '30 நாள் தமிழ் பாடநெறி புதிய வகுப்புகளுக்கான கவர்ச்சிகரமான 5 தம்பனைல்கள் வடிவமைப்பு.',
+      assignedDate: '2026-08-12',
+      dueDate: '2026-08-18',
+      completedDate: '2026-08-16',
+      status: 'Completed',
+      priority: 'Medium',
+      workCount: 5,
+      workUnit: 'Thumbnails',
+      driveLink: 'https://drive.google.com/',
+      completionNotes: 'அனைத்து தம்பனைல்களும் HD தரத்தில் வழங்கப்பட்டுள்ளன.'
+    },
+    {
+      id: 'task_3',
+      staffId: '1773337820220',
+      staffName: 'Dhivya',
+      title: 'இலக்கணக் குறிப்புகள் ஆவணத் தயாரிப்பு (Grammar Notes Layout & Formatting)',
+      category: 'Course Material',
+      description: 'தமிழ் இலக்கணம் பகுதி 1-5 பாடக் குறிப்புகள் தட்டச்சு மற்றும் அச்சிடத்தக்க வடிவமைப்பு.',
+      assignedDate: '2026-08-20',
+      dueDate: '2026-08-28',
+      status: 'In Progress',
+      priority: 'High',
+      workCount: 15,
+      workUnit: 'Pages',
+      completionNotes: 'பக்கம் 1 முதல் 10 வரை தட்டச்சு நிறைவடைந்துள்ளது.'
+    }
+  ];
+
+  await saveData('employeeTasks', initialTasks);
+  return initialTasks;
+};
+
+export const saveEmployeeTasks = (tasks: EmployeeTask[]) => saveData('employeeTasks', tasks);
 
 export const getSubjects = async () => {
   const rawList = await getData('subjects', null);
@@ -1885,7 +1968,7 @@ export const ALL_BACKUP_COLLECTIONS = [
   'classes', 'homework', 'staffs', 'staffAttendance', 'subjects',
   'incomeExpense', 'grades', 'timetable', 'examMarks', 'webPosts',
   'examSettings', 'announcements', 'behaviourRecords', 'questionPapers',
-  'chatMessages', 'forms', 'formSubmissions'
+  'chatMessages', 'forms', 'formSubmissions', 'employeeTasks'
 ];
 
 export interface BackupOptions {

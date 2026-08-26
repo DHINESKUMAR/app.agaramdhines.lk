@@ -14,13 +14,18 @@ import {
   FileText,
   Bell,
   User,
-  Award
+  Award,
+  Briefcase,
+  CreditCard,
+  Sparkles,
+  CheckCircle2,
+  Clock
 } from "lucide-react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
-import { getAttendance, getZoomLinks, saveZoomLinks, getHomework, saveHomework, getStaffAttendance, saveStaffAttendance, getTimeTable, saveTimeTable, getStudents, getAdminSettings } from "../../lib/db";
+import { getAttendance, getZoomLinks, saveZoomLinks, getHomework, saveHomework, getStaffAttendance, saveStaffAttendance, getTimeTable, saveTimeTable, getStudents, getAdminSettings, getStaffs } from "../../lib/db";
 import { getUserSession, saveUserSession, clearUserSession } from "../../lib/authSession";
 import CountdownTimer from "../../components/CountdownTimer";
 import PopupAnnouncement from "../../components/PopupAnnouncement";
@@ -30,14 +35,46 @@ import { useHomeworkNotifications } from "../../hooks/useHomeworkNotifications";
 import { useTimetableNotifications } from "../../hooks/useTimetableNotifications";
 import { motion, AnimatePresence } from "motion/react";
 
+import WorkView from "./components/WorkView";
+import EnhancedSalaryView from "./components/EnhancedSalaryView";
+import StaffIdCardView from "./components/StaffIdCardView";
+import StaffCertificateView from "./components/StaffCertificateView";
+
 export default function StaffDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("website");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [adminSettings, setAdminSettings] = useState<any>(null);
   
   const [staff, setStaff] = useState<any>(location.state);
+
+  const isDesignWorker = 
+    staff?.role === "Design Worker" || 
+    staff?.role === "Technical Staff" || 
+    String(staff?.role || "").toLowerCase().includes("design") || 
+    String(staff?.role || "").toLowerCase().includes("typist") || 
+    String(staff?.role || "").toLowerCase().includes("worker") ||
+    String(staff?.role || "").toLowerCase().includes("வடிவமைப்பு") ||
+    String(staff?.role || "").toLowerCase().includes("தட்டச்சு");
+
+  const [activeTab, setActiveTab] = useState(isDesignWorker ? "work" : "website");
+
+  useEffect(() => {
+    if (staff) {
+      const isDesign = 
+        staff.role === "Design Worker" || 
+        staff.role === "Technical Staff" || 
+        String(staff.role || "").toLowerCase().includes("design") || 
+        String(staff.role || "").toLowerCase().includes("typist") || 
+        String(staff.role || "").toLowerCase().includes("worker") ||
+        String(staff.role || "").toLowerCase().includes("வடிவமைப்பு") ||
+        String(staff.role || "").toLowerCase().includes("தட்டச்சு");
+      
+      if (isDesign && activeTab === "website") {
+        setActiveTab("work");
+      }
+    }
+  }, [staff]);
 
   const isChatOpen = activeTab === "chat";
   const { unreadCount, markAsRead } = useChatNotifications(staff ? { id: staff.id, name: staff.name, role: "Staff" } : null, isChatOpen);
@@ -70,6 +107,30 @@ export default function StaffDashboard() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const refreshStaffData = async () => {
+    try {
+      const allStaffs = await getStaffs();
+      if (allStaffs && Array.isArray(allStaffs)) {
+        const currentId = staff?.id || location.state?.id || getUserSession()?.id;
+        const currentUsername = staff?.username || location.state?.username || getUserSession()?.username;
+        const currentName = staff?.name || location.state?.name || getUserSession()?.name;
+        
+        const freshStaff = allStaffs.find((s: any) => 
+          (currentId && s.id === currentId) || 
+          (currentUsername && s.username === currentUsername) ||
+          (currentName && s.name === currentName)
+        );
+
+        if (freshStaff) {
+          setStaff(freshStaff);
+          saveUserSession({ ...freshStaff, role: 'Staff' });
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to sync staff data:", err);
+    }
+  };
+
   useEffect(() => {
     let data = staff || location.state;
     if (!data) {
@@ -85,9 +146,30 @@ export default function StaffDashboard() {
       return;
     }
 
-    getAdminSettings().then(data => {
-      if (data) setAdminSettings(data);
+    // Refresh staff data from database immediately on load
+    refreshStaffData();
+
+    getAdminSettings().then(settingsData => {
+      if (settingsData) setAdminSettings(settingsData);
     });
+
+    // Listen for real-time db updates
+    const handleDbUpdate = (e: any) => {
+      if (e.detail?.key === 'staffs' || e.detail?.key === 'adminSettings') {
+        refreshStaffData();
+        if (e.detail?.key === 'adminSettings') {
+          setAdminSettings(e.detail.data);
+        }
+      }
+    };
+
+    window.addEventListener('db_updated', handleDbUpdate);
+    const interval = setInterval(refreshStaffData, 5000);
+
+    return () => {
+      window.removeEventListener('db_updated', handleDbUpdate);
+      clearInterval(interval);
+    };
   }, [navigate, location.state]);
 
   if (!staff) return null;
@@ -97,7 +179,15 @@ export default function StaffDashboard() {
     navigate("/", { replace: true });
   };
 
-  const navItems = [
+  const navItems = isDesignWorker ? [
+    { id: "work", name: "My Work & Tasks", icon: <Briefcase size={20} /> },
+    { id: "salary", name: "Salary Details", icon: <DollarSign size={20} /> },
+    { id: "my-attendance", name: "Attendance Log", icon: <Calendar size={20} /> },
+    { id: "idcard", name: "Staff ID Card", icon: <CreditCard size={20} /> },
+    { id: "certificate", name: "My Certificate", icon: <Award size={20} /> },
+    { id: "chat", name: "Live Chat", icon: <WhatsAppIcon size={20} /> },
+    { id: "profile", name: "Profile", icon: <User size={20} /> },
+  ] : [
     { id: "website", name: "Agaram Website", icon: <Globe size={20} /> },
     { id: "timetable", name: "My Timetable", icon: <Calendar size={20} /> },
     { id: "zoom", name: "Add Zoom Links", icon: <Video size={20} /> },
@@ -105,6 +195,8 @@ export default function StaffDashboard() {
     { id: "student-attendance", name: "Student Attendance", icon: <UserCheck size={20} /> },
     { id: "my-attendance", name: "My Classes (Attendance)", icon: <Calendar size={20} /> },
     { id: "salary", name: "Salary Details", icon: <DollarSign size={20} /> },
+    { id: "idcard", name: "Staff ID Card", icon: <CreditCard size={20} /> },
+    { id: "certificate", name: "My Certificate", icon: <Award size={20} /> },
     { id: "chat", name: "Live Chat", icon: <WhatsAppIcon size={20} /> },
     { id: "profile", name: "Profile", icon: <User size={20} /> },
   ];
@@ -261,13 +353,16 @@ export default function StaffDashboard() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
+          {activeTab === "work" && <WorkView staff={staff} adminSettings={adminSettings} />}
           {activeTab === "website" && <WebsiteView />}
           {activeTab === "timetable" && <TimetableManager staff={staff} />}
           {activeTab === "zoom" && <ZoomManager staff={staff} />}
           {activeTab === "homework" && <HomeworkManager staff={staff} />}
           {activeTab === "student-attendance" && <StudentAttendanceView staff={staff} />}
           {activeTab === "my-attendance" && <StaffAttendanceView staff={staff} />}
-          {activeTab === "salary" && <SalaryView staff={staff} />}
+          {activeTab === "salary" && <EnhancedSalaryView staff={staff} adminSettings={adminSettings} onRefresh={refreshStaffData} />}
+          {activeTab === "idcard" && <StaffIdCardView staff={staff} adminSettings={adminSettings} />}
+          {activeTab === "certificate" && <StaffCertificateView staff={staff} adminSettings={adminSettings} />}
           {activeTab === "profile" && <ProfileView staff={staff} adminSettings={adminSettings} />}
           {activeTab === "chat" && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
@@ -946,112 +1041,6 @@ function StaffAttendanceView({ staff }: { staff: any }) {
             </div>
           ))}
           {records.length === 0 && <p className="text-gray-500 text-center py-4">No activity recorded yet.</p>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-function SalaryView({ staff }: { staff: any }) {
-  const handleDownload = (month: string) => {
-    const subjects = staff.assignedClasses?.map((c: any) => c.subject).join(', ') || 'N/A';
-    
-    const doc = new jsPDF();
-    
-    // Header
-    doc.setFontSize(22);
-    doc.setTextColor(30, 58, 138); // #1e3a8a
-    doc.text("AGARAM DHINES ACADEMY", 105, 20, { align: "center" });
-    
-    doc.setFontSize(14);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`SALARY SLIP: ${month}`, 105, 30, { align: "center" });
-    
-    doc.setLineWidth(0.5);
-    doc.line(20, 35, 190, 35);
-    
-    // Staff Details
-    doc.setFontSize(12);
-    doc.setTextColor(0, 0, 0);
-    doc.text(`Staff Name: ${staff.name}`, 20, 50);
-    doc.text(`Role: ${staff.role || 'Teacher'}`, 20, 60);
-    doc.text(`Subjects: ${subjects}`, 20, 70);
-    
-    // Salary Details
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text("Salary Details", 20, 90);
-    
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Basic Salary:`, 20, 105);
-    doc.text(`Rs. ${staff.salary || "0"}`, 150, 105);
-    
-    doc.line(20, 115, 190, 115);
-    
-    doc.setFont("helvetica", "bold");
-    doc.text(`Total Payable:`, 20, 125);
-    doc.text(`Rs. ${staff.salary || "0"}`, 150, 125);
-    
-    // Footer
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "italic");
-    doc.setTextColor(150, 150, 150);
-    doc.text(`Generated on: ${new Date().toLocaleString()}`, 105, 270, { align: "center" });
-    doc.text("This is a computer generated document.", 105, 280, { align: "center" });
-    
-    doc.save(`Payslip_${staff.name.replace(/\s+/g, '_')}_${month.replace(/\s+/g, '_')}.pdf`);
-  };
-
-  const months = [
-    new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
-    new Date(new Date().setMonth(new Date().getMonth() - 1)).toLocaleString('default', { month: 'long', year: 'numeric' }),
-    new Date(new Date().setMonth(new Date().getMonth() - 2)).toLocaleString('default', { month: 'long', year: 'numeric' })
-  ];
-
-  const subjects = staff.assignedClasses?.map((c: any) => c.subject).join(', ') || 'N/A';
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">Salary Information</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 flex flex-col justify-center">
-            <p className="text-sm text-blue-600 font-medium mb-1 uppercase tracking-wider">Current Basic Salary</p>
-            <p className="text-4xl font-bold text-blue-900">Rs. {staff.salary || "0"}</p>
-          </div>
-          <div className="space-y-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
-            <p className="flex justify-between border-b border-gray-200 pb-2"><span className="text-gray-500 font-medium">Name:</span> <span className="font-bold text-gray-800">{staff.name}</span></p>
-            <p className="flex justify-between border-b border-gray-200 pb-2"><span className="text-gray-500 font-medium">Role:</span> <span className="font-bold text-gray-800">{staff.role || "Teacher"}</span></p>
-            <p className="flex justify-between pb-1"><span className="text-gray-500 font-medium">Subjects:</span> <span className="font-bold text-gray-800">{subjects}</span></p>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">Recent Payslips</h3>
-        <div className="space-y-3">
-          {months.map((month, idx) => (
-            <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors gap-4">
-              <div className="flex items-center gap-4">
-                <div className="bg-green-100 text-green-600 p-3 rounded-lg">
-                  <FileText size={24} />
-                </div>
-                <div>
-                  <p className="font-bold text-gray-800">Salary Slip - {month}</p>
-                  <p className="text-sm text-gray-500">Amount: Rs. {staff.salary || "0"}</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => handleDownload(month)}
-                className="flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-100 hover:text-blue-600 font-medium text-sm transition-colors shadow-sm"
-              >
-                <Download size={16} />
-                <span>Download Sheet</span>
-              </button>
-            </div>
-          ))}
         </div>
       </div>
     </div>

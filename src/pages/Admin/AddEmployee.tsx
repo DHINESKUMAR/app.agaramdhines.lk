@@ -23,7 +23,10 @@ export default function AddEmployee() {
     address: '',
     username: '',
     password: '',
-    assignedClasses: [] as any[]
+    assignedClasses: [] as any[],
+    specialization: '',
+    monthlyTarget: '',
+    workNotes: ''
   });
 
   useEffect(() => {
@@ -54,7 +57,10 @@ export default function AddEmployee() {
         address: staff.address || '',
         username: staff.username || '',
         password: staff.password || '',
-        assignedClasses: staff.assignedClasses || []
+        assignedClasses: staff.assignedClasses || [],
+        specialization: staff.specialization || '',
+        monthlyTarget: staff.monthlyTarget || '',
+        workNotes: staff.workNotes || ''
       });
     }
   };
@@ -151,9 +157,11 @@ export default function AddEmployee() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Employee Role <span className="text-red-500">*</span></label>
                 <select name="role" value={formData.role} onChange={handleChange} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500 bg-white" required>
                   <option value="">Select Role</option>
-                  <option value="Teacher">Teacher</option>
-                  <option value="Management">Management Staff</option>
-                  <option value="Admin">Admin</option>
+                  <option value="Teacher">Teacher (ஆசிரியர்)</option>
+                  <option value="Management">Management Staff (நிர்வாக பணியாளர்)</option>
+                  <option value="Design Worker">Design Worker / Typist (வடிவமைப்பு & தட்டச்சு பணியாளர்)</option>
+                  <option value="Technical Staff">Technical & Media Staff (தொழில்நுட்ப பணியாளர்)</option>
+                  <option value="Admin">Admin (முதன்மை நிர்வாகி)</option>
                 </select>
               </div>
               <div>
@@ -165,11 +173,55 @@ export default function AddEmployee() {
                 <input name="joinDate" value={formData.joinDate} onChange={handleChange} type="date" className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500" required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary (LKR)</label>
                 <input name="salary" value={formData.salary} onChange={handleChange} type="number" className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500" placeholder="0.00" />
               </div>
             </div>
           </div>
+
+          {/* Work & Technical Responsibilities (For Design Workers / Staff) */}
+          {(formData.role === "Design Worker" || formData.role === "Technical Staff" || formData.role === "Management") && (
+            <div className="mb-8 p-5 bg-blue-50/70 rounded-xl border border-blue-100">
+              <h2 className="text-base font-bold text-blue-900 mb-3 flex items-center gap-2">
+                🎨 Work & Responsibilities (பணிகள் மற்றும் பொறுப்புகள்)
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Specialization / Primary Work</label>
+                  <input 
+                    name="specialization" 
+                    value={formData.specialization} 
+                    onChange={handleChange} 
+                    type="text" 
+                    className="w-full border border-gray-300 bg-white rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500 text-sm" 
+                    placeholder="e.g. Question Paper Typing, Graphic Design, Thumbnails, Course Materials" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Target Monthly Tasks / Output</label>
+                  <input 
+                    name="monthlyTarget" 
+                    value={formData.monthlyTarget} 
+                    onChange={handleChange} 
+                    type="number" 
+                    className="w-full border border-gray-300 bg-white rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500 text-sm" 
+                    placeholder="e.g. 25 tasks / month" 
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Work Scope / Instructions</label>
+                  <textarea 
+                    name="workNotes" 
+                    value={formData.workNotes} 
+                    onChange={handleChange} 
+                    rows={2} 
+                    className="w-full border border-gray-300 bg-white rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500 text-sm" 
+                    placeholder="Enter specific duties, daily typing assignments, graphic design requirements..." 
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Other Information Section */}
           <div className="mb-8">
