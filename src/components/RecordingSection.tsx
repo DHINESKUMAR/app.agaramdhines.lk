@@ -205,6 +205,106 @@ export const GRADE_COLOR_CONFIG: Record<string, {
   }
 };
 
+export const areSubjectsMatching = (itemSub: string, studentSub: string): boolean => {
+  if (!itemSub || !studentSub) return false;
+  const rawItem = itemSub.trim().toLowerCase();
+  const rawSt = studentSub.trim().toLowerCase();
+
+  // 1. Direct exact match
+  if (rawItem === rawSt) return true;
+
+  // 2. Wildcards (e.g., item or target is 'All' or 'General')
+  const wildcards = [
+    "all", "general", "public", "e-learning", "uncategorized", 
+    "அனைத்து", "அனைத்து பாடங்களும்", "all subjects", "பொது"
+  ];
+  if (wildcards.includes(rawItem) || wildcards.includes(rawSt)) return true;
+
+  // 3. Normalize strings (remove grade tags, brackets, punctuation)
+  const cleanItem = rawItem.replace(/[\(\)\[\]\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
+  const cleanSt = rawSt.replace(/[\(\)\[\]\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (cleanItem === cleanSt) return true;
+
+  // 4. Substring containment
+  if (cleanItem.includes(cleanSt) || cleanSt.includes(cleanItem)) return true;
+
+  // 5. English - Tamil synonym dictionary for exact school subjects
+  const subjectMap: Record<string, string[]> = {
+    tamil: ["தமிழ்", "tamil", "தமிழ் மொழி", "தமிழ் இலக்கியம்", "tamil language", "tamil literature"],
+    science: ["விஞ்ஞானம்", "science", "அறிவியல்", "பொது விஞ்ஞானம்", "general science"],
+    maths: ["கணிதம்", "maths", "mathematics", "கணிதவியல்"],
+    english: ["ஆங்கிலம்", "english", "english language", "general english"],
+    history: ["வரலாறு", "history"],
+    ict: ["தகவல் தொழில்நுட்பம்", "ict", "computer", "கணினி", "information technology", "computer science", "தகவல் தொடர்பாடல்"],
+    commerce: ["வர்த்தகம்", "வணிகக் கல்வி", "commerce", "வணிகம்", "accounting", "கணக்கியல்", "business studies"],
+    geography: ["புவியியல்", "geography"],
+    civics: ["குடிமையியல்", "குடியியல்", "civics"],
+    religion: ["சமயம்", "இந்து சமயம்", "இஸ்லாம்", "கிறிஸ்தவம்", "religion", "hinduism", "islam", "christianity", "saivam", "சைவ சமயம்"],
+    health: ["சுகாதாரம்", "உடற்கல்வி", "health", "physical education"],
+    art: ["சித்திரம்", "art", "கலை"],
+    music: ["சங்கீதம்", "இசை", "music", "கர்நாடக சங்கீதம்"],
+    dance: ["நடனம்", "dance", "பரதநாட்டியம்"],
+    drama: ["நாடகம்", "drama", "நாடகமும் அரங்கியலும்"]
+  };
+
+  for (const [, aliases] of Object.entries(subjectMap)) {
+    const itemMatches = aliases.some(a => cleanItem.includes(a));
+    const stMatches = aliases.some(a => cleanSt.includes(a));
+    if (itemMatches && stMatches) return true;
+  }
+
+  return false;
+};
+
+export const doesItemMatchStudentSubjects = (item: RecordingItem, studentSubs?: string[]): boolean => {
+  if (!studentSubs || !Array.isArray(studentSubs) || studentSubs.length === 0) {
+    return true; // No filter if student subjects are not defined
+  }
+
+  const cleanStudentSubs = studentSubs
+    .map(s => String(s || '').trim())
+    .filter(s => {
+      if (!s) return false;
+      const lower = s.toLowerCase();
+      if (lower.startsWith('தரம்') || lower.startsWith('grade')) return false;
+      return true;
+    });
+
+  if (cleanStudentSubs.length === 0) {
+    return true;
+  }
+
+  // Check if student has wildcard
+  const hasWildcard = cleanStudentSubs.some(s => {
+    const raw = s.toLowerCase();
+    return raw === 'all' || raw === 'general' || raw === 'public' || 
+           raw === 'அனைத்து' || raw === 'அனைத்து பாடங்களும்' || 
+           raw === 'all subjects' || raw === 'பொது';
+  });
+  if (hasWildcard) return true;
+
+  const itemSubs = Array.from(new Set([
+    ...(Array.isArray(item.subjects) ? item.subjects : []),
+    item.subject
+  ].filter(Boolean))).map(s => String(s).trim());
+
+  if (itemSubs.length === 0) return true;
+
+  // Check if item is marked General / All
+  const isItemGeneral = itemSubs.some(s => {
+    const raw = s.toLowerCase();
+    return raw === 'all' || raw === 'general' || raw === 'public' || 
+           raw === 'அனைத்து' || raw === 'அனைத்து பாடங்களும்' || 
+           raw === 'all subjects' || raw === 'பொது' || raw === 'uncategorized';
+  });
+  if (isItemGeneral) return true;
+
+  // Check overlap with student enrolled subjects
+  return itemSubs.some(itemSub => 
+    cleanStudentSubs.some(stSub => areSubjectsMatching(itemSub, stSub))
+  );
+};
+
 export const normalizeGradeString = (g?: string): string => {
   if (!g) return "";
   const num = g.toString().replace(/[^0-9]/g, '');
@@ -218,43 +318,32 @@ export const normalizeGradeString = (g?: string): string => {
 export const doesItemMatchGrade = (item: RecordingItem, targetGrade: string): boolean => {
   if (!item || !targetGrade) return false;
   const normTarget = normalizeGradeString(targetGrade);
-  const targetNum = targetGrade.replace(/[^0-9]/g, '');
+  const targetDigits = targetGrade.toString().replace(/[^0-9]/g, '');
+  const targetNum = targetDigits ? parseInt(targetDigits, 10) : null;
 
-  // 1. Check direct grade property
-  if (item.grade && typeof item.grade === 'string' && item.grade.trim()) {
-    const isGeneric = item.grade.toLowerCase().includes('all') || 
-                      item.grade.toLowerCase().includes('general') || 
-                      item.grade.toLowerCase().includes('public') || 
-                      item.grade.toLowerCase().includes('அனைத்து') ||
-                      item.grade.trim() === '';
-    if (isGeneric) return true;
-    const normGrade = normalizeGradeString(item.grade);
-    const itemNum = item.grade.replace(/[^0-9]/g, '');
-    if (normGrade === normTarget || Boolean(targetNum && itemNum && itemNum === targetNum)) {
-      return true;
-    }
-  }
-
-  // 2. Check grades array
+  // 1. Check grades array (strictly matches the target grade only)
   if (Array.isArray(item.grades) && item.grades.length > 0) {
     for (const g of item.grades) {
       if (!g) continue;
-      const isGeneric = String(g).toLowerCase().includes('all') || 
-                        String(g).toLowerCase().includes('general') || 
-                        String(g).toLowerCase().includes('public') || 
-                        String(g).toLowerCase().includes('அனைத்து');
-      if (isGeneric) return true;
-      const normG = normalizeGradeString(g);
-      const gNum = String(g).replace(/[^0-9]/g, '');
-      if (normG === normTarget || Boolean(targetNum && gNum && gNum === targetNum)) {
+      const normG = normalizeGradeString(String(g));
+      const gDigits = String(g).replace(/[^0-9]/g, '');
+      const gNum = gDigits ? parseInt(gDigits, 10) : null;
+
+      if (normG === normTarget || (targetNum !== null && gNum !== null && gNum === targetNum)) {
         return true;
       }
     }
   }
 
-  // 3. If item does not specify any grade, default to showing in all grades
-  if (!item.grade && (!Array.isArray(item.grades) || item.grades.length === 0)) {
-    return true;
+  // 2. Check direct grade property (strictly matches the target grade only)
+  if (item.grade && typeof item.grade === 'string' && item.grade.trim()) {
+    const normGrade = normalizeGradeString(item.grade);
+    const itemDigits = item.grade.toString().replace(/[^0-9]/g, '');
+    const itemNum = itemDigits ? parseInt(itemDigits, 10) : null;
+
+    if (normGrade === normTarget || (targetNum !== null && itemNum !== null && itemNum === targetNum)) {
+      return true;
+    }
   }
 
   return false;
@@ -265,10 +354,18 @@ export const deduplicateCourses = (coursesList: any[]): any[] => {
   const map = new Map<string, any>();
 
   for (const item of coursesList) {
-    if (!item || (!item.title && !item.id)) continue;
-    
-    // Key by unique ID if available so that user posts are never deleted!
-    const key = item.id ? String(item.id).trim().toLowerCase() : `item_${item.title}_${item.type}_${item.createdAt || ''}`;
+    if (!item) continue;
+    const cleanTitle = (item.title || '').trim().toLowerCase();
+    const cleanContent = (item.content || '').trim().toLowerCase();
+    const cleanCode = (item.code || '').trim();
+    const cleanLink = (item.link || '').trim().toLowerCase();
+    const cleanType = (item.type || (item.code ? 'html_code' : (item.studentNames && item.studentNames.length > 0) ? 'student_box' : item.gameType ? 'mobile_game' : item.imageUrl ? 'image_post' : 'webpost')).trim().toLowerCase();
+
+    // Unique identification key
+    const contentSignature = cleanCode ? cleanCode.slice(0, 100) : (cleanContent ? cleanContent.slice(0, 100) : cleanLink);
+    const key = cleanTitle 
+      ? `${cleanType}:::${cleanTitle}:::${contentSignature}`
+      : (item.id ? String(item.id).trim().toLowerCase() : `item_${Math.random()}`);
 
     const currentSubs = Array.from(new Set([
       ...(Array.isArray(item.subjects) ? item.subjects : []),
@@ -280,14 +377,51 @@ export const deduplicateCourses = (coursesList: any[]): any[] => {
       item.grade
     ].filter(Boolean)));
 
-    map.set(key, {
-      ...item,
-      id: item.id || `post_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      grades: currentGrades.length > 0 ? currentGrades : (item.grade ? [item.grade] : []),
-      grade: item.grade || currentGrades[0] || 'General',
-      subjects: currentSubs.length > 0 ? currentSubs : (item.subject ? [item.subject] : ['General']),
-      subject: currentSubs[0] || item.subject || 'General'
-    });
+    const currentStudents = Array.from(new Set([
+      ...(Array.isArray(item.studentNames) ? item.studentNames : [])
+    ].filter(Boolean)));
+
+    if (!map.has(key)) {
+      map.set(key, {
+        ...item,
+        type: cleanType,
+        grades: currentGrades.length > 0 ? currentGrades : (item.grade ? [item.grade] : []),
+        grade: item.grade || currentGrades[0] || '',
+        subjects: currentSubs.length > 0 ? currentSubs : (item.subject ? [item.subject] : ['General']),
+        subject: currentSubs[0] || item.subject || 'General',
+        studentNames: currentStudents.length > 0 ? currentStudents : (item.studentNames || [])
+      });
+    } else {
+      const existing = map.get(key)!;
+      // Merge unique grades and subjects
+      const combinedGrades = Array.from(new Set([
+        ...(Array.isArray(existing.grades) ? existing.grades : []),
+        existing.grade,
+        ...currentGrades
+      ].filter(Boolean)));
+
+      const combinedSubs = Array.from(new Set([
+        ...(Array.isArray(existing.subjects) ? existing.subjects : []),
+        existing.subject,
+        ...currentSubs
+      ].filter(Boolean)));
+
+      const combinedStudents = Array.from(new Set([
+        ...(Array.isArray(existing.studentNames) ? existing.studentNames : []),
+        ...currentStudents
+      ].filter(Boolean)));
+
+      map.set(key, {
+        ...existing,
+        ...item,
+        id: existing.id || item.id,
+        grades: combinedGrades,
+        grade: existing.grade || combinedGrades[0] || item.grade || '',
+        subjects: combinedSubs,
+        subject: combinedSubs[0] || existing.subject || 'General',
+        studentNames: combinedStudents
+      });
+    }
   }
 
   return Array.from(map.values());
@@ -458,28 +592,42 @@ export default function RecordingSection({
     return deduplicateCourses(list);
   }, [courses, webPosts]);
 
-  // Extract count of posts for each grade
+  // Extract count of posts for each grade (filtered by student enrolled subjects if applicable)
   const gradeCounts = React.useMemo(() => {
     const counts: Record<string, number> = {};
     GRADES_LIST.forEach(g => {
-      counts[g] = unifiedItems.filter(item => doesItemMatchGrade(item, g)).length;
+      counts[g] = unifiedItems.filter(item => {
+        if (!doesItemMatchGrade(item, g)) return false;
+        if (studentSubjects && studentSubjects.length > 0) {
+          if (!doesItemMatchStudentSubjects(item, studentSubjects)) return false;
+        }
+        return true;
+      }).length;
     });
     return counts;
-  }, [unifiedItems]);
+  }, [unifiedItems, studentSubjects]);
 
-  // Items filtered for the selected grade
+  // Items filtered for the selected grade and student subjects
   const gradeItems = React.useMemo(() => {
     if (!selectedGrade) return [];
-    return unifiedItems.filter(item => doesItemMatchGrade(item, selectedGrade));
-  }, [unifiedItems, selectedGrade]);
+    return unifiedItems.filter(item => {
+      // 1. Grade Isolation: must strictly match this grade
+      if (!doesItemMatchGrade(item, selectedGrade)) return false;
+      // 2. Student Subject Isolation: only show posts matching student's enrolled subjects
+      if (studentSubjects && studentSubjects.length > 0) {
+        if (!doesItemMatchStudentSubjects(item, studentSubjects)) return false;
+      }
+      return true;
+    });
+  }, [unifiedItems, selectedGrade, studentSubjects]);
 
-  // Available subjects for the active grade
+  // Available subjects for the active grade (only shows enrolled subjects for student)
   const gradeSubjects = React.useMemo(() => {
     const subs = new Set<string>();
     gradeItems.forEach(item => {
-      if (item.subject && item.subject !== 'All') subs.add(item.subject.trim());
+      if (item.subject && item.subject !== 'All' && item.subject !== 'General') subs.add(item.subject.trim());
       if (Array.isArray(item.subjects)) {
-        item.subjects.forEach(s => s && s !== 'All' && subs.add(s.trim()));
+        item.subjects.forEach(s => s && s !== 'All' && s !== 'General' && subs.add(s.trim()));
       }
     });
     return Array.from(subs).filter(Boolean);
@@ -491,7 +639,7 @@ export default function RecordingSection({
       // Subject filter
       if (selectedSubject !== "All") {
         const itemSubs = [item.subject, ...(item.subjects || [])].filter(Boolean);
-        const matchesSub = itemSubs.some(s => s?.toLowerCase().includes(selectedSubject.toLowerCase()) || selectedSubject.toLowerCase().includes(s?.toLowerCase() || ''));
+        const matchesSub = itemSubs.some(s => areSubjectsMatching(String(s), selectedSubject));
         if (!matchesSub) return false;
       }
 

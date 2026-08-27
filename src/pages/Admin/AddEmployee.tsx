@@ -117,17 +117,25 @@ export default function AddEmployee() {
       return;
     }
 
-    const staffs = await getStaffs();
-    let updatedStaffs;
+    const currentStaffs = await getStaffs();
+    let updatedStaffs: any[] = [];
     
     if (id) {
-      updatedStaffs = staffs.map((s: any) => s.id === id ? { ...formData, id } : s);
+      const exists = currentStaffs.some((s: any) => String(s.id) === String(id));
+      if (exists) {
+        updatedStaffs = currentStaffs.map((s: any) => String(s.id) === String(id) ? { ...s, ...formData, id } : s);
+      } else {
+        updatedStaffs = [...currentStaffs, { ...formData, id }];
+      }
     } else {
       const newStaff = {
-        id: Date.now().toString(),
-        ...formData
+        id: `staff_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        ...formData,
+        createdAt: Date.now()
       };
-      updatedStaffs = [...staffs, newStaff];
+      // Keep existing staffs and append new employee
+      const existingWithoutDupe = currentStaffs.filter((s: any) => s && String(s.id) !== newStaff.id);
+      updatedStaffs = [...existingWithoutDupe, newStaff];
     }
 
     await saveStaffs(updatedStaffs);

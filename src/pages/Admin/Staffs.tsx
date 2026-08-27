@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getStaffs, saveStaffs, getEmployeeTasks, saveEmployeeTasks, EmployeeTask } from "../../lib/db";
+import { getStaffs, saveStaffs, deleteStaff, getEmployeeTasks, saveEmployeeTasks, EmployeeTask } from "../../lib/db";
 import { Plus, Edit, Trash2, Search, Eye, Download, QrCode, Briefcase, CheckCircle2, Clock, Calendar, ExternalLink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
@@ -30,6 +30,15 @@ export default function Staffs() {
 
   useEffect(() => {
     loadData();
+
+    const handleDbUpdate = (e: any) => {
+      if (e.detail?.key === 'staffs' || e.detail?.key === 'employeeTasks') {
+        loadData();
+      }
+    };
+
+    window.addEventListener('db_updated', handleDbUpdate);
+    return () => window.removeEventListener('db_updated', handleDbUpdate);
   }, []);
 
   const loadData = async () => {
@@ -45,9 +54,8 @@ export default function Staffs() {
 
   const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this staff member?")) {
-      const updatedStaffs = staffs.filter(s => s.id !== id);
-      await saveStaffs(updatedStaffs);
-      setStaffs(updatedStaffs);
+      const updated = await deleteStaff(id);
+      setStaffs(updated || []);
     }
   };
 

@@ -47,7 +47,7 @@ import QrScanner from "../../components/QrScanner";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
-import RecordingSection, { deduplicateCourses } from "../../components/RecordingSection";
+import RecordingSection, { deduplicateCourses, areSubjectsMatching, doesItemMatchGrade, doesItemMatchStudentSubjects, normalizeGradeString } from "../../components/RecordingSection";
 
 import { getCourses, getCourseMaterials, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts, getStudentMenuLabels, DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels } from "../../lib/db";
 import { getUserSession, saveUserSession, clearUserSession } from "../../lib/authSession";
@@ -99,33 +99,6 @@ export const getCanonicalSubject = (s: string): string => {
   }
 
   return raw;
-};
-
-export const areSubjectsMatching = (itemSub: string, studentSub: string): boolean => {
-  if (!itemSub || !studentSub) return false;
-  const rawItem = itemSub.trim().toLowerCase();
-  const rawSt = studentSub.trim().toLowerCase();
-
-  // 1. Direct exact match
-  if (rawItem === rawSt) return true;
-
-  // 2. Wildcards (e.g., item or target is 'All' or 'General')
-  const wildcards = ["all", "general", "public", "e-learning", "uncategorized", "அனைத்து", "அனைத்து பாடங்களும்", "all subjects"];
-  if (wildcards.includes(rawItem) || wildcards.includes(rawSt)) return true;
-
-  // 3. Normalized string match (strips grade tags like '(தரம் 11)', punctuation, extra spaces)
-  const normItem = normalizeSub(itemSub);
-  const normSt = normalizeSub(studentSub);
-
-  if (normItem && normSt && normItem === normSt) return true;
-
-  // 4. Canonical match for identical subject/lesson aliases
-  const canonItem = getCanonicalSubject(itemSub);
-  const canonSt = getCanonicalSubject(studentSub);
-
-  if (canonItem && canonSt && canonItem === canonSt) return true;
-
-  return false;
 };
 
 export default function StudentDashboard() {
@@ -644,98 +617,22 @@ export default function StudentDashboard() {
       const filterItemByGradeAndSubject = (c: any) => {
         if (!c) return false;
 
-        // 1. Public or All grades check
-        if (c.isPublic || c.grade === "Public" || c.grade === "public" || c.grade === "All" || c.grade === "all") {
-          return true;
-        }
-
-        // 2. Grade check
-        const itemGradesList: string[] = [];
-        if (Array.isArray(c.grades) && c.grades.length > 0) {
-          c.grades.forEach((g: any) => itemGradesList.push(g?.toString().trim().toLowerCase() || ""));
-        }
-        if (c.grade) {
-          itemGradesList.push(c.grade?.toString().trim().toLowerCase() || "");
-        }
-
-        let matchesGrade = false;
-        if (itemGradesList.length === 0) {
-          matchesGrade = true;
-        } else {
-          for (const itemGrade of itemGradesList) {
-            if (!itemGrade) {
-              matchesGrade = true;
-              break;
-            }
-            const itemGradeNum = itemGrade.replace(/[^0-9]/g, '');
-            if (
-              itemGrade === "public" ||
-              itemGrade.includes("public") ||
-              itemGrade.includes("all") ||
-              itemGrade === studentGrade ||
-              (normalizedStudentGrade && itemGradeNum === normalizedStudentGrade) ||
-              (normalizedStudentGrade && itemGrade.includes(normalizedStudentGrade)) ||
-              (studentGrade && itemGrade.includes(studentGrade)) ||
-              (itemGrade.includes("30") && studentGrade.includes("30"))
-            ) {
-              matchesGrade = true;
-              break;
-            }
-          }
-        }
-
+        // 1. Grade Isolation: Item MUST strictly match this student's grade (e.g. தரம் 01 only for தரம் 01)
+        const targetStudentGrade = freshStudentData.grade || "தரம் 10";
+        const matchesGrade = doesItemMatchGrade(c, targetStudentGrade);
         if (!matchesGrade) return false;
 
-        // 3. Subject check
-        const itemSubjectsList: string[] = [];
-        if (Array.isArray(c.subjects) && c.subjects.length > 0) {
-          c.subjects.forEach((s: any) => itemSubjectsList.push(s?.toString().trim() || ""));
-        }
-        if (c.subject) {
-          itemSubjectsList.push(c.subject?.toString().trim() || "");
+        // 2. Subject Isolation: If student has enrolled subjects, item MUST match their subjects
+        if (studentSubjectsArray.length > 0) {
+          const matchesSubject = doesItemMatchStudentSubjects(c, studentSubjectsArray);
+          if (!matchesSubject) return false;
         }
 
-        const nonGeneralSubjects = itemSubjectsList.filter(
-          s => s && s.toLowerCase() !== "general" && s.toLowerCase() !== "e-learning" && s.toLowerCase() !== "uncategorized" && s.toLowerCase() !== "public" && s.toLowerCase() !== "all" && s !== "அனைத்து" && s !== "அனைத்து பாடங்களும்"
-        );
-
-        if (nonGeneralSubjects.length === 0) {
-          return true;
-        }
-
-        // If student has no specific subjects assigned in profile, show all grade materials
-        if (studentSubjectsArray.length === 0) {
-          return true;
-        }
-
-        const studentHasWildcard = studentSubjectsArray.some(stSub => {
-          if (!stSub) return false;
-          const clean = stSub.trim().toLowerCase();
-          return (
-            clean === "all" ||
-            clean === "general" ||
-            clean === "public" ||
-            clean === "அனைத்து" ||
-            clean === "அனைத்து பாடங்களும்" ||
-            clean === "all subjects" ||
-            clean === "uncategorized"
-          );
-        });
-
-        if (studentHasWildcard) {
-          return true;
-        }
-
-        const hasMatch = nonGeneralSubjects.some(itemSub => {
-          return studentSubjectsArray.some(stSub => areSubjectsMatching(itemSub, stSub));
-        });
-
-        return hasMatch;
+        return true;
       };
 
       const filterBySubjectAndGrade = (item: any) => {
         if (!item) return false;
-        if (item.isPublic || item.grade === "Public" || item.grade === "public" || item.grade === "All" || item.grade === "all") return true;
         return filterItemByGradeAndSubject(item);
       };
 
@@ -1876,11 +1773,11 @@ export default function StudentDashboard() {
                               )}
                             </div>
 
-                            {courses.filter(c => areSubjectsMatching(c.subject, subjectName)).length > 0 && (
+                            {courses.filter(c => areSubjectsMatching(c.subject, subjectName) && doesItemMatchGrade(c, studentData?.grade || "தரம் 10")).length > 0 && (
                               <div className="mt-4 pt-4 border-t border-slate-200/60">
                                 <p className="font-bold text-slate-800 mb-3 flex items-center gap-2"><FileText size={16} className="text-blue-500"/> Course Materials</p>
                                 <div className="space-y-2">
-                                  {courses.filter(c => areSubjectsMatching(c.subject, subjectName)).map(course => (
+                                  {courses.filter(c => areSubjectsMatching(c.subject, subjectName) && doesItemMatchGrade(c, studentData?.grade || "தரம் 10")).map(course => (
                                     <a 
                                       key={course.id} 
                                       href={course.link} 

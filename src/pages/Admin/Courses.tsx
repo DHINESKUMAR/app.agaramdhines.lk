@@ -69,7 +69,11 @@ export default function Courses() {
 
   const loadCoursesData = async () => {
     const rawCourses = await getCourses();
-    setCourses(rawCourses);
+    const clean = deduplicateCourses(rawCourses);
+    setCourses(clean);
+    if (clean.length < rawCourses.length) {
+      await saveCourses(clean);
+    }
     getClasses().then(setClasses);
     getStaffs().then(setStaffs);
     getStudents().then(setStudents);
@@ -200,6 +204,16 @@ export default function Courses() {
       await saveCourses([]);
       alert("Post Library cleared successfully! All old records have been removed.");
     }
+  };
+
+  // Remove exact duplicates automatically
+  const handleCleanDuplicates = async () => {
+    const raw = await getCourses();
+    const clean = deduplicateCourses(raw);
+    const removedCount = raw.length - clean.length;
+    setCourses(clean);
+    await saveCourses(clean);
+    alert(`தேவையற்ற / போலிப் பதிவுகள் நீக்கப்பட்டன (Removed ${removedCount} duplicate items)!`);
   };
 
   const handleAddCourse = async (e: React.FormEvent) => {
@@ -969,13 +983,22 @@ export default function Courses() {
 
         <div className="flex items-center gap-2">
           {courses.length > 0 && (
-            <button
-              onClick={handleClearAllOldItems}
-              className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all border border-rose-200"
-              title="Clear All Post Library Items"
-            >
-              <Trash2 size={14} /> Clear Old Items
-            </button>
+            <>
+              <button
+                onClick={handleCleanDuplicates}
+                className="px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all border border-amber-200"
+                title="Remove Duplicate Posts"
+              >
+                ✨ Clean Duplicates
+              </button>
+              <button
+                onClick={handleClearAllOldItems}
+                className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all border border-rose-200"
+                title="Clear All Post Library Items"
+              >
+                <Trash2 size={14} /> Clear All
+              </button>
+            </>
           )}
 
           <button

@@ -111,6 +111,38 @@ const setupRealtimeListener = (key: string) => {
       activeListeners[`${key}_col`] = colUnsub;
     }
 
+    // Also listen to collection changes for staffs / employees
+    if (key === 'staffs') {
+      const colUnsub = onSnapshot(collection(db, 'staffs'), (colSnap) => {
+        if (!colSnap.empty) {
+          const list = colSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+          
+          let deletedIds: string[] = [];
+          try {
+            const rawDeleted = localStorage.getItem('staffs_deleted');
+            if (rawDeleted) deletedIds = JSON.parse(rawDeleted);
+          } catch (_) {}
+
+          let localStaffs: any[] = [];
+          try {
+            const rawLocal = localStorage.getItem('staffs');
+            if (rawLocal) localStaffs = JSON.parse(rawLocal);
+          } catch (_) {}
+
+          const merged = mergeArraysById(list, localStaffs).filter(u => !deletedIds.includes(String(u.id)));
+          
+          try {
+            localStorage.setItem('staffs', JSON.stringify(merged));
+          } catch (_) {}
+
+          window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'staffs', data: merged } }));
+        }
+      }, (err) => {
+        console.warn("Realtime staffs collection error:", err);
+      });
+      activeListeners[`${key}_col`] = colUnsub;
+    }
+
     activeListeners[key] = unsub;
   } catch (e) {
     console.warn(`Failed to setup realtime listener for ${key}:`, e);
@@ -1055,8 +1087,143 @@ export const saveClasses = async (classes: any) => {
 export const getHomework = () => getData('homework', []);
 export const saveHomework = (homework: any) => saveData('homework', homework);
 
-export const getStaffs = () => getData('staffs', []);
-export const saveStaffs = (staffs: any) => saveData('staffs', staffs);
+export const getStaffs = async (): Promise<any[]> => {
+  setupRealtimeListener('staffs');
+
+  let deletedIds: string[] = [];
+  try {
+    const rawDeleted = localStorage.getItem('staffs_deleted');
+    if (rawDeleted) deletedIds = JSON.parse(rawDeleted);
+  } catch (_) {}
+
+  let localStaffs: any[] = [];
+  try {
+    const rawLocal = localStorage.getItem('staffs');
+    if (rawLocal) {
+      localStaffs = JSON.parse(rawLocal);
+    }
+  } catch (_) {}
+
+  let remoteStaffs: any[] = [];
+
+  if (isFirebaseConfigured) {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'staffs'));
+      if (!querySnapshot.empty) {
+        remoteStaffs = querySnapshot.docs.map((docSnap) => ({
+          ...docSnap.data(),
+          id: docSnap.id
+        }));
+      }
+    } catch (fbErr) {
+      console.warn("Firestore collection query for staffs:", fbErr);
+    }
+
+    try {
+      const singletonSnap = await getDoc(doc(db, 'singletons', 'staffs'));
+      if (singletonSnap.exists() && Array.isArray(singletonSnap.data()?.data)) {
+        remoteStaffs = mergeArraysById(remoteStaffs, singletonSnap.data().data);
+      }
+    } catch (_) {}
+  }
+
+  // Merge remote and local so newly created or existing staff are NEVER lost
+  let combined = mergeArraysById(remoteStaffs, localStaffs);
+  if (deletedIds.length > 0) {
+    combined = combined.filter(s => !deletedIds.includes(String(s.id)));
+  }
+
+  if (combined.length > 0) {
+    try {
+      localStorage.setItem('staffs', JSON.stringify(combined));
+    } catch (_) {}
+    return combined;
+  }
+
+  const raw = await getData('staffs', []);
+  if (raw && Array.isArray(raw) && raw.length > 0) {
+    return raw.filter(s => !deletedIds.includes(String(s.id)));
+  }
+
+  return [];
+};
+
+export const saveStaffs = async (staffs: any[]) => {
+  const cleanList = Array.isArray(staffs) ? staffs : [];
+
+  // Remove saved item IDs from deleted tombstone list if they were re-saved
+  try {
+    const rawDeleted = localStorage.getItem('staffs_deleted');
+    if (rawDeleted) {
+      const deletedIds: string[] = JSON.parse(rawDeleted);
+      const savedIds = cleanList.map(s => String(s.id));
+      const cleanedDeleted = deletedIds.filter(d => !savedIds.includes(d));
+      localStorage.setItem('staffs_deleted', JSON.stringify(cleanedDeleted));
+    }
+
+    localStorage.setItem('staffs', JSON.stringify(cleanList));
+    localStorage.setItem('staffs_lastSavedAt', String(Date.now()));
+  } catch (e) {
+    console.warn("Error caching staffs locally:", e);
+  }
+
+  // Dispatch UI update immediately with cleanList
+  window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'staffs', data: cleanList } }));
+
+  // Fast Parallel Save to Firebase Firestore collection and singleton
+  if (isFirebaseConfigured) {
+    try {
+      const savePromises = cleanList.map(item => {
+        if (item && item.id) {
+          return setDoc(doc(db, 'staffs', String(item.id)), {
+            ...item,
+            updatedAt: Date.now()
+          }, { merge: true });
+        }
+        return Promise.resolve();
+      });
+
+      // Also update singleton in background
+      savePromises.push(
+        setDoc(doc(db, 'singletons', 'staffs'), {
+          data: cleanList,
+          updatedAt: Date.now()
+        }, { merge: false })
+      );
+
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
+      await Promise.race([Promise.all(savePromises), timeoutPromise]);
+    } catch (fbErr: any) {
+      console.warn("Firebase saveStaffs warning:", fbErr?.message || fbErr);
+    }
+  }
+};
+
+export const deleteStaff = async (id: string | number) => {
+  const targetId = String(id);
+  // Mark in tombstone
+  try {
+    const rawDeleted = localStorage.getItem('staffs_deleted') || '[]';
+    const deletedIds: string[] = JSON.parse(rawDeleted);
+    if (!deletedIds.includes(targetId)) {
+      deletedIds.push(targetId);
+      localStorage.setItem('staffs_deleted', JSON.stringify(deletedIds.slice(-200)));
+    }
+  } catch (_) {}
+
+  const current = await getStaffs();
+  const updated = current.filter(s => String(s.id) !== targetId);
+  await saveStaffs(updated);
+
+  if (isFirebaseConfigured) {
+    try {
+      await deleteDoc(doc(db, 'staffs', targetId));
+    } catch (e) {
+      console.warn("Error deleting staff document from Firebase:", e);
+    }
+  }
+  return updated;
+};
 
 export const getStaffAttendance = () => getData('staffAttendance', []);
 export const saveStaffAttendance = (attendance: any) => saveData('staffAttendance', attendance);
@@ -2343,9 +2510,7 @@ export const initDB = async () => {
     
     const courses = await getCourses();
     if (!courses || courses.length === 0) {
-      await saveCourses([
-        { id: "1", grade: "தரம் 10", title: "Science", link: "https://www.agaramdhines.lk/courses/g10-science" }
-      ]);
+      await saveCourses([]);
     }
     
     const youtubeLinks = await getYoutubeLinks();
