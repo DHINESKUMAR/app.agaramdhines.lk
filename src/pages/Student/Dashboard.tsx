@@ -47,7 +47,7 @@ import QrScanner from "../../components/QrScanner";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
-import RecordingSection, { deduplicateCourses, areSubjectsMatching, doesItemMatchGrade, doesItemMatchStudentSubjects, normalizeGradeString } from "../../components/RecordingSection";
+import RecordingSection, { deduplicateCourses, areSubjectsMatching, doesItemMatchGrade, doesItemMatchStudentSubjects, normalizeGradeString, getCanonicalSubjectCategory } from "../../components/RecordingSection";
 
 import { getCourses, getCourseMaterials, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts, getStudentMenuLabels, DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels } from "../../lib/db";
 import { getUserSession, saveUserSession, clearUserSession } from "../../lib/authSession";
@@ -2134,9 +2134,9 @@ export default function StudentDashboard() {
                           rawSubs.forEach(name => {
                             if (name && name.toLowerCase() !== 'general' && name.toLowerCase() !== 'all') {
                               const displayName = name.trim();
-                              const key = displayName.toLowerCase();
-                              if (key && !subjectMap.has(key)) {
-                                subjectMap.set(key, displayName);
+                              const catKey = getCanonicalSubjectCategory(displayName) || displayName.toLowerCase();
+                              if (catKey && !subjectMap.has(catKey)) {
+                                subjectMap.set(catKey, displayName);
                               }
                             }
                           });
@@ -2149,7 +2149,7 @@ export default function StudentDashboard() {
 
                           return (
                             <>
-                              {courseMaterials.length > 1 && allAvailableSubjectNames.length > 1 && (
+                              {courseMaterials.length > 0 && allAvailableSubjectNames.length > 1 && (
                                 <div
                                   onClick={() => setSelectedMaterialSubject("ALL_MATERIALS")}
                                   className="p-6 rounded-3xl border-2 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between h-48 group relative overflow-hidden bg-gradient-to-br from-red-50 to-orange-50 border-red-200"

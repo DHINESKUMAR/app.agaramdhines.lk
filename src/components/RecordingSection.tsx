@@ -205,10 +205,141 @@ export const GRADE_COLOR_CONFIG: Record<string, {
   }
 };
 
+export const getCanonicalSubjectCategory = (name: string): string => {
+  if (!name) return "";
+  let clean = name.trim().toLowerCase();
+
+  // Strip out grade markers like "(தரம் 11)", "(grade 11)", "grade 11", "தரம் 11", "o/l", "a/l"
+  clean = clean
+    .replace(/\((?:தரம்|grade)\s*\d+\)/gi, ' ')
+    .replace(/\b(?:தரம்|grade)\s*\d+\b/gi, ' ')
+    .replace(/\b(?:o\/l|a\/l|ol|al)\b/gi, ' ')
+    .replace(/[\(\)\[\]\-–—:,]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // 1. Check for specific specialized course packages FIRST (Do not confuse with general Tamil):
+
+  // 30 Days Part 2 (15 - 30 days)
+  if (
+    (clean.includes("30 நாள்") || clean.includes("30 days") || clean.includes("30-day") || clean.includes("30 day")) &&
+    (clean.includes("15") || clean.includes("15 30") || clean.includes("15 - 30") || clean.includes("15 தொடக்கம் 30") || clean.includes("இரண்டாம் பகுதி") || clean.includes("part 2"))
+  ) {
+    return "tamil_30_days_part2";
+  }
+
+  // 30 Days Full Course
+  if (clean.includes("30 நாள்") || clean.includes("30 days") || clean.includes("30-day") || clean.includes("30 day")) {
+    return "tamil_30_days";
+  }
+
+  // Question & Answer / Paper Class
+  if (
+    clean.includes("வினா விடை") || clean.includes("வினாவிடை") || clean.includes("வினா-விடை") || 
+    clean.includes("paper class") || clean.includes("பேப்பர் கிளாஸ்") || clean.includes("q&a") || 
+    clean.includes("வினாத்தாள்") || clean.includes("மாதிரி வினா") || clean.includes("வினாக்கள்") ||
+    clean.includes("past paper") || clean.includes("model paper")
+  ) {
+    return "tamil_q_and_a";
+  }
+
+  // Literature / இலக்கிய நயம்
+  if (clean.includes("இலக்கிய நயம்") || clean.includes("தமிழ் இலக்கிய நயம்") || clean.includes("இலக்கியம்") || clean.includes("நயம்")) {
+    return "tamil_literature";
+  }
+
+  // Game / தமிழ் மொழி வளம்
+  if (clean.includes("மொழி வளம்") || clean.includes("வளம்") || clean.includes("game")) {
+    return "tamil_game";
+  }
+
+  // Standard Tamil
+  if (clean.includes("தமிழ்") || clean.includes("tamil")) {
+    return "tamil";
+  }
+
+  // Science / விஞ்ஞானம்
+  if (clean.includes("விஞ்ஞானம்") || clean.includes("science") || clean.includes("அறிவியல்")) {
+    return "science";
+  }
+
+  // Maths / கணிதம்
+  if (clean.includes("கணிதம்") || clean.includes("maths") || clean.includes("mathematics") || clean.includes("கணிதவியல்")) {
+    return "maths";
+  }
+
+  // English / ஆங்கிலம்
+  if (clean.includes("ஆங்கிலம்") || clean.includes("english")) {
+    return "english";
+  }
+
+  // History / வரலாறு
+  if (clean.includes("வரலாறு") || clean.includes("history")) {
+    return "history";
+  }
+
+  // ICT
+  if (clean.includes("ict") || clean.includes("தகவல் தொடர்பாடல்") || clean.includes("தகவல் தொழில்நுட்பம்") || clean.includes("computer") || clean.includes("கணினி")) {
+    return "ict";
+  }
+
+  // Commerce / வர்த்தகம்
+  if (clean.includes("வர்த்தகம்") || clean.includes("வணிக") || clean.includes("commerce") || clean.includes("கணக்கியல்") || clean.includes("accounting") || clean.includes("business")) {
+    return "commerce";
+  }
+
+  // Geography / புவியியல்
+  if (clean.includes("புவியியல்") || clean.includes("geography")) {
+    return "geography";
+  }
+
+  // Civics / குடியியல்
+  if (clean.includes("குடிமை") || clean.includes("குடியியல்") || clean.includes("civics")) {
+    return "civics";
+  }
+
+  // Religion / சமயம்
+  if (clean.includes("சமயம்") || clean.includes("இந்து சமயம்") || clean.includes("சைவ சமயம்") || clean.includes("இஸ்லாம்") || clean.includes("கிறிஸ்தவம்") || clean.includes("religion") || clean.includes("hinduism") || clean.includes("islam") || clean.includes("christianity")) {
+    return "religion";
+  }
+
+  // Health / சுகாதாரம்
+  if (clean.includes("சுகாதாரம்") || clean.includes("உடற்கல்வி") || clean.includes("health") || clean.includes("physical education")) {
+    return "health";
+  }
+
+  // Art / சித்திரம்
+  if (clean.includes("சித்திரம்") || clean.includes("art") || clean.includes("கலை")) {
+    return "art";
+  }
+
+  // Music / சங்கீதம்
+  if (clean.includes("சங்கீதம்") || clean.includes("இசை") || clean.includes("music")) {
+    return "music";
+  }
+
+  // Dance / நடனம்
+  if (clean.includes("நடனம்") || clean.includes("dance") || clean.includes("பரதநாட்டியம்")) {
+    return "dance";
+  }
+
+  // Drama / நாடகம்
+  if (clean.includes("நாடகம்") || clean.includes("drama")) {
+    return "drama";
+  }
+
+  // Wildcards
+  if (clean === "all" || clean === "general" || clean === "public" || clean === "அனைத்து" || clean === "அனைத்து பாடங்களும்" || clean === "பொது" || clean === "all subjects" || clean === "uncategorized" || clean === "e-learning") {
+    return "ALL_WILDCARD";
+  }
+
+  return clean;
+};
+
 export const areSubjectsMatching = (itemSub: string, studentSub: string): boolean => {
   if (!itemSub || !studentSub) return false;
-  const rawItem = itemSub.trim().toLowerCase();
-  const rawSt = studentSub.trim().toLowerCase();
+  const rawItem = String(itemSub).trim().toLowerCase();
+  const rawSt = String(studentSub).trim().toLowerCase();
 
   // 1. Direct exact match
   if (rawItem === rawSt) return true;
@@ -221,39 +352,18 @@ export const areSubjectsMatching = (itemSub: string, studentSub: string): boolea
   if (wildcards.includes(rawItem) || wildcards.includes(rawSt)) return true;
 
   // 3. Normalize strings (remove grade tags, brackets, punctuation, multiple spaces)
-  const cleanItem = rawItem.replace(/[\(\)\[\]\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
-  const cleanSt = rawSt.replace(/[\(\)\[\]\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
+  const cleanItem = rawItem.replace(/[\(\)\[\]\-–—:,]/g, ' ').replace(/\s+/g, ' ').trim();
+  const cleanSt = rawSt.replace(/[\(\)\[\]\-–—:,]/g, ' ').replace(/\s+/g, ' ').trim();
   if (cleanItem === cleanSt) return true;
 
-  // 4. Substring containment
-  if (cleanItem.includes(cleanSt) || cleanSt.includes(cleanItem)) return true;
+  // 4. Canonical category matching (guarantees strict separation between 30-day, Q&A, literature, and regular Tamil)
+  const catItem = getCanonicalSubjectCategory(rawItem);
+  const catSt = getCanonicalSubjectCategory(rawSt);
 
-  // 5. English - Tamil synonym & course packages dictionary
-  const subjectMap: Record<string, string[]> = {
-    tamil_30_days: ["30 நாள்", "30 days", "30 நாள் பாடநெறி", "30 நாள் தமிழ் பாடநெறி", "30-day course"],
-    tamil_q_and_a: ["வினா விடை", "வினாவிடை", "வினா-விடை", "q&a", "questions", "வினாக்கள்", "2026 ஆம் ஆண்டு வினாவிடை", "மாதிரி வினாத்தாள்", "கடந்தகால வினா"],
-    tamil_literature: ["இலக்கிய நயம்", "தமிழ் இலக்கிய நயம்", "இலக்கியம்"],
-    tamil: ["தமிழ்", "tamil", "தமிழ் மொழி", "தமிழ் இலக்கியம்", "tamil language", "tamil literature", "தமிழ் வகுப்பு"],
-    science: ["விஞ்ஞானம்", "science", "அறிவியல்", "பொது விஞ்ஞானம்", "general science"],
-    maths: ["கணிதம்", "maths", "mathematics", "கணிதவியல்"],
-    english: ["ஆங்கிலம்", "english", "english language", "general english"],
-    history: ["வரலாறு", "history"],
-    ict: ["தகவல் தொழில்நுட்பம்", "ict", "computer", "கணினி", "information technology", "computer science", "தகவல் தொடர்பாடல்"],
-    commerce: ["வர்த்தகம்", "வணிகக் கல்வி", "commerce", "வணிகம்", "accounting", "கணக்கியல்", "business studies"],
-    geography: ["புவியியல்", "geography"],
-    civics: ["குடிமையியல்", "குடியியல்", "civics", "குடிமை"],
-    religion: ["சமயம்", "இந்து சமயம்", "இஸ்லாம்", "கிறிஸ்தவம்", "religion", "hinduism", "islam", "christianity", "saivam", "சைவ சமயம்"],
-    health: ["சுகாதாரம்", "உடற்கல்வி", "health", "physical education"],
-    art: ["சித்திரம்", "art", "கலை"],
-    music: ["சங்கீதம்", "இசை", "music", "கர்நாடக சங்கீதம்"],
-    dance: ["நடனம்", "dance", "பரதநாட்டியம்"],
-    drama: ["நாடகம்", "drama", "நாடகமும் அரங்கியலும்"]
-  };
-
-  for (const [, aliases] of Object.entries(subjectMap)) {
-    const itemMatches = aliases.some(a => cleanItem.includes(a));
-    const stMatches = aliases.some(a => cleanSt.includes(a));
-    if (itemMatches && stMatches) return true;
+  if (catItem && catSt) {
+    if (catItem === "ALL_WILDCARD" || catSt === "ALL_WILDCARD") return true;
+    if (catItem === catSt) return true;
+    return false; // Both are classified distinct subjects, so they must not cross-leak
   }
 
   return false;

@@ -587,50 +587,131 @@ export const normalizeSub = (str: string) => {
 
 export const getCanonicalSubject = (s: string): string => {
   if (!s) return "";
-  const raw = normalizeSub(s);
+  let clean = s.trim().toLowerCase()
+    .replace(/\((?:தரம்|grade)\s*\d+\)/gi, ' ')
+    .replace(/\b(?:தரம்|grade)\s*\d+\b/gi, ' ')
+    .replace(/\b(?:o\/l|a\/l|ol|al)\b/gi, ' ')
+    .replace(/[\(\)\[\]\-–—:,]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-  if (raw === "tamil" || raw === "தமிழ்") {
-    return "tamil";
+  if (
+    (clean.includes("30 நாள்") || clean.includes("30 days") || clean.includes("30-day") || clean.includes("30 day")) &&
+    (clean.includes("15") || clean.includes("15 30") || clean.includes("15 - 30") || clean.includes("15 தொடக்கம் 30") || clean.includes("இரண்டாம் பகுதி") || clean.includes("part 2"))
+  ) {
+    return "tamil_30_days_part2";
   }
-  if (raw.includes("நயம்") || raw.includes("nayam") || (raw.includes("இலக்கிய") && raw.includes("நயம்"))) {
-    return "tamil_ilakkia_nayam";
-  }
-  if (raw.includes("மொழி") && raw.includes("இலக்கிய")) {
-    return "tamil_mozhi_ilakkiam";
-  }
-  if (raw.includes("30 நாள்") || raw.includes("30 day")) {
-    if (raw.includes("15") || raw.includes("30 வது")) return "tamil_30_days_part2";
+
+  if (clean.includes("30 நாள்") || clean.includes("30 days") || clean.includes("30-day") || clean.includes("30 day")) {
     return "tamil_30_days";
   }
-  if (raw.includes("வினா") || raw.includes("vina") || raw.includes("q&a") || raw.includes("question")) {
-    return "tamil_vina_vidai";
-  }
-  if (raw.includes("வளம்") || raw.includes("game")) {
-    return "tamil_mozhi_valam";
+
+  if (
+    clean.includes("வினா விடை") || clean.includes("வினாவிடை") || clean.includes("வினா-விடை") || 
+    clean.includes("paper class") || clean.includes("பேப்பர் கிளாஸ்") || clean.includes("q&a") || 
+    clean.includes("வினாத்தாள்") || clean.includes("மாதிரி வினா") || clean.includes("வினாக்கள்") ||
+    clean.includes("past paper") || clean.includes("model paper")
+  ) {
+    return "tamil_q_and_a";
   }
 
-  return raw;
+  if (clean.includes("இலக்கிய நயம்") || clean.includes("தமிழ் இலக்கிய நயம்") || clean.includes("இலக்கியம்") || clean.includes("நயம்")) {
+    return "tamil_literature";
+  }
+
+  if (clean.includes("மொழி வளம்") || clean.includes("வளம்") || clean.includes("game")) {
+    return "tamil_game";
+  }
+
+  if (clean.includes("தமிழ்") || clean.includes("tamil")) {
+    return "tamil";
+  }
+
+  if (clean.includes("விஞ்ஞானம்") || clean.includes("science") || clean.includes("அறிவியல்")) {
+    return "science";
+  }
+
+  if (clean.includes("கணிதம்") || clean.includes("maths") || clean.includes("mathematics") || clean.includes("கணிதவியல்")) {
+    return "maths";
+  }
+
+  if (clean.includes("ஆங்கிலம்") || clean.includes("english")) {
+    return "english";
+  }
+
+  if (clean.includes("வரலாறு") || clean.includes("history")) {
+    return "history";
+  }
+
+  if (clean.includes("ict") || clean.includes("தகவல் தொடர்பாடல்") || clean.includes("தகவல் தொழில்நுட்பம்") || clean.includes("computer") || clean.includes("கணினி")) {
+    return "ict";
+  }
+
+  if (clean.includes("வர்த்தகம்") || clean.includes("வணிக") || clean.includes("commerce") || clean.includes("கணக்கியல்") || clean.includes("accounting") || clean.includes("business")) {
+    return "commerce";
+  }
+
+  if (clean.includes("புவியியல்") || clean.includes("geography")) {
+    return "geography";
+  }
+
+  if (clean.includes("குடிமை") || clean.includes("குடியியல்") || clean.includes("civics")) {
+    return "civics";
+  }
+
+  if (clean.includes("சமயம்") || clean.includes("இந்து சமயம்") || clean.includes("சைவ சமயம்") || clean.includes("இஸ்லாம்") || clean.includes("கிறிஸ்தவம்") || clean.includes("religion") || clean.includes("hinduism") || clean.includes("islam") || clean.includes("christianity")) {
+    return "religion";
+  }
+
+  if (clean.includes("சுகாதாரம்") || clean.includes("உடற்கல்வி") || clean.includes("health") || clean.includes("physical education")) {
+    return "health";
+  }
+
+  if (clean.includes("சித்திரம்") || clean.includes("art") || clean.includes("கலை")) {
+    return "art";
+  }
+
+  if (clean.includes("சங்கீதம்") || clean.includes("இசை") || clean.includes("music")) {
+    return "music";
+  }
+
+  if (clean.includes("நடனம்") || clean.includes("dance") || clean.includes("பரதநாட்டியம்")) {
+    return "dance";
+  }
+
+  if (clean.includes("நாடகம்") || clean.includes("drama")) {
+    return "drama";
+  }
+
+  if (clean === "all" || clean === "general" || clean === "public" || clean === "அனைத்து" || clean === "அனைத்து பாடங்களும்" || clean === "பொது" || clean === "all subjects" || clean === "uncategorized" || clean === "e-learning") {
+    return "ALL_WILDCARD";
+  }
+
+  return clean;
 };
 
 export const areSubjectsMatching = (itemSub: string, studentSub: string): boolean => {
   if (!itemSub || !studentSub) return false;
-  const rawItem = itemSub.trim().toLowerCase();
-  const rawSt = studentSub.trim().toLowerCase();
+  const rawItem = String(itemSub).trim().toLowerCase();
+  const rawSt = String(studentSub).trim().toLowerCase();
 
   if (rawItem === rawSt) return true;
 
-  const wildcards = ["all", "general", "public", "e-learning", "uncategorized", "அனைத்து", "அனைத்து பாடங்களும்", "all subjects"];
+  const wildcards = ["all", "general", "public", "e-learning", "uncategorized", "அனைத்து", "அனைத்து பாடங்களும்", "all subjects", "பொது"];
   if (wildcards.includes(rawItem) || wildcards.includes(rawSt)) return true;
 
-  const normItem = normalizeSub(itemSub);
-  const normSt = normalizeSub(studentSub);
+  const cleanItem = rawItem.replace(/[\(\)\[\]\-–—:,]/g, ' ').replace(/\s+/g, ' ').trim();
+  const cleanSt = rawSt.replace(/[\(\)\[\]\-–—:,]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (cleanItem === cleanSt) return true;
 
-  if (normItem && normSt && normItem === normSt) return true;
+  const canonItem = getCanonicalSubject(rawItem);
+  const canonSt = getCanonicalSubject(rawSt);
 
-  const canonItem = getCanonicalSubject(itemSub);
-  const canonSt = getCanonicalSubject(studentSub);
-
-  if (canonItem && canonSt && canonItem === canonSt) return true;
+  if (canonItem && canonSt) {
+    if (canonItem === "ALL_WILDCARD" || canonSt === "ALL_WILDCARD") return true;
+    if (canonItem === canonSt) return true;
+    return false;
+  }
 
   return false;
 };
