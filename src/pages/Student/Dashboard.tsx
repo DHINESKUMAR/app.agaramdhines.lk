@@ -195,9 +195,12 @@ export default function StudentDashboard() {
       const itemPaid = Number(fee.amount) || 0;
       const itemRem = Number(fee.remainingAmount || "0") || 0;
 
-      const batchFull = fee.batchFullFee ? Number(fee.batchFullFee) : null;
+      const batchFull = fee.batchSubTotal || fee.batchFullFee ? Number(fee.batchSubTotal || fee.batchFullFee) : null;
+      const batchDiscount = fee.batchDiscount !== undefined && fee.batchDiscount !== null ? Number(fee.batchDiscount) : null;
+      const batchNet = fee.batchNetPayable ? Number(fee.batchNetPayable) : null;
       const batchPaid = fee.batchAmountPaid ? Number(fee.batchAmountPaid) : null;
       const batchRem = fee.batchRemaining ? Number(fee.batchRemaining) : null;
+      const itemDiscount = Number(fee.discount) || 0;
 
       if (!groups[key]) {
         groups[key] = {
@@ -205,11 +208,16 @@ export default function StudentDashboard() {
           id: key,
           batchId: key,
           totalAmount: batchFull !== null && !isNaN(batchFull) && batchFull > 0 ? batchFull : itemFull,
+          subTotal: batchFull !== null && !isNaN(batchFull) && batchFull > 0 ? batchFull : itemFull,
+          discount: batchDiscount !== null && !isNaN(batchDiscount) ? batchDiscount : itemDiscount,
+          discountReason: fee.batchDiscountReason || fee.discountReason || "",
+          netPayable: batchNet !== null && !isNaN(batchNet) ? batchNet : Math.max(0, itemFull - itemDiscount),
           amountPaid: batchPaid !== null && !isNaN(batchPaid) && batchPaid > 0 ? batchPaid : itemPaid,
-          remainingAmount: batchRem !== null && !isNaN(batchRem) && batchRem > 0 ? batchRem : itemRem,
+          remainingAmount: batchRem !== null && !isNaN(batchRem) ? batchRem : itemRem,
           items: [{ 
             label: (fee.itemName || fee.type), 
             amount: itemFull, 
+            discount: itemDiscount,
             paidAmount: itemPaid,
             remainingAmount: itemRem,
             type: fee.type, 
@@ -224,6 +232,7 @@ export default function StudentDashboard() {
         groups[key].items.push({ 
           label: (fee.itemName || fee.type), 
           amount: itemFull, 
+          discount: itemDiscount,
           paidAmount: itemPaid,
           remainingAmount: itemRem,
           type: fee.type, 
@@ -236,9 +245,11 @@ export default function StudentDashboard() {
           groups[key].displayMonth = fee.month;
         }
 
-        const hasBatchLevel = groups[key].batchFullFee && Number(groups[key].batchFullFee) > 0;
+        const hasBatchLevel = (groups[key].batchSubTotal || groups[key].batchFullFee) && Number(groups[key].batchSubTotal || groups[key].batchFullFee) > 0;
         if (!hasBatchLevel) {
           groups[key].totalAmount = (Number(groups[key].totalAmount) || 0) + itemFull;
+          groups[key].subTotal = (Number(groups[key].subTotal) || 0) + itemFull;
+          groups[key].discount = (Number(groups[key].discount) || 0) + itemDiscount;
           groups[key].amountPaid = (Number(groups[key].amountPaid) || 0) + itemPaid;
           groups[key].remainingAmount = (Number(groups[key].remainingAmount) || 0) + itemRem;
         }
@@ -4010,8 +4021,20 @@ export default function StudentDashboard() {
                 <div className="space-y-1.5 border-t border-slate-100 pt-3 text-[11px]">
                   <div className="flex justify-between items-center text-slate-550 font-medium">
                     <span>Sub Total (முழு கட்டணம்)</span>
-                    <span className="font-bold">LKR {selectedReceipt.totalAmount || selectedReceipt.fullFee || selectedReceipt.amount}.00</span>
+                    <span className="font-bold">LKR {selectedReceipt.subTotal || selectedReceipt.totalAmount || selectedReceipt.fullFee || selectedReceipt.amount}.00</span>
                   </div>
+                  {selectedReceipt.discount && Number(selectedReceipt.discount) > 0 ? (
+                    <>
+                      <div className="flex justify-between items-center text-emerald-600 font-bold">
+                        <span>Discount (கட்டணக் கழிவு) {selectedReceipt.discountReason ? `[${selectedReceipt.discountReason}]` : ''}</span>
+                        <span>- LKR {selectedReceipt.discount}.00</span>
+                      </div>
+                      <div className="flex justify-between items-center text-slate-700 font-bold">
+                        <span>Net Payable (கழிவு போக மொத்தம்)</span>
+                        <span>LKR {selectedReceipt.netPayable || (Number(selectedReceipt.subTotal || selectedReceipt.totalAmount || selectedReceipt.amount) - Number(selectedReceipt.discount))}.00</span>
+                      </div>
+                    </>
+                  ) : null}
                   <div className="flex justify-between items-center text-emerald-600 font-bold">
                     <span>Paid Amount (செலுத்தியது)</span>
                     <span>LKR {selectedReceipt.amountPaid || selectedReceipt.amount}.00</span>

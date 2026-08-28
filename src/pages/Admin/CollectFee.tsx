@@ -25,6 +25,11 @@ export default function CollectFee() {
   const [amountPaid, setAmountPaid] = useState(0);
   const [isManualAmount, setIsManualAmount] = useState(false);
 
+  // Discount states
+  const [discountType, setDiscountType] = useState<'amount' | 'percent'>('amount');
+  const [discountValue, setDiscountValue] = useState<number>(0);
+  const [discountReason, setDiscountReason] = useState<string>("");
+
   const [subjects, setSubjects] = useState<any[]>([]);
   const [feeSettings, setFeeSettings] = useState<any[]>([]);
 
@@ -146,6 +151,12 @@ export default function CollectFee() {
   const handleSelectStudent = (student: any) => {
     setSelectedStudent(student);
     
+    // Reset discount states when student changes
+    setDiscountValue(0);
+    setDiscountType('amount');
+    setDiscountReason("");
+    setIsManualAmount(false);
+
     // Default to Tuition fee for the selected grade
     const classData = classes.find(c => c.name === student.grade);
     const tuitionAmount = classData ? parseInt(classData.monthlyTuitionFees.toString().replace(/\D/g, '')) : 1500;
@@ -180,13 +191,31 @@ export default function CollectFee() {
     setSelectedItems([]);
   };
 
+  const discountAmount = useMemo(() => {
+    const val = Number(discountValue) || 0;
+    if (val <= 0) return 0;
+    if (discountType === 'percent') {
+      return Math.min(totalAmount, Math.round((totalAmount * val) / 100));
+    }
+    return Math.min(totalAmount, val);
+  }, [totalAmount, discountValue, discountType]);
+
+  const netPayable = useMemo(() => {
+    return Math.max(0, totalAmount - discountAmount);
+  }, [totalAmount, discountAmount]);
+
   useEffect(() => {
     if (!isManualAmount) {
       const total = selectedItems.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0);
       setTotalAmount(total);
-      setAmountPaid(total);
     }
   }, [selectedItems, isManualAmount]);
+
+  useEffect(() => {
+    if (!isManualAmount) {
+      setAmountPaid(netPayable);
+    }
+  }, [netPayable, isManualAmount]);
 
   const toggleItem = (itemType: string, itemName: string, amount: number, isSubject: boolean, category?: string) => {
     setIsManualAmount(false); // Reset manual override when changing selection
@@ -253,24 +282,31 @@ export default function CollectFee() {
         return;
       }
 
-      // Calculate proportions if amount was manually changed
+      // Calculate proportions if amount was manually changed or discount applied
       const calculatedTotal = validItems.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0);
       const adjustmentRatio = calculatedTotal > 0 ? amountPaid / calculatedTotal : 1;
+      const discountRatio = calculatedTotal > 0 ? discountAmount / calculatedTotal : 0;
 
       const newFeeRecords = validItems.map((item, idx) => {
         let finalAmount = parseInt(item.amount) || 0;
-        if (isManualAmount) {
+        let itemDiscount = Math.round((parseInt(item.amount) || 0) * discountRatio);
+
+        if (isManualAmount || discountAmount > 0) {
           if (idx === validItems.length - 1) {
             // Last item gets the remainder to ensure exact total match
             const otherItemsTotal = validItems.slice(0, -1).reduce((sum, it) => sum + Math.round((parseInt(it.amount) || 0) * adjustmentRatio), 0);
             finalAmount = amountPaid - otherItemsTotal;
+
+            const otherDiscounts = validItems.slice(0, -1).reduce((sum, it) => sum + Math.round((parseInt(it.amount) || 0) * discountRatio), 0);
+            itemDiscount = discountAmount - otherDiscounts;
           } else {
             finalAmount = Math.round(finalAmount * adjustmentRatio);
           }
         }
 
         const originalFullFeeItem = parseInt(item.amount) || 0;
-        const itemRemaining = Math.max(0, originalFullFeeItem - finalAmount);
+        const itemNetFee = Math.max(0, originalFullFeeItem - itemDiscount);
+        const itemRemaining = Math.max(0, itemNetFee - finalAmount);
 
         return {
           id: `${Date.now()}-${idx}`,
@@ -281,6 +317,11 @@ export default function CollectFee() {
           month: (item.type === 'Monthly Tuition' || item.type === 'Subject Fee' || item.category === 'Main') ? paymentData.month : "",
           amount: finalAmount.toString(),
           fullFee: originalFullFeeItem.toString(),
+          discount: itemDiscount.toString(),
+          discountReason: discountReason || "",
+          discountType: discountType,
+          discountValue: discountValue.toString(),
+          netFee: itemNetFee.toString(),
           remainingAmount: itemRemaining.toString(),
           method: paymentData.method,
           date: paymentData.date,
@@ -291,8 +332,14 @@ export default function CollectFee() {
           batchId: batchId,
           timestamp: new Date().toISOString(),
           batchFullFee: totalAmount.toString(),
+          batchSubTotal: totalAmount.toString(),
+          batchDiscount: discountAmount.toString(),
+          batchDiscountType: discountType,
+          batchDiscountValue: discountValue.toString(),
+          batchDiscountReason: discountReason || "",
+          batchNetPayable: netPayable.toString(),
           batchAmountPaid: amountPaid.toString(),
-          batchRemaining: (totalAmount - amountPaid).toString()
+          batchRemaining: Math.max(0, netPayable - amountPaid).toString()
         };
       });
 
@@ -313,32 +360,51 @@ export default function CollectFee() {
         ...newFeeRecords[0],
         items: selectedItems.map((item, idx) => {
           let finalAmount = parseInt(item.amount) || 0;
-          if (isManualAmount) {
+          let itemDiscount = Math.round((parseInt(item.amount) || 0) * discountRatio);
+          if (isManualAmount || discountAmount > 0) {
             if (idx === selectedItems.length - 1) {
               const otherItemsTotal = selectedItems.slice(0, -1).reduce((sum, it) => sum + Math.round((parseInt(it.amount) || 0) * adjustmentRatio), 0);
               finalAmount = amountPaid - otherItemsTotal;
+              const otherDiscounts = selectedItems.slice(0, -1).reduce((sum, it) => sum + Math.round((parseInt(it.amount) || 0) * discountRatio), 0);
+              itemDiscount = discountAmount - otherDiscounts;
             } else {
               finalAmount = Math.round(finalAmount * adjustmentRatio);
             }
           }
+          const itemNet = Math.max(0, (parseInt(item.amount) || 0) - itemDiscount);
           return {
             ...item,
             paidAmount: finalAmount,
-            remainingAmount: Math.max(0, (parseInt(item.amount) || 0) - finalAmount)
+            discount: itemDiscount,
+            remainingAmount: Math.max(0, itemNet - finalAmount)
           };
         }),
+        subTotal: totalAmount,
         totalAmount: totalAmount,
+        discount: discountAmount,
+        discountType: discountType,
+        discountValue: discountValue,
+        discountReason: discountReason,
+        netPayable: netPayable,
         amountPaid: amountPaid,
-        remainingAmount: totalAmount - amountPaid,
+        remainingAmount: Math.max(0, netPayable - amountPaid),
         transactionId: txnIdBase,
         batchFullFee: totalAmount.toString(),
+        batchSubTotal: totalAmount.toString(),
+        batchDiscount: discountAmount.toString(),
+        batchDiscountReason: discountReason,
+        batchNetPayable: netPayable.toString(),
         batchAmountPaid: amountPaid.toString(),
-        batchRemaining: (totalAmount - amountPaid).toString()
+        batchRemaining: Math.max(0, netPayable - amountPaid).toString()
       });
       setShowReceipt(true);
       
       // Reset form
       setSelectedItems([]);
+      setDiscountValue(0);
+      setDiscountReason("");
+      setDiscountType('amount');
+      setIsManualAmount(false);
       setPaymentData({
         method: "Bank Transfer",
         date: new Date().toISOString().split('T')[0],
@@ -376,10 +442,13 @@ export default function CollectFee() {
       if (!id) id = fee.id;
 
       const itemFull = Number(fee.fullFee || fee.amount) || 0;
+      const itemDiscount = Number(fee.discount) || 0;
       const itemPaid = Number(fee.amount) || 0;
       const itemRem = Number(fee.remainingAmount || "0") || 0;
 
-      const batchFull = fee.batchFullFee ? Number(fee.batchFullFee) : null;
+      const batchFull = fee.batchSubTotal || fee.batchFullFee ? Number(fee.batchSubTotal || fee.batchFullFee) : null;
+      const batchDiscount = fee.batchDiscount !== undefined && fee.batchDiscount !== null ? Number(fee.batchDiscount) : null;
+      const batchNet = fee.batchNetPayable ? Number(fee.batchNetPayable) : null;
       const batchPaid = fee.batchAmountPaid ? Number(fee.batchAmountPaid) : null;
       const batchRem = fee.batchRemaining ? Number(fee.batchRemaining) : null;
 
@@ -387,11 +456,16 @@ export default function CollectFee() {
         groups[id] = {
           ...fee,
           totalAmount: batchFull !== null && !isNaN(batchFull) && batchFull > 0 ? batchFull : itemFull,
+          batchSubTotal: batchFull !== null && !isNaN(batchFull) && batchFull > 0 ? batchFull : itemFull,
+          batchDiscount: batchDiscount !== null && !isNaN(batchDiscount) ? batchDiscount : itemDiscount,
+          batchDiscountReason: fee.batchDiscountReason || fee.discountReason || "",
+          batchNetPayable: batchNet !== null && !isNaN(batchNet) ? batchNet : Math.max(0, itemFull - itemDiscount),
           amountPaid: batchPaid !== null && !isNaN(batchPaid) && batchPaid > 0 ? batchPaid : itemPaid,
-          remainingAmount: batchRem !== null && !isNaN(batchRem) && batchRem > 0 ? batchRem : itemRem,
+          remainingAmount: batchRem !== null && !isNaN(batchRem) ? batchRem : itemRem,
           items: [{ 
             label: (fee.itemName || fee.type), 
             amount: itemFull, 
+            discount: itemDiscount,
             paidAmount: itemPaid,
             remainingAmount: itemRem,
             type: fee.type, 
@@ -406,6 +480,7 @@ export default function CollectFee() {
         groups[id].items.push({ 
           label: (fee.itemName || fee.type), 
           amount: itemFull, 
+          discount: itemDiscount,
           paidAmount: itemPaid,
           remainingAmount: itemRem,
           type: fee.type, 
@@ -417,17 +492,21 @@ export default function CollectFee() {
           groups[id].displayMonth = fee.month;
         }
 
-        // If batchFull is valid and non-zero, let's use it directly (this handles manual overrides perfectly)
+        // If batchFull is valid and non-zero, let's use it directly
         if (batchFull !== null && !isNaN(batchFull) && batchFull > 0) {
           groups[id].totalAmount = batchFull;
+          groups[id].batchSubTotal = batchFull;
+          groups[id].batchDiscount = batchDiscount !== null && !isNaN(batchDiscount) ? batchDiscount : groups[id].batchDiscount;
+          groups[id].batchDiscountReason = fee.batchDiscountReason || fee.discountReason || groups[id].batchDiscountReason;
+          groups[id].batchNetPayable = batchNet !== null && !isNaN(batchNet) ? batchNet : groups[id].batchNetPayable;
           groups[id].amountPaid = batchPaid !== null && !isNaN(batchPaid) && batchPaid > 0 ? batchPaid : groups[id].amountPaid;
-          groups[id].remainingAmount = batchRem !== null && !isNaN(batchRem) && batchRem > 0 ? batchRem : groups[id].remainingAmount;
+          groups[id].remainingAmount = batchRem !== null && !isNaN(batchRem) ? batchRem : groups[id].remainingAmount;
         } else {
-          // Otherwise, if we don't have batch-level values, accumulate individual items
-          // But only if the group's current total wasn't already set from a batch-level value in a previous record
           const hasBatchLevel = groups[id].batchFullFee && Number(groups[id].batchFullFee) > 0;
           if (!hasBatchLevel) {
             groups[id].totalAmount = (Number(groups[id].totalAmount) || 0) + itemFull;
+            groups[id].batchSubTotal = (Number(groups[id].batchSubTotal) || 0) + itemFull;
+            groups[id].batchDiscount = (Number(groups[id].batchDiscount) || 0) + itemDiscount;
             groups[id].amountPaid = (Number(groups[id].amountPaid) || 0) + itemPaid;
             groups[id].remainingAmount = (Number(groups[id].remainingAmount) || 0) + itemRem;
           }
@@ -439,8 +518,6 @@ export default function CollectFee() {
   };
 
   const handleEditFee = (fee: any) => {
-    // If it's a grouped fee, we typically only edit one record for now
-    // but the UI currently expects a single record format
     const sourceFee = fee.items ? fee : fee;
     setEditingFeeId(sourceFee.id);
     setPaymentData({
@@ -448,6 +525,16 @@ export default function CollectFee() {
       date: sourceFee.date,
       month: sourceFee.month || new Date().toISOString().slice(0, 7),
     });
+
+    if (sourceFee.batchDiscount || sourceFee.discount) {
+      setDiscountValue(Number(sourceFee.batchDiscountValue || sourceFee.batchDiscount || sourceFee.discount) || 0);
+      setDiscountType((sourceFee.batchDiscountType || 'amount') as any);
+      setDiscountReason(sourceFee.batchDiscountReason || sourceFee.discountReason || "");
+    } else {
+      setDiscountValue(0);
+      setDiscountType('amount');
+      setDiscountReason("");
+    }
     
     setSelectedItems(sourceFee.items ? sourceFee.items.map((it: any) => ({
       id: Date.now() + Math.random().toString(),
@@ -461,18 +548,28 @@ export default function CollectFee() {
       type: sourceFee.type || 'Monthly Tuition',
       label: sourceFee.type === 'Subject Fee' ? sourceFee.itemName : sourceFee.type,
       itemName: sourceFee.itemName,
-      amount: parseInt(sourceFee.amount) || 0
+      amount: parseInt(sourceFee.fullFee || sourceFee.amount) || 0
     }]);
   };
 
   const handleLoadReceipt = (fee: any) => {
     setIsUnpaidReceipt(false);
+    const subTotal = Number(fee.batchSubTotal || fee.batchFullFee || fee.totalAmount || fee.fullFee || fee.amount) || 0;
+    const discount = Number(fee.batchDiscount ?? fee.discount) || 0;
+    const netPayable = Number(fee.batchNetPayable) || Math.max(0, subTotal - discount);
+    const amountPaid = Number(fee.batchAmountPaid ?? fee.amountPaid ?? fee.amount) || 0;
+    const remainingAmount = Number(fee.batchRemaining ?? fee.remainingAmount ?? (netPayable - amountPaid)) || 0;
+
     if (fee.items) {
       setReceiptData({
         ...fee,
-        totalAmount: fee.totalAmount,
-        amountPaid: fee.amountPaid ?? fee.totalAmount,
-        remainingAmount: fee.remainingAmount ?? 0,
+        subTotal: subTotal,
+        totalAmount: subTotal,
+        discount: discount,
+        discountReason: fee.batchDiscountReason || fee.discountReason || "",
+        netPayable: netPayable,
+        amountPaid: amountPaid,
+        remainingAmount: remainingAmount,
         transactionId: fee.transactionId?.split('-')[0] + '-' + fee.transactionId?.split('-')[1] || fee.transactionId
       });
     } else {
@@ -486,9 +583,13 @@ export default function CollectFee() {
           type: fee.type, 
           itemName: fee.itemName 
         }],
-        totalAmount: parseInt(fee.fullFee || fee.amount) || 0,
-        amountPaid: parseInt(fee.amount) || 0,
-        remainingAmount: parseInt(fee.remainingAmount || "0") || 0
+        subTotal: subTotal,
+        totalAmount: subTotal,
+        discount: discount,
+        discountReason: fee.batchDiscountReason || fee.discountReason || "",
+        netPayable: netPayable,
+        amountPaid: amountPaid,
+        remainingAmount: remainingAmount
       });
     }
     setShowReceipt(true);
@@ -513,13 +614,23 @@ export default function CollectFee() {
         paidAmount: 0,
         remainingAmount: parseInt(item.amount) || 0
       })),
+      subTotal: totalAmount,
       totalAmount: totalAmount,
+      discount: discountAmount,
+      discountType: discountType,
+      discountValue: discountValue,
+      discountReason: discountReason,
+      netPayable: netPayable,
       amountPaid: 0,
-      remainingAmount: totalAmount,
+      remainingAmount: netPayable,
       transactionId: "PREVIEW-INVOICE",
       batchFullFee: totalAmount.toString(),
+      batchSubTotal: totalAmount.toString(),
+      batchDiscount: discountAmount.toString(),
+      batchDiscountReason: discountReason,
+      batchNetPayable: netPayable.toString(),
       batchAmountPaid: "0",
-      batchRemaining: totalAmount.toString()
+      batchRemaining: netPayable.toString()
     });
     setShowReceipt(true);
   };
@@ -805,7 +916,7 @@ export default function CollectFee() {
                     <div className="space-y-5">
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                          Full Fee / Bill Total (முழு கட்டணம்)
+                          Full Fee / Sub Total (முழு கட்டணம்)
                         </label>
                         <div className="flex rounded-md shadow-sm max-w-lg">
                           <span className="inline-flex items-center px-4 rounded-l-md border border-r-0 border-slate-300 bg-slate-100 text-slate-500 font-black text-xs uppercase select-none">
@@ -817,10 +928,128 @@ export default function CollectFee() {
                             onChange={(e) => {
                               const val = parseInt(e.target.value) || 0;
                               setTotalAmount(val);
-                              setAmountPaid(val); // By default, set amountPaid to match
                               setIsManualAmount(true);
                             }}
                             className="flex-1 min-w-0 px-4 py-3 border border-slate-300 bg-gray-50 rounded-none rounded-r-md font-black text-slate-800 text-lg focus:ring-blue-500 focus:border-blue-500 transition-shadow outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Discount / Concession Section */}
+                      <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <label className="text-sm font-bold text-emerald-950">
+                              Discount / Concession (கட்டணக் கழிவு / டிஸ்கவுண்ட்)
+                            </label>
+                          </div>
+                          
+                          {/* Type Toggle: LKR vs % */}
+                          <div className="flex bg-white rounded-lg border border-emerald-300 p-0.5 text-xs font-bold shadow-xs">
+                            <button
+                              type="button"
+                              onClick={() => setDiscountType('amount')}
+                              className={`px-3 py-1 rounded-md transition-colors ${discountType === 'amount' ? 'bg-emerald-600 text-white shadow-xs' : 'text-emerald-700 hover:bg-emerald-50'}`}
+                            >
+                              LKR (தொகை)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDiscountType('percent')}
+                              className={`px-3 py-1 rounded-md transition-colors ${discountType === 'percent' ? 'bg-emerald-600 text-white shadow-xs' : 'text-emerald-700 hover:bg-emerald-50'}`}
+                            >
+                              % (சதவீதம்)
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <div className="flex rounded-md shadow-xs">
+                              <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-emerald-300 bg-emerald-100 text-emerald-800 font-bold text-xs uppercase select-none">
+                                {discountType === 'amount' ? 'LKR' : '%'}
+                              </span>
+                              <input 
+                                type="number"
+                                min="0"
+                                max={discountType === 'percent' ? 100 : totalAmount}
+                                placeholder="0"
+                                value={discountValue || ''}
+                                onChange={(e) => {
+                                  const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                  setDiscountValue(val);
+                                }}
+                                className="flex-1 min-w-0 px-3 py-2 border border-emerald-300 bg-white rounded-none rounded-r-md font-bold text-emerald-900 text-base focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Discount Reason */}
+                          <div>
+                            <input 
+                              type="text" 
+                              placeholder="Discount Reason (e.g. Scholarship, Sibling, Free Class)..."
+                              value={discountReason}
+                              onChange={(e) => setDiscountReason(e.target.value)}
+                              className="w-full px-3 py-2 border border-emerald-300 bg-white rounded-md text-xs font-semibold text-emerald-900 placeholder:text-emerald-400 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                          <span className="text-[11px] font-bold text-emerald-700 mr-1">Quick:</span>
+                          {[
+                            { label: '0%', val: 0, type: 'percent', reason: '' },
+                            { label: '10%', val: 10, type: 'percent', reason: '10% Discount' },
+                            { label: '20%', val: 20, type: 'percent', reason: '20% Discount' },
+                            { label: '50% (Half)', val: 50, type: 'percent', reason: '50% Concession' },
+                            { label: '100% (Free)', val: 100, type: 'percent', reason: 'Full Scholarship (100%)' },
+                            { label: 'LKR 500', val: 500, type: 'amount', reason: 'Special Discount' },
+                            { label: 'LKR 1000', val: 1000, type: 'amount', reason: 'Sibling Concession' },
+                          ].map((preset, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setDiscountType(preset.type as 'amount' | 'percent');
+                                setDiscountValue(preset.val);
+                                if (preset.reason) setDiscountReason(preset.reason);
+                              }}
+                              className={`px-2 py-0.5 text-[11px] font-bold rounded-md border transition-all ${
+                                discountValue === preset.val && discountType === preset.type
+                                  ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                                  : 'bg-white text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Summary breakdown badge */}
+                        {discountAmount > 0 && (
+                          <div className="flex items-center justify-between text-xs bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg text-emerald-900 font-bold">
+                            <span>Discount: - LKR {discountAmount}.00 {discountReason ? `(${discountReason})` : ''}</span>
+                            <span className="text-emerald-800 font-black">Net Payable: LKR {netPayable}.00</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                          Net Payable Fee (கழிவு போக செலுத்த வேண்டிய தொகை)
+                        </label>
+                        <div className="flex rounded-md shadow-sm max-w-lg">
+                          <span className="inline-flex items-center px-4 rounded-l-md border border-r-0 border-slate-300 bg-slate-100 text-slate-600 font-black text-xs uppercase select-none">
+                            LKR
+                          </span>
+                          <input 
+                            type="text" 
+                            disabled
+                            value={`${netPayable}.00`}
+                            className="flex-1 min-w-0 px-4 py-3 border border-slate-300 bg-slate-50 rounded-none rounded-r-md font-black text-slate-900 text-lg"
                           />
                         </div>
                       </div>
@@ -852,7 +1081,7 @@ export default function CollectFee() {
                         </label>
                         <div className="flex rounded-md shadow-sm max-w-lg">
                           <span className={`inline-flex items-center px-4 rounded-l-md border border-r-0 font-black text-xs uppercase select-none ${
-                            totalAmount - amountPaid > 0 
+                            netPayable - amountPaid > 0 
                               ? 'border-red-300 bg-red-100 text-red-600' 
                               : 'border-green-300 bg-green-100 text-green-600'
                           }`}>
@@ -861,9 +1090,9 @@ export default function CollectFee() {
                           <input 
                             type="text" 
                             disabled
-                            value={`${Math.max(0, totalAmount - amountPaid)}.00`}
+                            value={`${Math.max(0, netPayable - amountPaid)}.00`}
                             className={`flex-1 min-w-0 px-4 py-3 border rounded-none rounded-r-md font-black text-lg ${
-                              totalAmount - amountPaid > 0 
+                              netPayable - amountPaid > 0 
                                 ? 'border-red-200 bg-red-50 text-red-600' 
                                 : 'border-green-200 bg-green-50 text-green-600'
                             }`}
@@ -964,7 +1193,14 @@ export default function CollectFee() {
                             <td className="px-4 py-4 text-sm text-gray-500 whitespace-nowrap">{fee.date}</td>
                             <td className="px-4 py-4">
                               <div className="flex flex-col">
-                                <span className="text-sm font-black text-green-600">LKR {fee.totalAmount}</span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-sm font-black text-green-600">LKR {fee.amountPaid ?? fee.totalAmount}</span>
+                                  {fee.batchDiscount && Number(fee.batchDiscount) > 0 ? (
+                                    <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">
+                                      -LKR {fee.batchDiscount} {fee.batchDiscountReason ? `(${fee.batchDiscountReason})` : ''}
+                                    </span>
+                                  ) : null}
+                                </div>
                                 <span className="text-[10px] text-gray-400 font-medium max-w-[200px] line-clamp-1">
                                   {fee.items.map((i: any) => i.label).join(", ")}
                                 </span>
@@ -1136,8 +1372,24 @@ export default function CollectFee() {
                   <div className="space-y-2 border-t-2 border-gray-100 pt-4 mb-10">
                     <div className="flex justify-between items-center px-2">
                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest font-bold">Sub Total (முழு கட்டணம்)</span>
-                      <span className="text-xs font-black text-gray-600">LKR {receiptData.totalAmount || receiptData.amount}.00</span>
+                      <span className="text-xs font-black text-gray-600">LKR {receiptData.subTotal || receiptData.totalAmount || receiptData.amount}.00</span>
                     </div>
+
+                    {receiptData.discount && Number(receiptData.discount) > 0 ? (
+                      <>
+                        <div className="flex justify-between items-center px-2 text-emerald-700 font-bold">
+                          <span className="text-[10px] font-black uppercase tracking-widest">
+                            Discount (கட்டணக் கழிவு) {receiptData.discountReason ? `[${receiptData.discountReason}]` : ''}
+                          </span>
+                          <span className="text-xs font-black">- LKR {receiptData.discount}.00</span>
+                        </div>
+                        <div className="flex justify-between items-center px-2 text-slate-700 font-bold">
+                          <span className="text-[10px] font-black uppercase tracking-widest">Net Payable (கழிவு போக மொத்தம்)</span>
+                          <span className="text-xs font-black">LKR {receiptData.netPayable || (Number(receiptData.subTotal || receiptData.totalAmount || receiptData.amount) - Number(receiptData.discount))}.00</span>
+                        </div>
+                      </>
+                    ) : null}
+
                     {!isUnpaidReceipt && receiptData.remainingAmount && parseInt(receiptData.remainingAmount) > 0 ? (
                       <>
                         <div className="flex justify-between items-center px-2 text-emerald-600">
@@ -1152,7 +1404,7 @@ export default function CollectFee() {
                     ) : null}
                     <div className={`flex justify-between items-center p-3 rounded-xl shadow-lg border ${isUnpaidReceipt ? 'bg-red-600 border-red-500 shadow-red-100' : 'bg-green-600 border-green-500 shadow-green-100'}`}>
                       <span className="text-[10px] font-black text-white uppercase tracking-widest font-bold">{isUnpaidReceipt ? 'Amount Due' : 'Paid Today'}</span>
-                      <span className="text-xl font-black text-white">LKR {isUnpaidReceipt ? (receiptData.totalAmount || receiptData.amount) : (receiptData.amountPaid || receiptData.amount)}</span>
+                      <span className="text-xl font-black text-white">LKR {isUnpaidReceipt ? (receiptData.netPayable || receiptData.totalAmount || receiptData.amount) : (receiptData.amountPaid || receiptData.netPayable || receiptData.amount)}</span>
                     </div>
                   </div>
 
