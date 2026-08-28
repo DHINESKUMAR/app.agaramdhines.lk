@@ -62,7 +62,7 @@ export default function Home() {
     if (e) {
       e.stopPropagation();
     }
-    const schoolUrl = window.location.origin || window.location.href;
+    const schoolUrl = "https://app-agaramdhines-lk.vercel.app/";
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(schoolUrl);
