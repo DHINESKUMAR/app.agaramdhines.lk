@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   getCourses, saveCourses, deleteCourse, getClasses, getStaffs, 
-  getSubjects, saveSubjects, getStudents,
+  getSubjects, saveSubjects, getStudents, getFees,
+  getCourseMaterials, getYoutubeLinks, getWebPosts,
   getStudentMenuLabels, saveStudentMenuLabels,
   DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels,
   mergeArraysById
@@ -17,7 +18,7 @@ import {
   FileText, Play, RefreshCw, Eye, Sparkles, Copy,
   Tag, Layers, MessageCircle, Calendar, Award, ShieldAlert,
   DollarSign, Phone, CheckCircle2, RotateCcw, AlertTriangle,
-  Star, Search
+  Star, Search, Filter
 } from 'lucide-react';
 
 export default function Courses() {
@@ -27,9 +28,14 @@ export default function Courses() {
   const [staffs, setStaffs] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [allSubjects, setAllSubjects] = useState<any[]>([]);
+  const [fees, setFees] = useState<any[]>([]);
+  const [courseMaterials, setCourseMaterials] = useState<any[]>([]);
+  const [youtubeLinks, setYoutubeLinks] = useState<any[]>([]);
+  const [webPosts, setWebPosts] = useState<any[]>([]);
   const [menuLabels, setMenuLabels] = useState<StudentMenuLabels>(DEFAULT_STUDENT_MENU_LABELS);
   const [selectedLibraryGrade, setSelectedLibraryGrade] = useState<string | null>(null);
   const [librarySearch, setLibrarySearch] = useState<string>('');
+  const [subjectSearch, setSubjectSearch] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [previewItem, setPreviewItem] = useState<any | null>(null);
 
@@ -74,11 +80,26 @@ export default function Courses() {
     if (clean.length < rawCourses.length) {
       await saveCourses(clean);
     }
-    getClasses().then(setClasses);
-    getStaffs().then(setStaffs);
-    getStudents().then(setStudents);
-    getSubjects().then(setAllSubjects);
-    getStudentMenuLabels().then(setMenuLabels);
+    const [cls, stf, std, subs, f, mats, yt, wp, menu] = await Promise.all([
+      getClasses(),
+      getStaffs(),
+      getStudents(),
+      getSubjects(),
+      getFees(),
+      getCourseMaterials(),
+      getYoutubeLinks(),
+      getWebPosts(),
+      getStudentMenuLabels()
+    ]);
+    setClasses(cls || []);
+    setStaffs(stf || []);
+    setStudents(std || []);
+    setAllSubjects(subs || []);
+    setFees(f || []);
+    setCourseMaterials(mats || []);
+    setYoutubeLinks(yt || []);
+    setWebPosts(wp || []);
+    if (menu) setMenuLabels(menu);
   };
 
   useEffect(() => {
@@ -86,7 +107,7 @@ export default function Courses() {
 
     const handleDbUpdate = (e: any) => {
       const key = e.detail?.key;
-      if (!key || key === 'courses' || key === 'subjects' || key === 'classes' || key === 'students') {
+      if (!key || ['courses', 'subjects', 'classes', 'students', 'staffs', 'fees', 'courseMaterials', 'youtubeLinks', 'webPosts'].includes(key)) {
         loadCoursesData();
       }
     };
@@ -94,20 +115,124 @@ export default function Courses() {
     return () => window.removeEventListener('db_updated', handleDbUpdate as EventListener);
   }, [view]);
 
-  const availableSubjectsList = Array.from(new Set([
-    "30 நாள் தமிழ் பாடநெறி (தரம் 11)",
-    "தமிழ் வினா விடை",
-    "தமிழ்",
-    "Science",
-    "Mathematics",
-    "ICT / Computer Science",
-    "English",
-    "History",
-    ...classes.flatMap(c => c.subjects || []),
-    ...staffs.flatMap(s => s.assignedClasses?.map((c: any) => c.subject) || []),
-    ...students.flatMap(s => s.subjects || s.enrolledClasses || []),
-    ...allSubjects.map(s => s.name)
-  ])).filter(Boolean);
+  // Aggregated comprehensive subjects list from all system sources
+  const availableSubjectsList = useMemo(() => {
+    const set = new Set<string>();
+
+    // Core default curriculum packages
+    const defaults = [
+      "30 நாள் தமிழ் பாடநெறி (தரம் 11)",
+      "30 நாள் பாடநெறி",
+      "தமிழ் வினா விடை",
+      "2026 ஆம் ஆண்டு வினாவிடை",
+      "தமிழ் வகுப்பு",
+      "தமிழ்",
+      "தமிழ் மொழி இலக்கியம்",
+      "தமிழ் இலக்கிய நயம்",
+      "Science",
+      "Mathematics",
+      "ICT / Computer Science",
+      "English",
+      "History",
+      "Commerce",
+      "Geography",
+      "Civics",
+      "General"
+    ];
+    defaults.forEach(d => set.add(d.trim()));
+
+    // From master allSubjects
+    allSubjects.forEach(s => {
+      if (s?.name && typeof s.name === 'string' && s.name.trim()) {
+        set.add(s.name.trim());
+      }
+    });
+
+    // From classes
+    classes.forEach(c => {
+      if (Array.isArray(c?.subjects)) {
+        c.subjects.forEach((sub: any) => sub && typeof sub === 'string' && set.add(sub.trim()));
+      }
+      if (c?.subject && typeof c.subject === 'string' && c.subject.trim()) {
+        set.add(c.subject.trim());
+      }
+    });
+
+    // From staffs
+    staffs.forEach(st => {
+      if (Array.isArray(st?.assignedClasses)) {
+        st.assignedClasses.forEach((ac: any) => {
+          if (ac?.subject && typeof ac.subject === 'string' && ac.subject.trim()) {
+            set.add(ac.subject.trim());
+          }
+        });
+      }
+    });
+
+    // From students
+    students.forEach(s => {
+      const subs = Array.isArray(s?.subjects) ? s.subjects : (Array.isArray(s?.enrolledClasses) ? s.enrolledClasses : []);
+      subs.forEach((sub: any) => {
+        if (sub && typeof sub === 'string' && sub.trim()) {
+          const lower = sub.trim().toLowerCase();
+          if (!lower.startsWith('தரம்') && !lower.startsWith('grade')) {
+            set.add(sub.trim());
+          }
+        }
+      });
+    });
+
+    // From fees
+    fees.forEach(f => {
+      if (f?.subject && typeof f.subject === 'string' && f.subject.trim()) set.add(f.subject.trim());
+      if (f?.packageName && typeof f.packageName === 'string' && f.packageName.trim()) set.add(f.packageName.trim());
+    });
+
+    // From existing courses
+    courses.forEach(c => {
+      if (Array.isArray(c?.subjects)) {
+        c.subjects.forEach((s: any) => s && typeof s === 'string' && set.add(s.trim()));
+      }
+      if (c?.subject && typeof c.subject === 'string' && c.subject.trim()) {
+        set.add(c.subject.trim());
+      }
+    });
+
+    // From course materials
+    courseMaterials.forEach(m => {
+      if (Array.isArray(m?.subjects)) {
+        m.subjects.forEach((s: any) => s && typeof s === 'string' && set.add(s.trim()));
+      }
+      if (m?.subject && typeof m.subject === 'string' && m.subject.trim()) {
+        set.add(m.subject.trim());
+      }
+    });
+
+    // From YouTube links
+    youtubeLinks.forEach(y => {
+      if (Array.isArray(y?.subjects)) {
+        y.subjects.forEach((s: any) => s && typeof s === 'string' && set.add(s.trim()));
+      }
+      if (y?.subject && typeof y.subject === 'string' && y.subject.trim()) {
+        set.add(y.subject.trim());
+      }
+    });
+
+    // From Web Posts
+    webPosts.forEach(wp => {
+      if (Array.isArray(wp?.subjects)) {
+        wp.subjects.forEach((s: any) => s && typeof s === 'string' && set.add(s.trim()));
+      }
+      if (wp?.subject && typeof wp.subject === 'string' && wp.subject.trim()) {
+        set.add(wp.subject.trim());
+      }
+    });
+
+    // Always include any currently selected subjects
+    selectedSubjects.forEach(s => s && set.add(s.trim()));
+
+    return Array.from(set).filter(Boolean);
+  }, [allSubjects, classes, staffs, students, fees, courses, courseMaterials, youtubeLinks, webPosts, selectedSubjects]);
 
   const toggleGrade = (gradeName: string) => {
     if (selectedGrades.includes(gradeName)) {
@@ -675,51 +800,75 @@ export default function Courses() {
 
           {/* Subject Selector */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-black text-slate-700 uppercase tracking-widest">
-                3. Select Subject / பாடம் *
-              </label>
-              <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2">
+                <label className="block text-xs font-black text-slate-700 uppercase tracking-widest">
+                  3. Select Subject / பாடம் *
+                </label>
+                {selectedSubjects.length > 0 && (
+                  <span className="text-[11px] font-black text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200">
+                    {selectedSubjects.length} Selected
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search subject / பாடத்தை தேடுக..."
+                    value={subjectSearch}
+                    onChange={(e) => setSubjectSearch(e.target.value)}
+                    className="pl-7 pr-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none focus:bg-white w-48 sm:w-56"
+                  />
+                </div>
                 <button type="button" onClick={selectAllSubjects} className="text-[11px] font-bold text-indigo-600 hover:underline">Select All</button>
                 <span className="text-slate-300">|</span>
                 <button type="button" onClick={clearSubjects} className="text-[11px] font-bold text-rose-600 hover:underline">Clear</button>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 mb-3">
-              {availableSubjectsList.map(s => {
-                const isSelected = selectedSubjects.includes(s);
-                return (
-                  <button
-                    type="button"
-                    key={s}
-                    onClick={() => toggleSubject(s)}
-                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1 ${
-                      isSelected
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    {isSelected && <Check size={12} />}
-                    {s}
-                  </button>
-                );
-              })}
+            <div className="flex flex-wrap gap-2 mb-3 max-h-48 overflow-y-auto p-1 border border-slate-100 rounded-2xl bg-slate-50/50">
+              {availableSubjectsList
+                .filter(s => !subjectSearch.trim() || s.toLowerCase().includes(subjectSearch.toLowerCase().trim()))
+                .map(s => {
+                  const isSelected = selectedSubjects.includes(s);
+                  return (
+                    <button
+                      type="button"
+                      key={s}
+                      onClick={() => toggleSubject(s)}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs scale-102 font-black'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
+                      }`}
+                    >
+                      {isSelected ? <Check size={13} /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>}
+                      {s}
+                    </button>
+                  );
+                })}
+              {availableSubjectsList.filter(s => !subjectSearch.trim() || s.toLowerCase().includes(subjectSearch.toLowerCase().trim())).length === 0 && (
+                <div className="p-3 text-xs text-slate-400 font-bold w-full text-center">
+                  No matching subjects found. You can add it below as a custom subject.
+                </div>
+              )}
             </div>
 
             {/* Custom Subject Quick Input */}
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Or type a custom subject name..."
+                placeholder="Or type a new custom subject name (e.g. 2026 தமிழ் வினாவிடை)..."
                 value={customSubjectInput}
                 onChange={(e) => setCustomSubjectInput(e.target.value)}
-                className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none"
+                className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
               />
               <button
                 type="button"
                 onClick={handleAddCustomSubject}
-                className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-900"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all"
               >
                 + Add Subject
               </button>

@@ -1642,6 +1642,13 @@ export const getSubjects = async () => {
         subs.forEach((subName: any) => addSubjectToMap(subName, 'Main', y?.grade || 'தரம் 11'));
       });
     }
+    const rawWebPosts = await getData('webPosts', []);
+    if (Array.isArray(rawWebPosts)) {
+      rawWebPosts.forEach((wp: any) => {
+        const subs = Array.isArray(wp?.subjects) ? wp.subjects : (wp?.subject ? [wp.subject] : []);
+        subs.forEach((subName: any) => addSubjectToMap(subName, 'Main', wp?.grade || 'தரம் 11'));
+      });
+    }
   } catch (_) {}
 
   // 7. Harvest subjects from courseMaterials
@@ -1651,6 +1658,17 @@ export const getSubjects = async () => {
       rawMats.forEach((m: any) => {
         const subs = Array.isArray(m?.subjects) ? m.subjects : (m?.subject ? [m.subject] : []);
         subs.forEach((subName: any) => addSubjectToMap(subName, 'Main', m?.grade || 'தரம் 11'));
+      });
+    }
+  } catch (_) {}
+
+  // 8. Harvest subjects from fees records
+  try {
+    const rawFees = await getData('fees', []);
+    if (Array.isArray(rawFees)) {
+      rawFees.forEach((f: any) => {
+        if (f?.subject) addSubjectToMap(f.subject, 'Sub', f?.grade || 'தரம் 11');
+        if (f?.packageName) addSubjectToMap(f.packageName, 'Sub', f?.grade || 'தரம் 11');
       });
     }
   } catch (_) {}

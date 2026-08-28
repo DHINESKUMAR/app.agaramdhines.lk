@@ -220,7 +220,7 @@ export const areSubjectsMatching = (itemSub: string, studentSub: string): boolea
   ];
   if (wildcards.includes(rawItem) || wildcards.includes(rawSt)) return true;
 
-  // 3. Normalize strings (remove grade tags, brackets, punctuation)
+  // 3. Normalize strings (remove grade tags, brackets, punctuation, multiple spaces)
   const cleanItem = rawItem.replace(/[\(\)\[\]\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
   const cleanSt = rawSt.replace(/[\(\)\[\]\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
   if (cleanItem === cleanSt) return true;
@@ -228,9 +228,12 @@ export const areSubjectsMatching = (itemSub: string, studentSub: string): boolea
   // 4. Substring containment
   if (cleanItem.includes(cleanSt) || cleanSt.includes(cleanItem)) return true;
 
-  // 5. English - Tamil synonym dictionary for exact school subjects
+  // 5. English - Tamil synonym & course packages dictionary
   const subjectMap: Record<string, string[]> = {
-    tamil: ["தமிழ்", "tamil", "தமிழ் மொழி", "தமிழ் இலக்கியம்", "tamil language", "tamil literature"],
+    tamil_30_days: ["30 நாள்", "30 days", "30 நாள் பாடநெறி", "30 நாள் தமிழ் பாடநெறி", "30-day course"],
+    tamil_q_and_a: ["வினா விடை", "வினாவிடை", "வினா-விடை", "q&a", "questions", "வினாக்கள்", "2026 ஆம் ஆண்டு வினாவிடை", "மாதிரி வினாத்தாள்", "கடந்தகால வினா"],
+    tamil_literature: ["இலக்கிய நயம்", "தமிழ் இலக்கிய நயம்", "இலக்கியம்"],
+    tamil: ["தமிழ்", "tamil", "தமிழ் மொழி", "தமிழ் இலக்கியம்", "tamil language", "tamil literature", "தமிழ் வகுப்பு"],
     science: ["விஞ்ஞானம்", "science", "அறிவியல்", "பொது விஞ்ஞானம்", "general science"],
     maths: ["கணிதம்", "maths", "mathematics", "கணிதவியல்"],
     english: ["ஆங்கிலம்", "english", "english language", "general english"],
@@ -238,7 +241,7 @@ export const areSubjectsMatching = (itemSub: string, studentSub: string): boolea
     ict: ["தகவல் தொழில்நுட்பம்", "ict", "computer", "கணினி", "information technology", "computer science", "தகவல் தொடர்பாடல்"],
     commerce: ["வர்த்தகம்", "வணிகக் கல்வி", "commerce", "வணிகம்", "accounting", "கணக்கியல்", "business studies"],
     geography: ["புவியியல்", "geography"],
-    civics: ["குடிமையியல்", "குடியியல்", "civics"],
+    civics: ["குடிமையியல்", "குடியியல்", "civics", "குடிமை"],
     religion: ["சமயம்", "இந்து சமயம்", "இஸ்லாம்", "கிறிஸ்தவம்", "religion", "hinduism", "islam", "christianity", "saivam", "சைவ சமயம்"],
     health: ["சுகாதாரம்", "உடற்கல்வி", "health", "physical education"],
     art: ["சித்திரம்", "art", "கலை"],
@@ -274,7 +277,7 @@ export const doesItemMatchStudentSubjects = (item: RecordingItem, studentSubs?: 
     return true;
   }
 
-  // Check if student has wildcard
+  // Check if student has wildcard / all access
   const hasWildcard = cleanStudentSubs.some(s => {
     const raw = s.toLowerCase();
     return raw === 'all' || raw === 'general' || raw === 'public' || 
@@ -299,7 +302,7 @@ export const doesItemMatchStudentSubjects = (item: RecordingItem, studentSubs?: 
   });
   if (isItemGeneral) return true;
 
-  // Check overlap with student enrolled subjects
+  // Student receives post if AT LEAST ONE item subject matches AT LEAST ONE enrolled student subject
   return itemSubs.some(itemSub => 
     cleanStudentSubs.some(stSub => areSubjectsMatching(itemSub, stSub))
   );
@@ -352,6 +355,7 @@ export const doesItemMatchGrade = (item: RecordingItem, targetGrade: string): bo
 export const deduplicateCourses = (coursesList: any[]): any[] => {
   if (!Array.isArray(coursesList)) return [];
   const map = new Map<string, any>();
+  const idToKeyMap = new Map<string, string>();
 
   for (const item of coursesList) {
     if (!item) continue;
@@ -363,9 +367,25 @@ export const deduplicateCourses = (coursesList: any[]): any[] => {
 
     // Unique identification key
     const contentSignature = cleanCode ? cleanCode.slice(0, 100) : (cleanContent ? cleanContent.slice(0, 100) : cleanLink);
-    const key = cleanTitle 
+    const contentKey = cleanTitle 
       ? `${cleanType}:::${cleanTitle}:::${contentSignature}`
-      : (item.id ? String(item.id).trim().toLowerCase() : `item_${Math.random()}`);
+      : '';
+    const itemId = item.id ? String(item.id).trim().toLowerCase() : '';
+
+    let key = '';
+    if (itemId && idToKeyMap.has(itemId)) {
+      key = idToKeyMap.get(itemId)!;
+    } else if (contentKey && map.has(contentKey)) {
+      key = contentKey;
+    } else if (itemId && map.has(itemId)) {
+      key = itemId;
+    } else {
+      key = contentKey || itemId || `item_${Math.random()}`;
+    }
+
+    if (itemId) {
+      idToKeyMap.set(itemId, key);
+    }
 
     const currentSubs = Array.from(new Set([
       ...(Array.isArray(item.subjects) ? item.subjects : []),
