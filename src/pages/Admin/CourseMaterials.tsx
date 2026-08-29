@@ -58,7 +58,7 @@ export default function CourseMaterials() {
     };
     window.addEventListener('db_updated', handleDbUpdate as EventListener);
     return () => window.removeEventListener('db_updated', handleDbUpdate as EventListener);
-  }, [view]);
+  }, []);
 
   const ALL_AVAILABLE_GRADES = Array.from(new Set([
     "30 DAY'S TAMIL COURSE",

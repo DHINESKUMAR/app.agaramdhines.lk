@@ -42,6 +42,7 @@ export default function Courses() {
   const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [customSubjectInput, setCustomSubjectInput] = useState<string>('');
+  const [debouncedLiveCode, setDebouncedLiveCode] = useState<string>('');
 
   // Form Data State supporting all Post types (Web Posts, HTML Code Live View, Student Box, Mobile Games, Images)
   const [itemType, setItemType] = useState<'webpost' | 'html_code' | 'student_box' | 'mobile_game' | 'image_post'>('webpost');
@@ -73,47 +74,68 @@ export default function Courses() {
     gameType: 'word_quiz' as 'word_quiz' | 'math_game' | 'memory_match' | 'flappy' | 'custom_url'
   });
 
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedLiveCode(formData.code);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [formData.code]);
+
   const loadCoursesData = async () => {
-    const rawCourses = await getCourses();
-    const clean = deduplicateCourses(rawCourses);
-    setCourses(clean);
-    if (clean.length < rawCourses.length) {
-      await saveCourses(clean);
+    try {
+      const rawCourses = await getCourses();
+      const clean = deduplicateCourses(rawCourses);
+      setCourses(clean);
+
+      const [cls, stf, std, subs, f, mats, yt, wp, menu] = await Promise.all([
+        getClasses(),
+        getStaffs(),
+        getStudents(),
+        getSubjects(),
+        getFees(),
+        getCourseMaterials(),
+        getYoutubeLinks(),
+        getWebPosts(),
+        getStudentMenuLabels()
+      ]);
+      setClasses(cls || []);
+      setStaffs(stf || []);
+      setStudents(std || []);
+      setAllSubjects(subs || []);
+      setFees(f || []);
+      setCourseMaterials(mats || []);
+      setYoutubeLinks(yt || []);
+      setWebPosts(wp || []);
+      if (menu) setMenuLabels(menu);
+    } catch (err) {
+      console.warn("Error loading courses data:", err);
     }
-    const [cls, stf, std, subs, f, mats, yt, wp, menu] = await Promise.all([
-      getClasses(),
-      getStaffs(),
-      getStudents(),
-      getSubjects(),
-      getFees(),
-      getCourseMaterials(),
-      getYoutubeLinks(),
-      getWebPosts(),
-      getStudentMenuLabels()
-    ]);
-    setClasses(cls || []);
-    setStaffs(stf || []);
-    setStudents(std || []);
-    setAllSubjects(subs || []);
-    setFees(f || []);
-    setCourseMaterials(mats || []);
-    setYoutubeLinks(yt || []);
-    setWebPosts(wp || []);
-    if (menu) setMenuLabels(menu);
   };
 
   useEffect(() => {
     loadCoursesData();
 
+    let debounceTimer: any = null;
     const handleDbUpdate = (e: any) => {
       const key = e.detail?.key;
-      if (!key || ['courses', 'subjects', 'classes', 'students', 'staffs', 'fees', 'courseMaterials', 'youtubeLinks', 'webPosts'].includes(key)) {
-        loadCoursesData();
+      // Only respond to specific relevant database updates and debounce
+      if (['courses', 'subjects', 'classes'].includes(key)) {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          if (key === 'courses' && Array.isArray(e.detail?.data)) {
+            setCourses(deduplicateCourses(e.detail.data));
+          } else {
+            loadCoursesData();
+          }
+        }, 300);
       }
     };
     window.addEventListener('db_updated', handleDbUpdate as EventListener);
-    return () => window.removeEventListener('db_updated', handleDbUpdate as EventListener);
-  }, [view]);
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      window.removeEventListener('db_updated', handleDbUpdate as EventListener);
+    };
+  }, []);
 
   // Aggregated comprehensive subjects list from all system sources
   const availableSubjectsList = useMemo(() => {
@@ -912,7 +934,7 @@ export default function Courses() {
                 <div className="rounded-2xl overflow-hidden border border-slate-700 bg-white h-44">
                   <iframe
                     title="Live Web View Preview"
-                    srcDoc={formData.code}
+                    srcDoc={debouncedLiveCode || formData.code}
                     sandbox="allow-scripts"
                     className="w-full h-full border-0"
                   />
@@ -1317,26 +1339,31 @@ export default function Courses() {
                       )}
 
                       {(course.type === 'html_code' || Boolean(course.code && course.code.trim())) && (
-                        <div className="my-2.5 rounded-xl border border-slate-300 overflow-hidden bg-slate-900 shadow-inner">
-                          <div className="bg-slate-800 px-3 py-1 flex items-center justify-between text-[11px] text-emerald-400 font-mono border-b border-slate-700">
-                            <span className="flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                              HTML Live View Sandbox
+                        <div className="my-2.5 rounded-2xl border border-slate-700 overflow-hidden bg-slate-950 shadow-md">
+                          <div className="bg-slate-900 px-3.5 py-2 flex items-center justify-between text-[11px] text-emerald-400 font-mono border-b border-slate-800">
+                            <span className="flex items-center gap-1.5 font-bold">
+                              <Code size={13} className="text-emerald-400" />
+                              HTML Live Sandbox
                             </span>
                             <button
                               type="button"
                               onClick={() => setPreviewItem(course)}
-                              className="text-[10px] text-indigo-300 hover:text-white font-bold"
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all shadow-xs"
                             >
-                              Fullscreen ↗
+                              <Eye size={11} /> நேரலை காட்சி (Live View ↗)
                             </button>
                           </div>
-                          <iframe
-                            title={course.title}
-                            srcDoc={course.code || ''}
-                            sandbox="allow-scripts allow-modals"
-                            className="w-full h-32 bg-white border-0"
-                          />
+                          <div 
+                            onClick={() => setPreviewItem(course)}
+                            className="p-3 bg-slate-950/80 cursor-pointer group hover:bg-slate-900/90 transition-all"
+                          >
+                            <pre className="text-[10px] font-mono text-emerald-400/90 line-clamp-3 overflow-hidden select-none">
+                              {course.code || '<!DOCTYPE html>...'}
+                            </pre>
+                            <div className="mt-2 text-[10px] text-indigo-300 font-bold flex items-center gap-1 group-hover:text-white">
+                              <span>Click to open interactive preview</span> →
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
