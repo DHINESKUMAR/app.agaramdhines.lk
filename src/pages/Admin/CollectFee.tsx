@@ -797,700 +797,760 @@ export default function CollectFee() {
   const groupedHistory = useMemo(() => groupFeesByBatch(studentFeeHistory), [studentFeeHistory]);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Collect Fee</h1>
-      
-      <div className="flex flex-col lg:flex-row gap-6">
+    <div className="w-full max-w-[1720px] mx-auto px-3 sm:px-6 lg:px-8 py-5 space-y-6">
+      {/* Top Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+              <DollarSign size={22} className="stroke-[2.5]" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
+                Collect Fee / கட்டணம் வசூலித்தல்
+              </h1>
+              <p className="text-xs text-slate-500 font-medium">
+                மாணவர் கட்டணங்கள், பல மாத கட்டணத் தேர்வு, கழிவு மற்றும் ரசீது மேலாண்மை
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {selectedStudent && (
+          <div className="flex items-center gap-3 bg-blue-50/80 border border-blue-200/80 px-4 py-2 rounded-xl">
+            <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
+              {selectedStudent.name.charAt(0)}
+            </div>
+            <div>
+              <p className="text-xs font-black text-slate-800 leading-tight">{selectedStudent.name}</p>
+              <p className="text-[11px] text-blue-600 font-bold">
+                Roll: {selectedStudent.rollNo || "N/A"} • Class: {selectedStudent.grade}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedStudent(null)}
+              className="ml-2 text-xs font-bold text-blue-700 hover:text-blue-900 bg-white hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition-colors cursor-pointer"
+            >
+              மாற்று (Change)
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Main Content Layout: Landscape 3-Column Grid on Desktop, Stacked on Mobile */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* Left Column: Search & Select Student */}
-        <div className="w-full lg:w-1/3">
-          <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200 h-fit">
-            <h2 className="font-bold text-gray-700 mb-4 pb-2 border-b border-gray-100">1. Select Student</h2>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Grade</label>
+        {/* Left Column: Student Selection & Quick Profile (3 cols on desktop) */}
+        <div className="lg:col-span-3 xl:col-span-3 space-y-4">
+          <div className="bg-white p-5 rounded-2xl shadow-xs border border-slate-200">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <User size={18} className="text-blue-600" />
+                <h2 className="font-black text-slate-800 text-sm uppercase tracking-wide">
+                  1. மாணவர் தேர்வு (Select Student)
+                </h2>
+              </div>
+            </div>
+
+            {/* Filter by Grade */}
+            <div className="mb-3">
+              <label className="block text-xs font-bold text-slate-600 mb-1">வகுப்பு (Grade Filter)</label>
               <select
                 value={selectedGrade}
                 onChange={(e) => setSelectedGrade(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs font-bold text-slate-800"
               >
-                <option value="">All Grades</option>
+                <option value="">அனைத்து வகுப்புகளும் (All Grades)</option>
                 {classes.map(c => (
                   <option key={c.id} value={c.name}>{c.name}</option>
                 ))}
               </select>
             </div>
 
-            <div className="relative mb-4">
+            {/* Search Input */}
+            <div className="relative mb-3">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search size={16} className="text-gray-400" />
+                <Search size={15} className="text-slate-400" />
               </div>
               <input 
                 type="text" 
-                placeholder="Search by Name or Roll No..." 
+                placeholder="பெயர் அல்லது Roll No தேடுக..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs font-semibold"
               />
             </div>
 
+            {/* Search Results List */}
             {(searchQuery || selectedGrade) && (
-              <div className="border border-gray-200 rounded-md max-h-80 overflow-y-auto bg-white shadow-sm mb-4">
+              <div className="border border-slate-200 rounded-xl max-h-64 overflow-y-auto bg-white shadow-inner mb-4 divide-y divide-slate-100">
                 {filteredStudents.length > 0 ? (
-                  <ul className="divide-y divide-gray-100">
-                    {filteredStudents.map(student => (
-                      <li 
-                        key={student.id} 
-                        onClick={() => handleSelectStudent(student)}
-                        className={`p-3 hover:bg-blue-50 cursor-pointer transition-colors flex flex-col ${selectedStudent?.id === student.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
-                      >
-                        <span className="font-medium text-gray-800">{student.name}</span>
-                        <span className="text-xs text-gray-500">Roll No: {student.rollNo || "N/A"} | Class: {student.grade}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  filteredStudents.map(student => (
+                    <div 
+                      key={student.id} 
+                      onClick={() => handleSelectStudent(student)}
+                      className={`p-2.5 hover:bg-blue-50 cursor-pointer transition-colors flex flex-col ${selectedStudent?.id === student.id ? 'bg-blue-50/80 border-l-4 border-blue-600' : ''}`}
+                    >
+                      <span className="font-bold text-xs text-slate-800">{student.name}</span>
+                      <span className="text-[11px] text-slate-500 font-medium">Roll: {student.rollNo || "N/A"} • Class: {student.grade}</span>
+                    </div>
+                  ))
                 ) : (
-                  <div className="p-4 text-center text-sm text-gray-500">No students found</div>
+                  <div className="p-4 text-center text-xs text-slate-400 font-medium">மாணவர்கள் எவரும் கிடைக்கவில்லை</div>
                 )}
               </div>
             )}
 
-            {/* Currently Selected Student Card (Small) */}
+            {/* Currently Selected Student Card */}
             {selectedStudent ? (
-              <div className="mt-6 bg-blue-50 border border-blue-100 rounded-lg p-4 relative">
-                <button 
-                  onClick={() => setSelectedStudent(null)}
-                  className="absolute top-2 right-2 text-blue-400 hover:text-blue-600 text-xs font-medium"
-                >
-                  Change
-                </button>
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">
+              <div className="mt-4 bg-gradient-to-br from-blue-50 to-indigo-50/70 border border-blue-200/80 rounded-xl p-4 relative space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center font-black text-lg shadow-sm">
                     {selectedStudent.name.charAt(0)}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-gray-800 leading-tight">{selectedStudent.name}</h3>
-                    <p className="text-xs text-gray-500">Roll No: {selectedStudent.rollNo || "N/A"}</p>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-black text-slate-900 text-sm truncate">{selectedStudent.name}</h3>
+                    <p className="text-xs text-blue-700 font-bold">Class: {selectedStudent.grade}</p>
+                    <p className="text-[11px] text-slate-500 font-medium">Roll No: {selectedStudent.rollNo || "N/A"}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-blue-200/60 text-[11px]">
+                  <div className="bg-white/80 p-2 rounded-lg border border-blue-100">
+                    <span className="text-slate-500 block">கடைசி கட்டணம்:</span>
+                    <span className="font-black text-emerald-600">
+                      {studentFeeHistory.length > 0 ? (studentFeeHistory[0].displayMonth || studentFeeHistory[0].month) : "இல்லை"}
+                    </span>
+                  </div>
+                  <div className="bg-white/80 p-2 rounded-lg border border-blue-100">
+                    <span className="text-slate-500 block">ரசீதுகள்:</span>
+                    <span className="font-black text-blue-700">{studentFeeHistory.length} பதிவுகள்</span>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="mt-6 border-2 border-dashed border-gray-200 rounded-lg p-8 text-center text-gray-400">
-                <User size={32} className="mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Search and select a student to proceed with payment</p>
+              <div className="mt-4 border-2 border-dashed border-slate-200 rounded-xl p-6 text-center text-slate-400">
+                <User size={30} className="mx-auto mb-2 opacity-40 text-slate-400" />
+                <p className="text-xs font-bold text-slate-600">மாணவரைத் தேர்வு செய்க</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">மேலே உள்ள பட்டியலில் இருந்து மாணவரைத் தேர்ந்தெடுக்கவும்</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Column: Payment Form */}
-        <div className="w-full lg:w-2/3">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden h-full">
-            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-              <h2 className="font-bold text-gray-700">2. Payment Details</h2>
+        {/* Center Column: Fee Items & Multi-Month Selector (5 cols on desktop) */}
+        <div className="lg:col-span-5 xl:col-span-5 space-y-4">
+          {!selectedStudent ? (
+            <div className="bg-white p-10 rounded-2xl border border-slate-200 text-center flex flex-col items-center justify-center min-h-[360px] text-slate-400">
+              <CreditCard size={44} className="mb-3 opacity-30 text-blue-500" />
+              <p className="text-base font-black text-slate-700">மாணவர் தேர்ந்தெடுக்கப்படவில்லை</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                இடதுபுற பலகத்தில் இருந்து ஒரு மாணவரைத் தேர்ந்தெடுத்த பின் கட்டண விபரங்கள் மற்றும் பாடங்கள் இங்கு தோன்றும்.
+              </p>
             </div>
-            
-            <div className="p-6">
-              {!selectedStudent ? (
-                <div className="h-full min-h-[300px] flex flex-col items-center justify-center text-gray-400">
-                  <CreditCard size={48} className="mb-4 opacity-30" />
-                  <p className="text-lg font-medium text-gray-500">No Student Selected</p>
-                  <p className="text-sm mt-1">Please select a student from the left panel first.</p>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmitPayment}>
-                  {/* Student Info Summary */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 p-4 bg-gray-50 rounded-lg border border-gray-100">
-                    <div className="flex items-center gap-3">
-                      <User size={20} className="text-gray-400" />
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase font-semibold">Student Name</p>
-                        <p className="font-medium text-gray-800">{selectedStudent.name}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <BookOpen size={20} className="text-gray-400" />
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase font-semibold">Class</p>
-                        <p className="font-medium text-gray-800">{selectedStudent.grade}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <DollarSign size={20} className={studentFeeHistory.length > 0 ? "text-green-500" : "text-gray-400"} />
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase font-semibold">Last Paid Month</p>
-                        <p className={`font-bold ${studentFeeHistory.length > 0 ? "text-green-600" : "text-gray-500"}`}>
-                          {studentFeeHistory.length > 0 ? studentFeeHistory[0].month : "No Records"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Multi-Month Selection & Payment Date Panel */}
-                  <div className="mb-8 p-5 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 rounded-xl border border-blue-200">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-blue-200/60">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Calendar size={18} className="text-blue-600" />
-                          <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">
-                            Select Fee Month(s) / கட்டண மாதங்கள் ({selectedMonths.length} Selected)
-                          </h3>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          ஒரே நேரத்தில் பல மாதங்களைத் தேர்வு செய்து கட்டணம் செலுத்தலாம் (Multi-month fee payment)
-                        </p>
-                      </div>
-
-                      {/* Year Selector and Quick Presets */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="flex items-center bg-white rounded-lg border border-blue-200 shadow-xs px-2 py-1">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedYear(prev => prev - 1)}
-                            className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-1.5 py-0.5 rounded"
-                          >
-                            ◀
-                          </button>
-                          <span className="text-xs font-black text-slate-800 px-2">{selectedYear}</span>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedYear(prev => prev + 1)}
-                            className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-1.5 py-0.5 rounded"
-                          >
-                            ▶
-                          </button>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={selectCurrentMonth}
-                          className="px-2.5 py-1 text-xs font-bold rounded-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 shadow-xs transition-colors"
-                        >
-                          1 Month
-                        </button>
-                        <button
-                          type="button"
-                          onClick={selectTwoMonths}
-                          className="px-2.5 py-1 text-xs font-bold rounded-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 shadow-xs transition-colors"
-                        >
-                          2 Months
-                        </button>
-                        <button
-                          type="button"
-                          onClick={selectThreeMonths}
-                          className="px-2.5 py-1 text-xs font-bold rounded-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 shadow-xs transition-colors"
-                        >
-                          3 Months
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Months Grid */}
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                      {MONTH_LIST.map((m) => {
-                        const mKey = `${selectedYear}-${m.index}`;
-                        const isSelected = selectedMonths.includes(mKey);
-                        return (
-                          <button
-                            key={m.index}
-                            type="button"
-                            onClick={() => toggleMonth(mKey)}
-                            className={`p-2.5 rounded-lg border text-center transition-all flex flex-col items-center justify-center relative ${
-                              isSelected
-                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-300'
-                                : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:bg-blue-50/50'
-                            }`}
-                          >
-                            <span className="text-xs font-black tracking-tight">{m.full}</span>
-                            <span className={`text-[11px] font-bold ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
-                              {m.ta}
-                            </span>
-                            {isSelected && (
-                              <span className="absolute top-1 right-1 w-2 h-2 bg-amber-300 rounded-full"></span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Selected Summary Bar */}
-                    <div className="mt-4 pt-3 border-t border-blue-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-2 flex-wrap text-slate-700 font-medium">
-                        <span className="font-bold text-blue-900">தேர்வு செய்யப்பட்ட மாதங்கள்:</span>
-                        <span className="font-black text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200">
-                          {formatMonthsList(selectedMonths) || "எந்த மாதமும் தேர்ந்தெடுக்கப்படவில்லை"}
-                        </span>
-                      </div>
-                      
-                      {/* Optional Custom Month Picker */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-slate-500">Other month:</span>
-                        <input
-                          type="month"
-                          value={customMonthInput}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setCustomMonthInput(val);
-                            if (val && !selectedMonths.includes(val)) {
-                              setSelectedMonths(prev => [...prev, val].sort());
-                            }
-                          }}
-                          className="text-xs border border-slate-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Payment Inputs */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div className="md:col-span-2 space-y-6">
-                       <div>
-                         <div className="flex items-center justify-between mb-3">
-                           <label className="block text-xs font-black text-blue-500 uppercase tracking-widest border-l-4 border-blue-500 pl-2">
-                             Main Subjects & Tuition
-                           </label>
-                           {monthCount > 1 && (
-                             <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
-                               Calculating for {monthCount} Months
-                             </span>
-                           )}
-                         </div>
-                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                           {/* Monthly Tuition Checkbox */}
-                           {(() => {
-                             const classData = classes.find(c => c.name === selectedStudent?.grade);
-                             const baseTuition = classData ? parseInt(classData.monthlyTuitionFees.toString().replace(/\D/g, '')) : 1500;
-                             const calculatedTuition = baseTuition * monthCount;
-                             const isSelected = !!selectedItems.find(i => i.type === 'Monthly Tuition');
-                             return (
-                               <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-blue-50 border-blue-300 shadow-sm ring-1 ring-blue-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
-                                 <input 
-                                   type="checkbox"
-                                   checked={isSelected}
-                                   onChange={() => toggleItem('Monthly Tuition', '', baseTuition, false)}
-                                   className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                 />
-                                 <div className="flex-1">
-                                   <p className="text-sm font-bold text-gray-800">Monthly Tuition</p>
-                                   <p className="text-[11px] text-gray-500">
-                                     {monthCount > 1 ? `${monthCount} Months × LKR ${baseTuition}` : `LKR ${baseTuition} / month`}
-                                   </p>
-                                 </div>
-                                 <div className="text-right">
-                                   <p className="font-bold text-blue-600">LKR {calculatedTuition}</p>
-                                   {monthCount > 1 && (
-                                     <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded">
-                                       {monthCount} M
-                                     </span>
-                                   )}
-                                 </div>
-                               </label>
-                             );
-                           })()}
-
-                           {/* Main Subjects Checkboxes */}
-                           {subjects.filter(s => s.category === "Main").map((sub) => {
-                             const baseFee = parseInt(sub.fee) || 0;
-                             const calculatedFee = baseFee * monthCount;
-                             const isSelected = !!selectedItems.find(i => i.itemName === sub.name && i.type === 'Subject Fee');
-                             return (
-                               <label key={sub.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-blue-50 border-blue-300 shadow-sm ring-1 ring-blue-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
-                                 <input 
-                                   type="checkbox"
-                                   checked={isSelected}
-                                   onChange={() => toggleItem('Subject Fee', sub.name, baseFee, true, 'Main')}
-                                   className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                 />
-                                 <div className="flex-1">
-                                   <p className="text-sm font-bold text-gray-800">{sub.name}</p>
-                                   <p className="text-[11px] text-blue-600 font-medium">
-                                     {monthCount > 1 ? `${monthCount} Months × LKR ${baseFee}` : `Main Subject (LKR ${baseFee})`}
-                                   </p>
-                                 </div>
-                                 <div className="text-right">
-                                   <p className="font-bold text-blue-600">LKR {calculatedFee}</p>
-                                   {monthCount > 1 && (
-                                     <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded">
-                                       {monthCount} M
-                                     </span>
-                                   )}
-                                 </div>
-                               </label>
-                             );
-                           })}
-                         </div>
-                       </div>
-
-                       <div>
-                         <div className="flex items-center justify-between mb-3">
-                           <label className="block text-xs font-black text-pink-500 uppercase tracking-widest border-l-4 border-pink-500 pl-2">
-                             Sub Subjects (Extra Classes)
-                           </label>
-                           {monthCount > 1 && (
-                             <span className="text-xs font-bold text-pink-700 bg-pink-100 px-2 py-0.5 rounded-full">
-                               Calculating for {monthCount} Months
-                             </span>
-                           )}
-                         </div>
-                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                           {/* Sub Subjects Checkboxes */}
-                           {subjects.filter(s => s.category === "Sub").map((sub) => {
-                             const baseFee = parseInt(sub.fee) || 0;
-                             const calculatedFee = baseFee * monthCount;
-                             const isSelected = !!selectedItems.find(i => i.itemName === sub.name && i.type === 'Subject Fee');
-                             return (
-                               <label key={sub.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-pink-50 border-pink-300 shadow-sm ring-1 ring-pink-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
-                                 <input 
-                                   type="checkbox"
-                                   checked={isSelected}
-                                   onChange={() => toggleItem('Subject Fee', sub.name, baseFee, true, 'Sub')}
-                                   className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-                                 />
-                                 <div className="flex-1">
-                                   <p className="text-sm font-bold text-gray-800">{sub.name}</p>
-                                   <p className="text-[11px] text-pink-600 font-medium">
-                                     {monthCount > 1 ? `${monthCount} Months × LKR ${baseFee}` : `Sub Subject (LKR ${baseFee})`}
-                                   </p>
-                                 </div>
-                                 <div className="text-right">
-                                   <p className="font-bold text-pink-600">LKR {calculatedFee}</p>
-                                   {monthCount > 1 && (
-                                     <span className="text-[10px] bg-pink-100 text-pink-800 font-bold px-1.5 py-0.5 rounded">
-                                       {monthCount} M
-                                     </span>
-                                   )}
-                                 </div>
-                               </label>
-                             );
-                           })}
-                         </div>
-                       </div>
-
-                    </div>
-
-                    <div className="space-y-5">
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                          Full Fee / Sub Total (முழு கட்டணம்)
-                        </label>
-                        <div className="flex rounded-md shadow-sm max-w-lg">
-                          <span className="inline-flex items-center px-4 rounded-l-md border border-r-0 border-slate-300 bg-slate-100 text-slate-500 font-black text-xs uppercase select-none">
-                            LKR
-                          </span>
-                          <input 
-                            type="number" 
-                            value={totalAmount}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value) || 0;
-                              setTotalAmount(val);
-                              setIsManualAmount(true);
-                            }}
-                            className="flex-1 min-w-0 px-4 py-3 border border-slate-300 bg-gray-50 rounded-none rounded-r-md font-black text-slate-800 text-lg focus:ring-blue-500 focus:border-blue-500 transition-shadow outline-none"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Discount / Concession Section */}
-                      <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <label className="text-sm font-bold text-emerald-950">
-                              Discount / Concession (கட்டணக் கழிவு / டிஸ்கவுண்ட்)
-                            </label>
-                          </div>
-                          
-                          {/* Type Toggle: LKR vs % */}
-                          <div className="flex bg-white rounded-lg border border-emerald-300 p-0.5 text-xs font-bold shadow-xs">
-                            <button
-                              type="button"
-                              onClick={() => setDiscountType('amount')}
-                              className={`px-3 py-1 rounded-md transition-colors ${discountType === 'amount' ? 'bg-emerald-600 text-white shadow-xs' : 'text-emerald-700 hover:bg-emerald-50'}`}
-                            >
-                              LKR (தொகை)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDiscountType('percent')}
-                              className={`px-3 py-1 rounded-md transition-colors ${discountType === 'percent' ? 'bg-emerald-600 text-white shadow-xs' : 'text-emerald-700 hover:bg-emerald-50'}`}
-                            >
-                              % (சதவீதம்)
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <div className="flex rounded-md shadow-xs">
-                              <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-emerald-300 bg-emerald-100 text-emerald-800 font-bold text-xs uppercase select-none">
-                                {discountType === 'amount' ? 'LKR' : '%'}
-                              </span>
-                              <input 
-                                type="number"
-                                min="0"
-                                max={discountType === 'percent' ? 100 : totalAmount}
-                                placeholder="0"
-                                value={discountValue || ''}
-                                onChange={(e) => {
-                                  const val = Math.max(0, parseFloat(e.target.value) || 0);
-                                  setDiscountValue(val);
-                                }}
-                                className="flex-1 min-w-0 px-3 py-2 border border-emerald-300 bg-white rounded-none rounded-r-md font-bold text-emerald-900 text-base focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Discount Reason */}
-                          <div>
-                            <input 
-                              type="text" 
-                              placeholder="Discount Reason (e.g. Scholarship, Sibling, Free Class)..."
-                              value={discountReason}
-                              onChange={(e) => setDiscountReason(e.target.value)}
-                              className="w-full px-3 py-2 border border-emerald-300 bg-white rounded-md text-xs font-semibold text-emerald-900 placeholder:text-emerald-400 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Quick Presets */}
-                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                          <span className="text-[11px] font-bold text-emerald-700 mr-1">Quick:</span>
-                          {[
-                            { label: '0%', val: 0, type: 'percent', reason: '' },
-                            { label: '10%', val: 10, type: 'percent', reason: '10% Discount' },
-                            { label: '20%', val: 20, type: 'percent', reason: '20% Discount' },
-                            { label: '50% (Half)', val: 50, type: 'percent', reason: '50% Concession' },
-                            { label: '100% (Free)', val: 100, type: 'percent', reason: 'Full Scholarship (100%)' },
-                            { label: 'LKR 500', val: 500, type: 'amount', reason: 'Special Discount' },
-                            { label: 'LKR 1000', val: 1000, type: 'amount', reason: 'Sibling Concession' },
-                          ].map((preset, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => {
-                                setDiscountType(preset.type as 'amount' | 'percent');
-                                setDiscountValue(preset.val);
-                                if (preset.reason) setDiscountReason(preset.reason);
-                              }}
-                              className={`px-2 py-0.5 text-[11px] font-bold rounded-md border transition-all ${
-                                discountValue === preset.val && discountType === preset.type
-                                  ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
-                                  : 'bg-white text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                              }`}
-                            >
-                              {preset.label}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Summary breakdown badge */}
-                        {discountAmount > 0 && (
-                          <div className="flex items-center justify-between text-xs bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg text-emerald-900 font-bold">
-                            <span>Discount: - LKR {discountAmount}.00 {discountReason ? `(${discountReason})` : ''}</span>
-                            <span className="text-emerald-800 font-black">Net Payable: LKR {netPayable}.00</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                          Net Payable Fee (கழிவு போக செலுத்த வேண்டிய தொகை)
-                        </label>
-                        <div className="flex rounded-md shadow-sm max-w-lg">
-                          <span className="inline-flex items-center px-4 rounded-l-md border border-r-0 border-slate-300 bg-slate-100 text-slate-600 font-black text-xs uppercase select-none">
-                            LKR
-                          </span>
-                          <input 
-                            type="text" 
-                            disabled
-                            value={`${netPayable}.00`}
-                            className="flex-1 min-w-0 px-4 py-3 border border-slate-300 bg-slate-50 rounded-none rounded-r-md font-black text-slate-900 text-lg"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-semibold text-blue-800 mb-1.5">
-                          Amount Paid Now (செலுத்திய தொகை) <span className="text-red-500">*</span>
-                        </label>
-                        <div className="flex rounded-md shadow-sm max-w-lg">
-                          <span className="inline-flex items-center px-4 rounded-l-md border border-r-0 border-blue-400 bg-blue-100 text-blue-600 font-black text-xs uppercase select-none">
-                            LKR
-                          </span>
-                          <input 
-                            type="number" 
-                            required
-                            value={amountPaid}
-                            onChange={(e) => {
-                              setAmountPaid(parseInt(e.target.value) || 0);
-                              setIsManualAmount(true);
-                            }}
-                            className="flex-1 min-w-0 px-4 py-3 border border-blue-400 bg-white rounded-none rounded-r-md font-black text-blue-700 text-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-shadow outline-none"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                          Remaining Balance (மீதி கட்டணம்)
-                        </label>
-                        <div className="flex rounded-md shadow-sm max-w-lg">
-                          <span className={`inline-flex items-center px-4 rounded-l-md border border-r-0 font-black text-xs uppercase select-none ${
-                            netPayable - amountPaid > 0 
-                              ? 'border-red-300 bg-red-100 text-red-600' 
-                              : 'border-green-300 bg-green-100 text-green-600'
-                          }`}>
-                            LKR
-                          </span>
-                          <input 
-                            type="text" 
-                            disabled
-                            value={`${Math.max(0, netPayable - amountPaid)}.00`}
-                            className={`flex-1 min-w-0 px-4 py-3 border rounded-none rounded-r-md font-black text-lg ${
-                              netPayable - amountPaid > 0 
-                                ? 'border-red-200 bg-red-50 text-red-600' 
-                                : 'border-green-200 bg-green-50 text-green-600'
-                            }`}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
+          ) : (
+            <div className="bg-white p-5 rounded-2xl shadow-xs border border-slate-200 space-y-5">
+              
+              {/* Multi-Month Selection Panel */}
+              <div className="p-4 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 rounded-xl border border-blue-200/80">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3 pb-2.5 border-b border-blue-200/60">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={17} className="text-blue-600" />
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method <span className="text-red-500">*</span></label>
-                      <select 
-                        value={paymentData.method}
-                        onChange={(e) => setPaymentData({...paymentData, method: e.target.value})}
-                        className="w-full border border-gray-300 rounded-md px-4 py-2.5 focus:ring-blue-500 focus:border-blue-500 bg-white transition-shadow"
-                      >
-                        <option value="Cash">Cash</option>
-                        <option value="Bank Transfer">Bank Transfer</option>
-                        <option value="Online">Online (Card/UPI)</option>
-                        <option value="Cheque">Cheque</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Date <span className="text-red-500">*</span></label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <Calendar size={18} className="text-gray-400" />
-                        </div>
-                        <input 
-                          type="date" 
-                          required
-                          value={paymentData.date}
-                          onChange={(e) => setPaymentData({...paymentData, date: e.target.value})}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition-shadow"
-                        />
-                      </div>
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">
+                        கட்டண மாதங்கள் ({selectedMonths.length} Selected)
+                      </h3>
+                      <p className="text-[11px] text-slate-500 font-medium">ஒரே நேரத்தில் பல மாதங்களைத் தேர்வு செய்யலாம்</p>
                     </div>
                   </div>
 
-          <div className="pt-4 border-t border-gray-100 flex flex-wrap gap-3 justify-end">
-                    <button 
-                      type="button"
-                      onClick={handlePreviewUnpaid}
-                      className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-6 rounded-md shadow-sm transition-colors flex items-center gap-2"
-                    >
-                      <Share2 size={18} />
-                      Unpaid Preview
-                    </button>
-                    <button 
-                      type="submit" 
-                      className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-md shadow-sm transition-colors flex items-center gap-2"
-                    >
-                      <CreditCard size={20} />
-                      {paymentData.method === "Online" && !editingFeeId ? "Pay Online" : editingFeeId ? "Update Payment" : "Submit Payment"}
-                    </button>
-                    {editingFeeId && (
+                  {/* Year Selector and Quick Presets */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex items-center bg-white rounded-lg border border-blue-200 shadow-2xs px-1.5 py-0.5">
                       <button
                         type="button"
-                        onClick={() => {
-                          setEditingFeeId(null);
-                          setPaymentData({
-                            amount: "",
-                            method: "Bank Transfer",
-                            date: new Date().toISOString().split('T')[0],
-                            month: new Date().toISOString().slice(0, 7)
-                          });
-                        }}
-                        className="ml-3 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-md shadow-sm transition-colors"
+                        onClick={() => setSelectedYear(prev => prev - 1)}
+                        className="text-xs font-black text-blue-600 hover:bg-blue-50 px-1 py-0.5 rounded cursor-pointer"
                       >
-                        Cancel
+                        ◀
                       </button>
-                    )}
+                      <span className="text-xs font-black text-slate-800 px-1.5">{selectedYear}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedYear(prev => prev + 1)}
+                        className="text-xs font-black text-blue-600 hover:bg-blue-50 px-1 py-0.5 rounded cursor-pointer"
+                      >
+                        ▶
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={selectCurrentMonth}
+                      className="px-2 py-0.5 text-xs font-bold rounded-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer"
+                    >
+                      1 M
+                    </button>
+                    <button
+                      type="button"
+                      onClick={selectTwoMonths}
+                      className="px-2 py-0.5 text-xs font-bold rounded-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer"
+                    >
+                      2 M
+                    </button>
+                    <button
+                      type="button"
+                      onClick={selectThreeMonths}
+                      className="px-2 py-0.5 text-xs font-bold rounded-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer"
+                    >
+                      3 M
+                    </button>
                   </div>
-                </form>
-              )}
+                </div>
+
+                {/* Months Grid (6 columns) */}
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-1.5">
+                  {MONTH_LIST.map((m) => {
+                    const mKey = `${selectedYear}-${m.index}`;
+                    const isSelected = selectedMonths.includes(mKey);
+                    return (
+                      <button
+                        key={m.index}
+                        type="button"
+                        onClick={() => toggleMonth(mKey)}
+                        className={`p-2 rounded-lg border text-center transition-all flex flex-col items-center justify-center relative cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-300'
+                            : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:bg-blue-50/50'
+                        }`}
+                      >
+                        <span className="text-[11px] font-black tracking-tight">{m.en}</span>
+                        <span className={`text-[10px] font-bold ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
+                          {m.ta}
+                        </span>
+                        {isSelected && (
+                          <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-amber-300 rounded-full"></span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Selected Summary Bar */}
+                <div className="mt-3 pt-2.5 border-t border-blue-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
+                  <div className="flex items-center gap-1.5 flex-wrap text-slate-700 font-medium">
+                    <span className="font-bold text-blue-900 text-[11px]">தேர்வு:</span>
+                    <span className="font-black text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200 text-[11px]">
+                      {formatMonthsList(selectedMonths) || "மாதம் தேர்ந்தெடுக்கவும்"}
+                    </span>
+                  </div>
+                  
+                  {/* Custom Month Picker */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-500 text-[11px]">Other:</span>
+                    <input
+                      type="month"
+                      value={customMonthInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomMonthInput(val);
+                        if (val && !selectedMonths.includes(val)) {
+                          setSelectedMonths(prev => [...prev, val].sort());
+                        }
+                      }}
+                      className="text-[11px] border border-slate-300 rounded px-1.5 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Subjects & Tuition */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-black text-blue-600 uppercase tracking-wider border-l-3 border-blue-600 pl-2">
+                    Main Subjects & Tuition / முக்கிய பாடங்கள்
+                  </label>
+                  {monthCount > 1 && (
+                    <span className="text-[11px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full">
+                      {monthCount} Months
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* Monthly Tuition Checkbox */}
+                  {(() => {
+                    const classData = classes.find(c => c.name === selectedStudent?.grade);
+                    const baseTuition = classData ? parseInt(classData.monthlyTuitionFees.toString().replace(/\D/g, '')) : 1500;
+                    const calculatedTuition = baseTuition * monthCount;
+                    const isSelected = !!selectedItems.find(i => i.type === 'Monthly Tuition');
+                    return (
+                      <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-blue-50/90 border-blue-400 shadow-xs ring-1 ring-blue-300' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                        <input 
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleItem('Monthly Tuition', '', baseTuition, false)}
+                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-black text-slate-800 truncate">Monthly Tuition</p>
+                          <p className="text-[10px] text-slate-500">
+                            {monthCount > 1 ? `${monthCount}M × LKR ${baseTuition}` : `LKR ${baseTuition} / month`}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-black text-xs text-blue-600">LKR {calculatedTuition}</p>
+                        </div>
+                      </label>
+                    );
+                  })()}
+
+                  {/* Main Subjects Checkboxes */}
+                  {subjects.filter(s => s.category === "Main").map((sub) => {
+                    const baseFee = parseInt(sub.fee) || 0;
+                    const calculatedFee = baseFee * monthCount;
+                    const isSelected = !!selectedItems.find(i => i.itemName === sub.name && i.type === 'Subject Fee');
+                    return (
+                      <label key={sub.id} className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-blue-50/90 border-blue-400 shadow-xs ring-1 ring-blue-300' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                        <input 
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleItem('Subject Fee', sub.name, baseFee, true, 'Main')}
+                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">{sub.name}</p>
+                          <p className="text-[10px] text-blue-600 font-medium">
+                            {monthCount > 1 ? `${monthCount}M × LKR ${baseFee}` : `Main (LKR ${baseFee})`}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-black text-xs text-blue-600">LKR {calculatedFee}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Sub Subjects / Extra Classes */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-black text-pink-600 uppercase tracking-wider border-l-3 border-pink-600 pl-2">
+                    Sub Subjects (Extra Classes) / கூடுதல் வகுப்புகள்
+                  </label>
+                  {monthCount > 1 && (
+                    <span className="text-[11px] font-bold text-pink-800 bg-pink-100 px-2 py-0.5 rounded-full">
+                      {monthCount} Months
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {subjects.filter(s => s.category === "Sub").map((sub) => {
+                    const baseFee = parseInt(sub.fee) || 0;
+                    const calculatedFee = baseFee * monthCount;
+                    const isSelected = !!selectedItems.find(i => i.itemName === sub.name && i.type === 'Subject Fee');
+                    return (
+                      <label key={sub.id} className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-pink-50/90 border-pink-400 shadow-xs ring-1 ring-pink-300' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                        <input 
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleItem('Subject Fee', sub.name, baseFee, true, 'Sub')}
+                          className="w-4 h-4 rounded border-slate-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">{sub.name}</p>
+                          <p className="text-[10px] text-pink-600 font-medium">
+                            {monthCount > 1 ? `${monthCount}M × LKR ${baseFee}` : `Sub (LKR ${baseFee})`}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-black text-xs text-pink-600">LKR {calculatedFee}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
+          )}
+        </div>
+
+        {/* Right Column: Billing, Discount & Checkout Panel (4 cols on desktop, sticky) */}
+        <div className="lg:col-span-4 xl:col-span-4 space-y-4">
+          <div className="bg-white p-5 rounded-2xl shadow-xs border border-slate-200 lg:sticky lg:top-4 space-y-4">
+            
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <CreditCard size={18} className="text-emerald-600" />
+                <h2 className="font-black text-slate-800 text-sm uppercase tracking-wide">
+                  3. கட்டண கணக்கீடு & செலுத்துகை
+                </h2>
+              </div>
+              <span className="text-[11px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                {selectedItems.length} Items
+              </span>
             </div>
 
-            {/* Fee History Section */}
-            {selectedStudent && (
-              <div className="p-6 border-t border-gray-200">
-                <h3 className="font-bold text-gray-700 mb-4">Payment History</h3>
-                {studentFeeHistory.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Month</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {groupedHistory.map((fee: any, idx) => (
-                          <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-4 py-4 text-sm font-bold text-gray-900">{fee.displayMonth || "-"}</td>
-                            <td className="px-4 py-4 text-sm text-gray-500 whitespace-nowrap">{fee.date}</td>
-                            <td className="px-4 py-4">
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-sm font-black text-green-600">LKR {fee.amountPaid ?? fee.totalAmount}</span>
-                                  {fee.batchDiscount && Number(fee.batchDiscount) > 0 ? (
-                                    <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">
-                                      -LKR {fee.batchDiscount} {fee.batchDiscountReason ? `(${fee.batchDiscountReason})` : ''}
-                                    </span>
-                                  ) : null}
-                                </div>
-                                <span className="text-[10px] text-gray-400 font-medium max-w-[200px] line-clamp-1">
-                                  {fee.items.map((i: any) => i.label).join(", ")}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-4 text-sm text-gray-500">
-                              <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px] font-bold uppercase tracking-tight">{fee.method}</span>
-                            </td>
-                            <td className="px-4 py-4 text-sm text-right space-x-3 whitespace-nowrap">
-                              <button onClick={() => handleEditFee(fee)} className="text-blue-600 hover:text-blue-800 font-bold uppercase text-[10px] tracking-widest">Edit</button>
-                              <button onClick={() => handleLoadReceipt(fee)} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-md hover:bg-blue-100 font-black uppercase text-[10px] tracking-widest transition-colors mr-2">Receipt</button>
-                              <button 
-                                onClick={() => handleDeleteFee(fee)} 
-                                disabled={isDeleting === (fee.batchId || fee.id)}
-                                className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-full transition-colors disabled:opacity-50"
-                                title="Delete Record"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-center py-6 text-gray-500 text-sm border border-dashed border-gray-200 rounded-lg">
-                    No payment history found for this student.
+            {!selectedStudent ? (
+              <div className="py-8 text-center text-slate-400 text-xs">
+                மாணவரைத் தேர்வுசெய்த பின் கட்டண கணக்கீடு இங்கு தோன்றும்.
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitPayment} className="space-y-4">
+                
+                {/* Live Selected Items Chips */}
+                {selectedItems.length > 0 && (
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5 max-h-36 overflow-y-auto">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      தேர்ந்தெடுக்கப்பட்ட கட்டணங்கள்:
+                    </span>
+                    {selectedItems.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                        <span className="truncate max-w-[200px]">{item.itemName || item.label}</span>
+                        <span className="font-bold text-blue-700 ml-2">LKR {item.amount}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
-              </div>
+
+                {/* Full Fee / Sub Total */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">
+                    Full Fee / Sub Total (முழு கட்டணம்)
+                  </label>
+                  <div className="flex rounded-xl shadow-2xs overflow-hidden border border-slate-200">
+                    <span className="inline-flex items-center px-3 bg-slate-100 text-slate-500 font-black text-xs uppercase select-none">
+                      LKR
+                    </span>
+                    <input 
+                      type="number" 
+                      value={totalAmount}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setTotalAmount(val);
+                        setIsManualAmount(true);
+                      }}
+                      className="flex-1 min-w-0 px-3 py-2 bg-slate-50 font-black text-slate-800 text-base focus:bg-white outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Discount / Concession Section */}
+                <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <label className="text-xs font-bold text-emerald-950">
+                        Discount / Concession (கட்டணக் கழிவு)
+                      </label>
+                    </div>
+                    
+                    {/* Toggle LKR vs % */}
+                    <div className="flex bg-white rounded-lg border border-emerald-300 p-0.5 text-[10px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setDiscountType('amount')}
+                        className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${discountType === 'amount' ? 'bg-emerald-600 text-white shadow-xs' : 'text-emerald-700 hover:bg-emerald-50'}`}
+                      >
+                        LKR
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDiscountType('percent')}
+                        className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${discountType === 'percent' ? 'bg-emerald-600 text-white shadow-xs' : 'text-emerald-700 hover:bg-emerald-50'}`}
+                      >
+                        %
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex rounded-lg overflow-hidden border border-emerald-300 bg-white">
+                      <span className="inline-flex items-center px-2 bg-emerald-100 text-emerald-800 font-bold text-[11px]">
+                        {discountType === 'amount' ? 'LKR' : '%'}
+                      </span>
+                      <input 
+                        type="number" 
+                        min="0"
+                        max={discountType === 'percent' ? 100 : totalAmount}
+                        placeholder="0"
+                        value={discountValue || ''}
+                        onChange={(e) => {
+                          const val = Math.max(0, parseFloat(e.target.value) || 0);
+                          setDiscountValue(val);
+                        }}
+                        className="flex-1 min-w-0 px-2 py-1.5 font-bold text-emerald-900 text-sm outline-none"
+                      />
+                    </div>
+
+                    <input 
+                      type="text" 
+                      placeholder="காரணம் (Reason)..."
+                      value={discountReason}
+                      onChange={(e) => setDiscountReason(e.target.value)}
+                      className="w-full px-2.5 py-1.5 border border-emerald-300 bg-white rounded-lg text-xs font-medium text-emerald-900 placeholder:text-emerald-400 outline-none"
+                    />
+                  </div>
+
+                  {/* Quick Preset Chips */}
+                  <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                    {[
+                      { label: '0%', val: 0, type: 'percent', reason: '' },
+                      { label: '10%', val: 10, type: 'percent', reason: '10% Discount' },
+                      { label: '20%', val: 20, type: 'percent', reason: '20% Discount' },
+                      { label: '50%', val: 50, type: 'percent', reason: '50% Concession' },
+                      { label: '100%', val: 100, type: 'percent', reason: 'Full Scholarship' },
+                      { label: 'LKR 500', val: 500, type: 'amount', reason: 'Special Discount' },
+                      { label: 'LKR 1000', val: 1000, type: 'amount', reason: 'Sibling Concession' },
+                    ].map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setDiscountType(preset.type as 'amount' | 'percent');
+                          setDiscountValue(preset.val);
+                          if (preset.reason) setDiscountReason(preset.reason);
+                        }}
+                        className={`px-1.5 py-0.5 text-[10px] font-bold rounded border transition-all cursor-pointer ${
+                          discountValue === preset.val && discountType === preset.type
+                            ? 'bg-emerald-700 text-white border-emerald-700'
+                            : 'bg-white text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {discountAmount > 0 && (
+                    <div className="flex items-center justify-between text-[11px] bg-emerald-100/90 border border-emerald-300 px-2.5 py-1 rounded-lg text-emerald-900 font-bold">
+                      <span>கழிவு: - LKR {discountAmount}</span>
+                      <span>Net: LKR {netPayable}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Net Payable Fee */}
+                <div className="bg-slate-900 text-white p-3.5 rounded-xl flex items-center justify-between shadow-sm">
+                  <div>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      Net Payable (கழிவு போக செலுத்த வேண்டியது)
+                    </p>
+                    <p className="text-lg font-black text-emerald-400">LKR {netPayable}.00</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">
+                      {monthCount} Month(s)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Amount Paid Now */}
+                <div>
+                  <label className="block text-xs font-bold text-blue-800 mb-1">
+                    Amount Paid Now (செலுத்திய தொகை) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex rounded-xl shadow-2xs overflow-hidden border border-blue-400">
+                    <span className="inline-flex items-center px-3 bg-blue-100 text-blue-700 font-black text-xs uppercase select-none">
+                      LKR
+                    </span>
+                    <input 
+                      type="number" 
+                      required
+                      value={amountPaid}
+                      onChange={(e) => {
+                        setAmountPaid(parseInt(e.target.value) || 0);
+                        setIsManualAmount(true);
+                      }}
+                      className="flex-1 min-w-0 px-3 py-2 bg-white font-black text-blue-700 text-base focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Remaining Balance Indicator */}
+                <div className="flex items-center justify-between p-2.5 rounded-xl border text-xs font-bold bg-slate-50 border-slate-200">
+                  <span className="text-slate-600">Remaining Balance (மீதி):</span>
+                  <span className={`font-black px-2 py-0.5 rounded text-xs ${
+                    netPayable - amountPaid > 0 
+                      ? 'bg-red-100 text-red-700' 
+                      : 'bg-emerald-100 text-emerald-700'
+                  }`}>
+                    LKR {Math.max(0, netPayable - amountPaid)}.00
+                  </span>
+                </div>
+
+                {/* Payment Method & Date in 2 columns */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Payment Method *</label>
+                    <select 
+                      value={paymentData.method}
+                      onChange={(e) => setPaymentData({...paymentData, method: e.target.value})}
+                      className="w-full border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-bold bg-white focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="Cash">Cash</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="Online">Online (Card/UPI)</option>
+                      <option value="Cheque">Cheque</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Payment Date *</label>
+                    <input 
+                      type="date" 
+                      required
+                      value={paymentData.date}
+                      onChange={(e) => setPaymentData({...paymentData, date: e.target.value})}
+                      className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                  <button 
+                    type="button"
+                    onClick={handlePreviewUnpaid}
+                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-3 rounded-xl transition-colors flex items-center justify-center gap-1.5 text-xs cursor-pointer shadow-2xs"
+                  >
+                    <Share2 size={15} />
+                    Unpaid Preview
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 text-xs cursor-pointer"
+                  >
+                    <CreditCard size={15} />
+                    {paymentData.method === "Online" && !editingFeeId ? "Pay Online" : editingFeeId ? "Update Payment" : "Submit Payment"}
+                  </button>
+                </div>
+
+                {editingFeeId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingFeeId(null);
+                      setPaymentData({
+                        amount: "",
+                        method: "Bank Transfer",
+                        date: new Date().toISOString().split('T')[0],
+                        month: new Date().toISOString().slice(0, 7)
+                      });
+                    }}
+                    className="w-full bg-slate-500 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    Cancel Editing
+                  </button>
+                )}
+
+              </form>
             )}
+
           </div>
         </div>
+
       </div>
+
+      {/* Bottom Full-Width Landscape Section: Payment History */}
+      {selectedStudent && (
+        <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-xs border border-slate-200 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+            <div>
+              <h3 className="font-black text-slate-800 text-base">
+                கட்டண வரலாறு (Payment History & Receipts) - {selectedStudent.name}
+              </h3>
+              <p className="text-xs text-slate-500">
+                இம்மாணவரின் கடந்தகால கட்டணப் பதிவுகள் மற்றும் ரசீதுகள்
+              </p>
+            </div>
+            <span className="text-xs font-black bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded-full">
+              மொத்தம்: {groupedHistory.length} பதிவுகள்
+            </span>
+          </div>
+
+          {studentFeeHistory.length > 0 ? (
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="min-w-full divide-y divide-slate-200 text-left">
+                <thead className="bg-slate-50">
+                  <tr className="text-[11px] font-black text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3">மாதம் (Month)</th>
+                    <th className="px-4 py-3">தேதி (Date)</th>
+                    <th className="px-4 py-3">பாடங்கள் & விபரங்கள் (Items)</th>
+                    <th className="px-4 py-3">செலுத்திய தொகை (Paid)</th>
+                    <th className="px-4 py-3">முறை (Method)</th>
+                    <th className="px-4 py-3 text-right">செயல்கள் (Actions)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {groupedHistory.map((fee: any, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-4 py-3.5 text-xs font-black text-slate-900 whitespace-nowrap">
+                        {fee.displayMonth || "-"}
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
+                        {fee.date}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="text-xs text-slate-700 font-semibold max-w-xs block truncate">
+                          {fee.items.map((i: any) => i.label).join(", ")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-black text-emerald-600">
+                            LKR {fee.amountPaid ?? fee.totalAmount}
+                          </span>
+                          {fee.batchDiscount && Number(fee.batchDiscount) > 0 ? (
+                            <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">
+                              -LKR {fee.batchDiscount} {fee.batchDiscountReason ? `(${fee.batchDiscountReason})` : ''}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-bold uppercase tracking-tight">
+                          {fee.method}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-right space-x-2 whitespace-nowrap">
+                        <button 
+                          onClick={() => handleEditFee(fee)} 
+                          className="text-blue-600 hover:text-blue-800 font-bold uppercase text-[10px] tracking-wider px-2 py-1 hover:bg-blue-50 rounded transition-colors cursor-pointer"
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => handleLoadReceipt(fee)} 
+                          className="bg-blue-50 text-blue-600 px-3 py-1 rounded-md hover:bg-blue-100 font-black uppercase text-[10px] tracking-wider transition-colors cursor-pointer"
+                        >
+                          Receipt
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteFee(fee)} 
+                          disabled={isDeleting === (fee.batchId || fee.id)}
+                          className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-full transition-colors disabled:opacity-50 inline-flex items-center cursor-pointer"
+                          title="Delete Record"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
+              இம்மாணவருக்கு இதுவரை கட்டணப் பதிவுகள் எதுவும் இல்லை.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Mock Payment Gateway Modal */}
       {showPaymentGateway && (
