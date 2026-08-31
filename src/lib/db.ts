@@ -1595,8 +1595,30 @@ export const getSubjects = async (): Promise<any[]> => {
     "தமிழ் இலக்கிய நயம் (தரம் 11)"
   ]);
 
+  const map = new Map<string, any>();
+
+  // 1. Core Default Subjects (always available unless user explicitly clicked delete)
+  const defaultSubjects = [
+    { id: "sub_tamil_main", name: "tamil", category: "Main", fee: "0" },
+    { id: "sub_1", name: "தமிழ் வினா விடை", category: "Sub", fee: "500", grade: "தரம் 11" },
+    { id: "sub_2", name: "30 நாள் தமிழ் பாடநெறி (தரம் 11)", category: "Sub", fee: "6000", grade: "தரம் 11" },
+    { id: "sub_3", name: "தமிழ் மொழி இலக்கியம்", category: "Main", fee: "0", grade: "தரம் 11" },
+    { id: "sub_4", name: "தமிழ் மொழி வளம் (GAME)", category: "Main", fee: "0" },
+    { id: "sub_5", name: "30 நாள் (15 - 30) வது நாள்", category: "Sub", fee: "3000", grade: "தரம் 11" },
+    { id: "sub_6", name: "தமிழ் இலக்கிய நயம்", category: "Sub", fee: "4000", grade: "தரம் 11" },
+    { id: "sub_7", name: "தமிழ்", category: "Main", fee: "0" }
+  ];
+
+  for (const s of defaultSubjects) {
+    const nameKey = String(s.name).trim().toLowerCase();
+    const idKey = String(s.id).trim().toLowerCase();
+    if (!deletedSet.has(nameKey) && !deletedSet.has(idKey)) {
+      map.set(nameKey, s);
+    }
+  }
+
+  // 2. Overlay / Merge stored records from Firestore / LocalStorage
   if (Array.isArray(rawList)) {
-    const map = new Map<string, any>();
     for (const item of rawList) {
       if (!item) continue;
       const nameStr = typeof item === 'string' ? item : item.name;
@@ -1611,8 +1633,9 @@ export const getSubjects = async (): Promise<any[]> => {
       const idStr = String(typeof item === 'object' && item.id ? item.id : '').trim().toLowerCase();
       const nameKey = rawName.toLowerCase();
 
-      // Check against deleted tombstone list
+      // If marked deleted by user, remove it
       if (deletedSet.has(idStr) || deletedSet.has(nameKey)) {
+        map.delete(nameKey);
         continue;
       }
 
@@ -1626,29 +1649,12 @@ export const getSubjects = async (): Promise<any[]> => {
         });
       } else if (typeof item === 'object') {
         const existing = map.get(nameKey);
-        if ((!existing.fee || existing.fee === "0") && item.fee && item.fee !== "0") {
-          map.set(nameKey, { ...existing, ...item, name: rawName });
-        }
+        map.set(nameKey, { ...existing, ...item, name: rawName });
       }
     }
-    return Array.from(map.values());
   }
 
-  // Fallback defaults for a completely fresh uninitialized system only
-  const defaultSubjects = [
-    { id: "sub_1", name: "தமிழ் வினா விடை", category: "Sub", fee: "500", grade: "தரம் 11" },
-    { id: "sub_2", name: "30 நாள் தமிழ் பாடநெறி (தரம் 11)", category: "Sub", fee: "6000", grade: "தரம் 11" },
-    { id: "sub_3", name: "தமிழ் மொழி இலக்கியம்", category: "Main", fee: "0", grade: "தரம் 11" },
-    { id: "sub_4", name: "தமிழ் மொழி வளம் (GAME)", category: "Main", fee: "0" },
-    { id: "sub_5", name: "30 நாள் (15 - 30) வது நாள்", category: "Sub", fee: "3000", grade: "தரம் 11" },
-    { id: "sub_6", name: "தமிழ் இலக்கிய நயம்", category: "Sub", fee: "4000", grade: "தரம் 11" },
-    { id: "sub_7", name: "தமிழ்", category: "Main", fee: "0" }
-  ];
-
-  return defaultSubjects.filter(s => 
-    !deletedSet.has(String(s.id).toLowerCase()) && 
-    !deletedSet.has(String(s.name).trim().toLowerCase())
-  );
+  return Array.from(map.values());
 };
 
 export const saveSubjects = async (subjects: any) => {
@@ -1761,6 +1767,30 @@ export const syncSubjectsFromRecords = async () => {
       map.set(String(s.name).trim().toLowerCase(), s);
     }
   });
+
+  // Harvest missing non-deleted subjects from students
+  try {
+    const rawStudents = await getData('students', []);
+    if (Array.isArray(rawStudents)) {
+      rawStudents.forEach((st: any) => {
+        const subs = Array.isArray(st?.subjects) ? st.subjects : (Array.isArray(st?.enrolledClasses) ? st.enrolledClasses : []);
+        subs.forEach((subName: any) => {
+          if (!subName || typeof subName !== 'string') return;
+          const cleanName = subName.trim();
+          const key = cleanName.toLowerCase();
+          if (cleanName && !deletedSet.has(key) && !map.has(key)) {
+            map.set(key, {
+              id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              name: cleanName,
+              category: 'Main',
+              fee: '0',
+              grade: st?.grade || 'தரம் 11'
+            });
+          }
+        });
+      });
+    }
+  } catch (_) {}
 
   // Harvest missing non-deleted subjects from classes
   try {

@@ -328,11 +328,15 @@ export default function Students() {
 
   const sortedClasses = [...classes].sort((a, b) => getGradeSortValue(a.name) - getGradeSortValue(b.name));
 
+  const coreDefaultSubjects = ["tamil", "தமிழ்", "தமிழ் மொழி இலக்கியம்", "தமிழ் வினா விடை", "தமிழ் இலக்கிய நயம்", "தமிழ் மொழி வளம் (GAME)", "30 நாள் தமிழ் பாடநெறி (தரம் 11)", "30 நாள் (15 - 30) வது நாள்"];
+
   const availableSubjects = Array.from(new Set([
-    ...allSubjects.map(s => s.name),
+    ...coreDefaultSubjects,
+    ...allSubjects.map(s => (typeof s === 'string' ? s : s?.name)).filter(Boolean),
+    ...classes.flatMap(c => (Array.isArray(c?.subjects) ? c.subjects : (c?.subject ? [c.subject] : []))).filter(Boolean),
     ...(formData.subjects || []),
     ...students.flatMap(s => s.subjects || s.enrolledClasses || [])
-  ])).filter(s => s && typeof s === 'string' && s.trim().length > 0);
+  ])).map(s => String(s).trim()).filter(s => s.length > 0);
 
   const handleSubjectToggle = (subject: string) => {
     setFormData(prev => {
