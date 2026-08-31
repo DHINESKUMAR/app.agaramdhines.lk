@@ -7,7 +7,7 @@ import {
   Printer, X, QrCode, Download, FileText, Copy, Check, User, LayoutGrid, List, Search, Eye, Edit, Trash2, 
   ArrowLeft, BookOpen, ShieldCheck, ShieldAlert, RefreshCw, UserPlus, Users, Upload, Key, CheckCircle2, 
   AlertTriangle, Sparkles, Phone, MapPin, Calendar, Lock, GraduationCap, School, Shield, Image as ImageIcon, 
-  CheckSquare, Square, Info, ChevronRight, Hash, Trash, CheckCircle
+  CheckSquare, Square, Info, ChevronRight, Hash, Trash, CheckCircle, Share2, MessageSquare
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
@@ -31,6 +31,11 @@ export default function Students() {
   const [copiedIdAdmin, setCopiedIdAdmin] = useState(false);
   const [studentViewMode, setStudentViewMode] = useState<'grid' | 'table'>('grid');
   const printRef = useRef<HTMLDivElement>(null);
+  const liveCardRef = useRef<HTMLDivElement>(null);
+  const [copiedImageToast, setCopiedImageToast] = useState(false);
+  const [copiedTextToast, setCopiedTextToast] = useState(false);
+  const [downloadingLiveCard, setDownloadingLiveCard] = useState(false);
+  const [copyingLiveCard, setCopyingLiveCard] = useState(false);
 
   const checkStudentMatchesSearch = (s: any, queryStr: string) => {
     if (!queryStr || !queryStr.trim()) return true;
@@ -855,6 +860,98 @@ export default function Students() {
     }
   };
 
+  const handleDownloadLiveCard = async () => {
+    if (!liveCardRef.current) return;
+    try {
+      setDownloadingLiveCard(true);
+      const dataUrl = await toPng(liveCardRef.current, { pixelRatio: 3, cacheBust: true });
+      const link = document.createElement("a");
+      const safeName = (formData.name || formData.username || "student").trim().replace(/[\s/\\?%*:|"<>]+/g, '_');
+      link.download = `${safeName}-ID-Card.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (error) {
+      console.error("Error downloading live ID card:", error);
+      alert("கார்டை பதிவிறக்குவதில் பிழை ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்.");
+    } finally {
+      setDownloadingLiveCard(false);
+    }
+  };
+
+  const handleCopyLiveCardImage = async () => {
+    if (!liveCardRef.current) return;
+    try {
+      setCopyingLiveCard(true);
+      const dataUrl = await toPng(liveCardRef.current, { pixelRatio: 3, cacheBust: true });
+      
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      
+      if (navigator.clipboard && (window as any).ClipboardItem) {
+        await navigator.clipboard.write([
+          new (window as any).ClipboardItem({ 'image/png': blob })
+        ]);
+        setCopiedImageToast(true);
+        setTimeout(() => setCopiedImageToast(false), 3500);
+      } else {
+        // Fallback to downloading image
+        const link = document.createElement("a");
+        const safeName = (formData.name || formData.username || "student").trim().replace(/[\s/\\?%*:|"<>]+/g, '_');
+        link.download = `${safeName}-ID-Card.png`;
+        link.href = dataUrl;
+        link.click();
+        setCopiedImageToast(true);
+        setTimeout(() => setCopiedImageToast(false), 3500);
+      }
+    } catch (error) {
+      console.error("Error copying live ID card image:", error);
+      // Fallback download if clipboard image fails
+      try {
+        const dataUrl = await toPng(liveCardRef.current, { pixelRatio: 3, cacheBust: true });
+        const link = document.createElement("a");
+        const safeName = (formData.name || formData.username || "student").trim().replace(/[\s/\\?%*:|"<>]+/g, '_');
+        link.download = `${safeName}-ID-Card.png`;
+        link.href = dataUrl;
+        link.click();
+        setCopiedImageToast(true);
+        setTimeout(() => setCopiedImageToast(false), 3500);
+      } catch (_) {
+        alert("கார்டை படமாக நகலெடுக்க முடியவில்லை. பதிவிறக்க பொத்தானைப் பயன்படுத்தவும்.");
+      }
+    } finally {
+      setCopyingLiveCard(false);
+    }
+  };
+
+  const handleCopyLiveCardText = async () => {
+    const portalUrl = window.location.origin;
+    const subsText = formData.subjects.length > 0 ? formData.subjects.join(", ") : "அனைத்துப் பாடங்கள்";
+    const message = `🎓 *AGARAM DHINES ONLINE ACADEMY*
+🆔 *மாணவர் அடையாள அட்டை விபரம் (Student ID Card)*
+
+👤 *பெயர் (Name):* ${formData.name || "-"}
+🏫 *வகுப்பு (Grade):* ${formData.grade || "-"}
+🔢 *பதிவு எண் (Roll No):* ${formData.rollNo || "-"}
+📚 *பாடங்கள் (Subjects):* ${subsText}
+
+🔐 *உள்நுழைவு விபரம் (Login Credentials):*
+• *Username:* ${formData.username || "-"}
+• *Password/PIN:* ${formData.password || "-"}
+
+🌐 *வலைத்தள முகவரி (Login Portal):*
+${portalUrl}
+
+📞 *தொடர்புகளுக்கு:* 778054232`;
+
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopiedTextToast(true);
+      setTimeout(() => setCopiedTextToast(false), 3500);
+    } catch (error) {
+      console.error("Error copying live ID card text:", error);
+    }
+  };
+
   if (view === "menu") {
     const totalStudentsCount = students.length;
     const totalClassesCount = unifiedGrades.length;
@@ -1664,31 +1761,177 @@ export default function Students() {
                   </label>
                 </div>
 
-                {/* Real-time Mini ID Preview Badge */}
-                <div className="p-3 bg-gradient-to-br from-indigo-900 via-blue-900 to-indigo-950 rounded-xl text-white shadow-md relative overflow-hidden">
-                  <div className="flex items-center justify-between text-[9px] font-mono text-indigo-200 pb-1 border-b border-white/10">
-                    <span>LIVE CARD PREVIEW</span>
-                    <span>{formData.rollNo ? `ROLL: ${formData.rollNo}` : 'ID PREVIEW'}</span>
+                {/* Real-time Official ID Card Preview with Download & Copy Toolbar */}
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Sparkles size={14} className="text-amber-500" />
+                      நேரலை அடையாள அட்டை (Live Card Preview)
+                    </span>
+                    <span className="text-[10px] font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md font-semibold">
+                      {formData.rollNo ? `ROLL: ${formData.rollNo}` : 'LIVE PREVIEW'}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2.5 mt-2">
-                    <div className="w-10 h-10 rounded-full bg-white/20 border border-white/40 overflow-hidden flex items-center justify-center shrink-0">
-                      {formData.image ? (
-                        <img src={formData.image} alt="preview" className="w-full h-full object-cover" />
-                      ) : (
-                        <User size={18} className="text-white" />
-                      )}
+
+                  {/* Toast Notifications */}
+                  {copiedImageToast && (
+                    <div className="p-2 bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md animate-fade-in">
+                      <CheckCircle2 size={15} />
+                      🎉 கார்டு படமாக நகலெடுக்கப்பட்டது (Ready to paste in WhatsApp)!
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h4 className="text-xs font-bold text-white truncate leading-tight">
-                        {formData.name || "Student Name"}
-                      </h4>
-                      <p className="text-[10px] text-amber-300 font-semibold truncate">
-                        {formData.grade || "Class / Grade"}
-                      </p>
-                      <p className="text-[9px] font-mono text-indigo-200 truncate mt-0.5">
-                        User: {formData.username || "-"} | PIN: {formData.password || "-"}
-                      </p>
+                  )}
+                  {copiedTextToast && (
+                    <div className="p-2 bg-blue-600 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md animate-fade-in">
+                      <CheckCircle2 size={15} />
+                      📋 மாணவர் Login விபரம் நகலெடுக்கப்பட்டது (WhatsApp Text Copied)!
                     </div>
+                  )}
+
+                  {/* The Official Agaram Dhines ID Card Container */}
+                  <div className="w-full flex justify-center bg-slate-900/5 p-2 rounded-2xl border border-slate-200">
+                    <div 
+                      ref={liveCardRef}
+                      className="w-full max-w-[420px] bg-gradient-to-br from-[#2563eb] via-[#4338ca] to-[#7c3aed] text-white rounded-2xl p-3.5 sm:p-4 shadow-xl border border-white/20 relative overflow-hidden flex flex-col justify-between"
+                      style={{ minHeight: "260px" }}
+                    >
+                      {/* Subtle ambient light orbs */}
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
+                      <div className="absolute bottom-0 left-0 w-28 h-28 bg-sky-400/20 rounded-full blur-xl pointer-events-none" />
+
+                      {/* Header Row: Academy Logo & Official Badge */}
+                      <div className="flex items-center justify-between gap-2 border-b border-white/20 pb-2 z-10">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-10 h-10 sm:w-11 sm:h-11 bg-white rounded-full p-0.5 shadow-md border border-amber-300 shrink-0 flex items-center justify-center overflow-hidden">
+                            <img 
+                              src={adminSettings?.profileImage || "/logo.png"} 
+                              alt="AGARAM DHINES ONLINE ACADEMY" 
+                              crossOrigin="anonymous"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = "/logo.png";
+                              }}
+                              className="w-full h-full object-cover rounded-full" 
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-white leading-tight drop-shadow-xs truncate">
+                              {adminSettings?.instituteName || "AGARAM DHINES ONLINE ACADEMY"}
+                            </h3>
+                            <p className="text-[9.5px] sm:text-[10.5px] font-extrabold text-amber-300 leading-tight drop-shadow-xs truncate">
+                              அகரம் தினேஷ் ஆன்லைன் அகாடமி
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-[8.5px] sm:text-[9px] font-black bg-[#f59e0b] text-indigo-950 px-2 py-0.5 rounded shadow-xs uppercase tracking-wider inline-block">
+                            OFFICIAL ID
+                          </span>
+                          <span className="text-[9.5px] sm:text-[10px] font-extrabold text-sky-100 block mt-0.5 whitespace-nowrap">
+                            📞 778054232
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Student Details Row */}
+                      <div className="flex items-center gap-3 my-2 z-10">
+                        <div className="w-12 h-12 rounded-full border-2 border-white/90 overflow-hidden shrink-0 bg-white/20 flex items-center justify-center shadow-md">
+                          {formData.image ? (
+                            <img src={formData.image} alt={formData.name || "Student"} className="w-full h-full object-cover" />
+                          ) : (
+                            <User size={24} className="text-white" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h2 className="text-base sm:text-lg font-extrabold text-white truncate leading-tight drop-shadow-xs">
+                            {formData.name || "MASafiya"}
+                          </h2>
+                          <div className="flex items-center gap-2 text-[11px] sm:text-xs text-sky-100 mt-0.5 font-medium flex-wrap">
+                            <span>Grade: <strong className="text-amber-300 font-bold">{formData.grade || "தரம் 11"}</strong></span>
+                            <span className="text-white/40">•</span>
+                            <span>Roll No: <strong className="text-white font-bold">{formData.rollNo || "2026/PAPER(B1)/1515"}</strong></span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Enrolled Subjects Box */}
+                      <div className="z-10 bg-black/30 backdrop-blur-xs p-2 rounded-xl border border-white/15 my-1 shadow-inner">
+                        <span className="text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider text-sky-200 block mb-1">
+                          SUBJECTS / பாடங்கள்:
+                        </span>
+                        <div className="flex flex-wrap gap-1 max-h-12 overflow-y-auto custom-scrollbar">
+                          {formData.subjects && formData.subjects.length > 0 ? (
+                            formData.subjects.map((sub: string, idx: number) => (
+                              <span 
+                                key={idx} 
+                                className="bg-[#eab308] text-indigo-950 font-black px-2 py-0.5 rounded text-[9.5px] sm:text-[10px] shadow-xs whitespace-nowrap"
+                              >
+                                {sub}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="bg-[#eab308] text-indigo-950 font-black px-2 py-0.5 rounded text-[9.5px] shadow-xs">
+                              பாடங்கள் தேர்ந்தெடுக்கப்படவில்லை
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Footer Credentials & QR Code Row */}
+                      <div className="flex items-end justify-between gap-2 mt-1 z-10">
+                        <div className="bg-black/35 backdrop-blur-xs px-2.5 py-1.5 rounded-xl border border-white/20 text-[10.5px] font-mono leading-tight flex-1 flex flex-col justify-center">
+                          <p className="text-white/80 flex justify-between">
+                            <span>User:</span> 
+                            <span className="text-white font-bold tracking-wide">{formData.username || "masafiya"}</span>
+                          </p>
+                          <p className="text-white/80 flex justify-between mt-0.5">
+                            <span>Pass:</span> 
+                            <span className="text-amber-300 font-bold tracking-wide">{formData.password || "773548509"}</span>
+                          </p>
+                        </div>
+                        <div className="bg-white p-1 rounded-xl shrink-0 shadow-md flex items-center justify-center border border-white/30">
+                          <QRCodeSVG 
+                            value={formData.studentCode || formData.rollNo || formData.username || "agaram-student"} 
+                            size={44} 
+                            level="H" 
+                            includeMargin={false} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pre-Submit Action Buttons: Download, Copy Image, Copy WhatsApp Info */}
+                  <div className="grid grid-cols-3 gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleDownloadLiveCard}
+                      disabled={downloadingLiveCard}
+                      className="flex items-center justify-center gap-1 py-2 px-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
+                      title="Download ID Card PNG"
+                    >
+                      <Download size={13} className={downloadingLiveCard ? "animate-bounce" : ""} />
+                      <span>{downloadingLiveCard ? "பதிவிறக்குகிறது..." : "கார்டு Download"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleCopyLiveCardImage}
+                      disabled={copyingLiveCard}
+                      className="flex items-center justify-center gap-1 py-2 px-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
+                      title="Copy Card Image to Clipboard"
+                    >
+                      <Copy size={13} className={copyingLiveCard ? "animate-spin" : ""} />
+                      <span>{copyingLiveCard ? "நகலெடுக்கிறது..." : "படம் Copy"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleCopyLiveCardText}
+                      className="flex items-center justify-center gap-1 py-2 px-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-[11px] font-bold transition-all shadow-sm hover:shadow active:scale-95"
+                      title="Copy WhatsApp Login Details & Portal Link"
+                    >
+                      <MessageSquare size={13} className="text-emerald-400" />
+                      <span>WhatsApp விபரம்</span>
+                    </button>
                   </div>
                 </div>
               </div>
