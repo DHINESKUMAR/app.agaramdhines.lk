@@ -1190,18 +1190,9 @@ export default function Students() {
   }
 
   if (view === "add" || view === "edit") {
-    // Helper to auto-suggest subjects when class changes if subjects are empty
+    // Helper when class changes - purely updates grade without auto-checking subjects
     const handleClassChange = (selectedGrade: string) => {
-      setFormData(prev => {
-        let updatedSubjects = prev.subjects;
-        if (selectedGrade && updatedSubjects.length === 0) {
-          const matchedClass = classes.find(c => c.name === selectedGrade);
-          if (matchedClass && Array.isArray(matchedClass.subjects) && matchedClass.subjects.length > 0) {
-            updatedSubjects = sanitizeSubjectList(matchedClass.subjects);
-          }
-        }
-        return { ...prev, grade: selectedGrade, subjects: updatedSubjects };
-      });
+      setFormData(prev => ({ ...prev, grade: selectedGrade }));
     };
 
     // Helper to auto-suggest roll number if empty
@@ -1316,7 +1307,7 @@ export default function Students() {
                     <option value="">-- வகுப்பைத் தேர்ந்தெடுக்கவும் --</option>
                     {unifiedGrades.map((grade) => (
                       <option key={grade} value={grade}>
-                        {grade} ({getStudentCountForGrade(grade)} மாணவர்கள்)
+                        {grade}
                       </option>
                     ))}
                     {formData.grade && !unifiedGrades.includes(formData.grade) && (
