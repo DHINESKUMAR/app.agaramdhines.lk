@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   getCourses, saveCourses, deleteCourse, getClasses, getStaffs, 
-  getSubjects, saveSubjects, getStudents, getFees,
+  getSubjects, saveSubjects, deleteSubject, getStudents, getFees,
   getCourseMaterials, getYoutubeLinks, getWebPosts,
   getStudentMenuLabels, saveStudentMenuLabels,
   DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels,
@@ -137,8 +137,8 @@ export default function Courses() {
     };
   }, []);
 
-  // Aggregated comprehensive subjects list from all system sources
-  const availableSubjectsList = useMemo(() => {
+  // Base aggregated subjects list from all system sources
+  const baseSubjectsList = useMemo(() => {
     const set = new Set<string>();
 
     // Core default curriculum packages
@@ -250,11 +250,15 @@ export default function Courses() {
       }
     });
 
-    // Always include any currently selected subjects
-    selectedSubjects.forEach(s => s && set.add(s.trim()));
-
     return Array.from(set).filter(Boolean);
-  }, [allSubjects, classes, staffs, students, fees, courses, courseMaterials, youtubeLinks, webPosts, selectedSubjects]);
+  }, [allSubjects, classes, staffs, students, fees, courses, courseMaterials, youtubeLinks, webPosts]);
+
+  // Combined subjects including current selections
+  const availableSubjectsList = useMemo(() => {
+    const set = new Set(baseSubjectsList);
+    selectedSubjects.forEach(s => s && set.add(s.trim()));
+    return Array.from(set).filter(Boolean);
+  }, [baseSubjectsList, selectedSubjects]);
 
   const toggleGrade = (gradeName: string) => {
     if (selectedGrades.includes(gradeName)) {
@@ -326,9 +330,9 @@ export default function Courses() {
 
   const handleDeleteSubject = async (subName: string) => {
     if (window.confirm(`Are you sure you want to remove the subject "${subName}"?`)) {
-      const updated = allSubjects.filter(s => s.name !== subName);
+      const subjectItem = allSubjects.find(s => s.name === subName);
+      const updated = await deleteSubject(subjectItem?.id || '', subName);
       setAllSubjects(updated);
-      await saveSubjects(updated);
     }
   };
 

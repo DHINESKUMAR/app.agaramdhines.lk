@@ -1,8 +1,42 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { getStudents, saveStudents, getFees, saveFees, getClasses, getAdminSettings, getSubjects } from "../../lib/db";
-import { Search, Calendar, CreditCard, User, BookOpen, DollarSign, CheckCircle, Printer, Download, Copy, FileText, Image as ImageIcon, Share2, Plus, Trash2 } from "lucide-react";
+import { Search, Calendar, CreditCard, User, BookOpen, DollarSign, CheckCircle, Printer, Download, Copy, FileText, Image as ImageIcon, Share2, Plus, Trash2, CheckSquare, Square } from "lucide-react";
 import { toPng, toBlob } from 'html-to-image';
 import jsPDF from 'jspdf';
+
+const MONTH_LIST = [
+  { index: '01', en: 'Jan', ta: 'ஜனவரி', full: 'January' },
+  { index: '02', en: 'Feb', ta: 'பிப்ரவரி', full: 'February' },
+  { index: '03', en: 'Mar', ta: 'மார்ச்', full: 'March' },
+  { index: '04', en: 'Apr', ta: 'ஏப்ரல்', full: 'April' },
+  { index: '05', en: 'May', ta: 'மே', full: 'May' },
+  { index: '06', en: 'Jun', ta: 'ஜூன்', full: 'June' },
+  { index: '07', en: 'Jul', ta: 'ஜூலை', full: 'July' },
+  { index: '08', en: 'Aug', ta: 'ஆகஸ்ட்', full: 'August' },
+  { index: '09', en: 'Sep', ta: 'செப்டம்பர்', full: 'September' },
+  { index: '10', en: 'Oct', ta: 'அக்டோபர்', full: 'October' },
+  { index: '11', en: 'Nov', ta: 'நவம்பர்', full: 'November' },
+  { index: '12', en: 'Dec', ta: 'டிசம்பர்', full: 'December' },
+];
+
+const formatMonthKey = (mKey: string) => {
+  if (!mKey || typeof mKey !== 'string') return '';
+  const parts = mKey.split('-');
+  if (parts.length !== 2) return mKey;
+  const y = parts[0];
+  const m = parts[1];
+  const item = MONTH_LIST.find(x => x.index === m);
+  return item ? `${item.full} ${y}` : mKey;
+};
+
+const formatMonthsList = (months: string[]) => {
+  if (!months || !Array.isArray(months) || months.length === 0) return '';
+  const sorted = [...months].sort();
+  const formatted = sorted.map(m => formatMonthKey(m));
+  if (formatted.length === 1) return formatted[0];
+  if (formatted.length === 2) return `${formatted[0]} & ${formatted[1]}`;
+  return `${formatted.slice(0, -1).join(', ')} & ${formatted[formatted.length - 1]} (${formatted.length} Months)`;
+};
 
 export default function CollectFee() {
   const [students, setStudents] = useState<any[]>([]);
@@ -14,10 +48,14 @@ export default function CollectFee() {
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [studentFeeHistory, setStudentFeeHistory] = useState<any[]>([]);
   
+  // Multi-month state
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([new Date().toISOString().slice(0, 7)]);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [customMonthInput, setCustomMonthInput] = useState<string>("");
+
   const [paymentData, setPaymentData] = useState({
     method: "Bank Transfer",
     date: new Date().toISOString().split('T')[0],
-    month: new Date().toISOString().slice(0, 7), // YYYY-MM format
   });
 
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
@@ -156,40 +194,68 @@ export default function CollectFee() {
     setDiscountType('amount');
     setDiscountReason("");
     setIsManualAmount(false);
-
-    // Default to Tuition fee for the selected grade
-    const classData = classes.find(c => c.name === student.grade);
-    const tuitionAmount = classData ? parseInt(classData.monthlyTuitionFees.toString().replace(/\D/g, '')) : 1500;
-    
-    const items: any[] = [{
-      id: 'tuition',
-      type: 'Monthly Tuition',
-      label: 'Monthly Tuition',
-      amount: tuitionAmount
-    }];
-
-    // Also auto-add subjects student is enrolled in (Main or Sub)
-    if (student.subjects && student.subjects.length > 0) {
-      student.subjects.forEach((subName: string) => {
-        const subData = subjects.find(s => s.name === subName);
-        if (subData) {
-          // Check if it's already added as tuition (usually not, but good to be safe)
-          if (!items.find(i => i.itemName === subName)) {
-            items.push({
-              id: `sub-${subName}-${Date.now()}`,
-              type: 'Subject Fee',
-              label: subName,
-              itemName: subName,
-              amount: parseInt(subData.fee) || 0,
-              category: subData.category
-            });
-          }
-        }
-      });
-    }
-    
+    setSelectedMonths([new Date().toISOString().slice(0, 7)]);
     setSelectedItems([]);
   };
+
+  const monthCount = useMemo(() => Math.max(1, selectedMonths.length), [selectedMonths]);
+
+  const toggleMonth = (mKey: string) => {
+    setSelectedMonths(prev => {
+      let next: string[];
+      if (prev.includes(mKey)) {
+        if (prev.length <= 1) {
+          return prev; // keep at least one month
+        }
+        next = prev.filter(m => m !== mKey);
+      } else {
+        next = [...prev, mKey].sort();
+      }
+      return next;
+    });
+  };
+
+  const selectCurrentMonth = () => {
+    const cur = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    setSelectedMonths([cur]);
+    setSelectedYear(new Date().getFullYear());
+  };
+
+  const selectTwoMonths = () => {
+    const now = new Date();
+    const m1 = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const nextD = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const m2 = `${nextD.getFullYear()}-${String(nextD.getMonth() + 1).padStart(2, '0')}`;
+    setSelectedMonths([m1, m2]);
+    setSelectedYear(now.getFullYear());
+  };
+
+  const selectThreeMonths = () => {
+    const now = new Date();
+    const m1 = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const d2 = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const m2 = `${d2.getFullYear()}-${String(d2.getMonth() + 1).padStart(2, '0')}`;
+    const d3 = new Date(now.getFullYear(), now.getMonth() + 2, 1);
+    const m3 = `${d3.getFullYear()}-${String(d3.getMonth() + 2).padStart(2, '0')}`;
+    setSelectedMonths([m1, m2, m3]);
+    setSelectedYear(now.getFullYear());
+  };
+
+  // Recalculate item totals when monthCount changes
+  useEffect(() => {
+    if (!isManualAmount) {
+      setSelectedItems(prevItems =>
+        prevItems.map(item => {
+          const base = item.baseAmount !== undefined ? item.baseAmount : (parseInt(item.amount) || 0);
+          return {
+            ...item,
+            baseAmount: base,
+            amount: base * monthCount
+          };
+        })
+      );
+    }
+  }, [monthCount, isManualAmount]);
 
   const discountAmount = useMemo(() => {
     const val = Number(discountValue) || 0;
@@ -217,8 +283,10 @@ export default function CollectFee() {
     }
   }, [netPayable, isManualAmount]);
 
-  const toggleItem = (itemType: string, itemName: string, amount: number, isSubject: boolean, category?: string) => {
+  const toggleItem = (itemType: string, itemName: string, unitAmount: number, isSubject: boolean, category?: string) => {
     setIsManualAmount(false); // Reset manual override when changing selection
+    const multiplier = monthCount;
+
     if (isSubject) {
       setSelectedItems(prev => {
         const exists = prev.find(i => i.itemName === itemName && i.type === 'Subject Fee');
@@ -230,7 +298,8 @@ export default function CollectFee() {
             type: 'Subject Fee',
             label: itemName,
             itemName: itemName,
-            amount: amount,
+            baseAmount: unitAmount,
+            amount: unitAmount * multiplier,
             category: category
           }];
         }
@@ -247,7 +316,8 @@ export default function CollectFee() {
             id: 'tuition',
             type: 'Monthly Tuition',
             label: 'Monthly Tuition',
-            amount: tuitionAmount
+            baseAmount: tuitionAmount,
+            amount: tuitionAmount * multiplier
           }];
         }
       });
@@ -257,8 +327,8 @@ export default function CollectFee() {
   const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedStudent || selectedItems.length === 0 || !paymentData.date || !paymentData.month) {
-      alert("Please select at least one item and fill in all required fields.");
+    if (!selectedStudent || selectedItems.length === 0 || !paymentData.date || selectedMonths.length === 0) {
+      alert("Please select at least one month and one fee item.");
       return;
     }
 
@@ -274,6 +344,8 @@ export default function CollectFee() {
       const existingFees = await getFees() || [];
       const batchId = `BATCH-${Date.now()}`;
       const txnIdBase = transactionId || `TXN-${Math.floor(Math.random() * 1000000)}`;
+      const numMonths = selectedMonths.length || 1;
+      const formattedMonths = formatMonthsList(selectedMonths);
       
       // Filter out items with 0 amount
       const validItems = selectedItems.filter(item => (parseInt(item.amount) || 0) > 0);
@@ -287,60 +359,53 @@ export default function CollectFee() {
       const adjustmentRatio = calculatedTotal > 0 ? amountPaid / calculatedTotal : 1;
       const discountRatio = calculatedTotal > 0 ? discountAmount / calculatedTotal : 0;
 
-      const newFeeRecords = validItems.map((item, idx) => {
-        let finalAmount = parseInt(item.amount) || 0;
-        let itemDiscount = Math.round((parseInt(item.amount) || 0) * discountRatio);
+      const newFeeRecords: any[] = [];
 
-        if (isManualAmount || discountAmount > 0) {
-          if (idx === validItems.length - 1) {
-            // Last item gets the remainder to ensure exact total match
-            const otherItemsTotal = validItems.slice(0, -1).reduce((sum, it) => sum + Math.round((parseInt(it.amount) || 0) * adjustmentRatio), 0);
-            finalAmount = amountPaid - otherItemsTotal;
+      selectedMonths.forEach((m, mIdx) => {
+        validItems.forEach((item, idx) => {
+          const itemBaseMonthly = item.baseAmount !== undefined ? item.baseAmount : Math.round((parseInt(item.amount) || 0) / numMonths);
+          const finalItemMonthlyAmount = Math.round(itemBaseMonthly * adjustmentRatio);
+          const itemMonthlyDiscount = Math.round(itemBaseMonthly * discountRatio);
+          const itemNetMonthly = Math.max(0, itemBaseMonthly - itemMonthlyDiscount);
+          const itemRemainingMonthly = Math.max(0, itemNetMonthly - finalItemMonthlyAmount);
 
-            const otherDiscounts = validItems.slice(0, -1).reduce((sum, it) => sum + Math.round((parseInt(it.amount) || 0) * discountRatio), 0);
-            itemDiscount = discountAmount - otherDiscounts;
-          } else {
-            finalAmount = Math.round(finalAmount * adjustmentRatio);
-          }
-        }
-
-        const originalFullFeeItem = parseInt(item.amount) || 0;
-        const itemNetFee = Math.max(0, originalFullFeeItem - itemDiscount);
-        const itemRemaining = Math.max(0, itemNetFee - finalAmount);
-
-        return {
-          id: `${Date.now()}-${idx}`,
-          studentId: selectedStudent.student_id || selectedStudent.id,
-          studentName: selectedStudent.name,
-          grade: selectedStudent.grade,
-          rollNo: selectedStudent.rollNo || "",
-          month: (item.type === 'Monthly Tuition' || item.type === 'Subject Fee' || item.category === 'Main') ? paymentData.month : "",
-          amount: finalAmount.toString(),
-          fullFee: originalFullFeeItem.toString(),
-          discount: itemDiscount.toString(),
-          discountReason: discountReason || "",
-          discountType: discountType,
-          discountValue: discountValue.toString(),
-          netFee: itemNetFee.toString(),
-          remainingAmount: itemRemaining.toString(),
-          method: paymentData.method,
-          date: paymentData.date,
-          type: item.type,
-          category: item.category || "",
-          itemName: item.itemName || item.label || "",
-          transactionId: validItems.length > 1 ? `${txnIdBase}-${idx + 1}` : txnIdBase,
-          batchId: batchId,
-          timestamp: new Date().toISOString(),
-          batchFullFee: totalAmount.toString(),
-          batchSubTotal: totalAmount.toString(),
-          batchDiscount: discountAmount.toString(),
-          batchDiscountType: discountType,
-          batchDiscountValue: discountValue.toString(),
-          batchDiscountReason: discountReason || "",
-          batchNetPayable: netPayable.toString(),
-          batchAmountPaid: amountPaid.toString(),
-          batchRemaining: Math.max(0, netPayable - amountPaid).toString()
-        };
+          newFeeRecords.push({
+            id: `${Date.now()}-${mIdx}-${idx}`,
+            studentId: selectedStudent.student_id || selectedStudent.id,
+            studentName: selectedStudent.name,
+            grade: selectedStudent.grade,
+            rollNo: selectedStudent.rollNo || "",
+            month: m,
+            amount: finalItemMonthlyAmount.toString(),
+            fullFee: itemBaseMonthly.toString(),
+            discount: itemMonthlyDiscount.toString(),
+            discountReason: discountReason || "",
+            discountType: discountType,
+            discountValue: discountValue.toString(),
+            netFee: itemNetMonthly.toString(),
+            remainingAmount: itemRemainingMonthly.toString(),
+            method: paymentData.method,
+            date: paymentData.date,
+            type: item.type,
+            category: item.category || "",
+            itemName: item.itemName || item.label || "",
+            transactionId: (validItems.length > 1 || numMonths > 1) ? `${txnIdBase}-${mIdx + 1}-${idx + 1}` : txnIdBase,
+            batchId: batchId,
+            batchMonths: selectedMonths,
+            batchMonthsFormatted: formattedMonths,
+            batchMonthCount: numMonths,
+            timestamp: new Date().toISOString(),
+            batchFullFee: totalAmount.toString(),
+            batchSubTotal: totalAmount.toString(),
+            batchDiscount: discountAmount.toString(),
+            batchDiscountType: discountType,
+            batchDiscountValue: discountValue.toString(),
+            batchDiscountReason: discountReason || "",
+            batchNetPayable: netPayable.toString(),
+            batchAmountPaid: amountPaid.toString(),
+            batchRemaining: Math.max(0, netPayable - amountPaid).toString()
+          });
+        });
       });
 
       const updatedFees = [...existingFees, ...newFeeRecords];
@@ -357,7 +422,16 @@ export default function CollectFee() {
       await saveStudents(updatedStudents);
 
       setReceiptData({
-        ...newFeeRecords[0],
+        studentId: selectedStudent.student_id || selectedStudent.id,
+        studentName: selectedStudent.name,
+        grade: selectedStudent.grade,
+        rollNo: selectedStudent.rollNo || "",
+        month: formattedMonths,
+        batchMonths: selectedMonths,
+        batchMonthsFormatted: formattedMonths,
+        monthCount: numMonths,
+        date: paymentData.date,
+        method: paymentData.method,
         items: selectedItems.map((item, idx) => {
           let finalAmount = parseInt(item.amount) || 0;
           let itemDiscount = Math.round((parseInt(item.amount) || 0) * discountRatio);
@@ -374,6 +448,8 @@ export default function CollectFee() {
           const itemNet = Math.max(0, (parseInt(item.amount) || 0) - itemDiscount);
           return {
             ...item,
+            label: numMonths > 1 ? `${item.itemName || item.label} (${numMonths} Months)` : (item.itemName || item.label),
+            subLabel: numMonths > 1 ? `${formattedMonths} (${numMonths} × LKR ${item.baseAmount || Math.round(item.amount / numMonths)})` : formattedMonths,
             paidAmount: finalAmount,
             discount: itemDiscount,
             remainingAmount: Math.max(0, itemNet - finalAmount)
@@ -405,12 +481,7 @@ export default function CollectFee() {
       setDiscountReason("");
       setDiscountType('amount');
       setIsManualAmount(false);
-      setPaymentData({
-        method: "Bank Transfer",
-        date: new Date().toISOString().split('T')[0],
-        month: new Date().toISOString().slice(0, 7),
-      });
-      
+      setSelectedMonths([new Date().toISOString().slice(0, 7)]);
     } catch (error) {
       console.error("Error saving fee:", error);
       alert("An error occurred while saving the payment. Please try again.");
@@ -432,10 +503,8 @@ export default function CollectFee() {
     const validFees = (fees || []).filter((f: any) => (Number(f.amount) || 0) > 0 || (Number(f.fullFee) || 0) > 0);
     
     validFees.forEach(fee => {
-      // Prioritize batchId, then transactionId base (for manual/older records), then standard txn id
       let id = fee.batchId;
       if (!id && fee.transactionId) {
-        // Extract base ID if it includes sequence suffix like -1, -2
         id = fee.transactionId.split('-')[0] + '-' + fee.transactionId.split('-')[1];
         if (fee.transactionId.split('-').length < 2) id = fee.transactionId;
       }
@@ -455,6 +524,7 @@ export default function CollectFee() {
       if (!groups[id]) {
         groups[id] = {
           ...fee,
+          batchMonths: fee.batchMonths || (fee.month ? [fee.month] : []),
           totalAmount: batchFull !== null && !isNaN(batchFull) && batchFull > 0 ? batchFull : itemFull,
           batchSubTotal: batchFull !== null && !isNaN(batchFull) && batchFull > 0 ? batchFull : itemFull,
           batchDiscount: batchDiscount !== null && !isNaN(batchDiscount) ? batchDiscount : itemDiscount,
@@ -473,26 +543,33 @@ export default function CollectFee() {
             category: fee.category 
           }],
           displayType: fee.type,
-          displayMonth: fee.month
+          displayMonth: fee.batchMonthsFormatted || (fee.batchMonths ? formatMonthsList(fee.batchMonths) : formatMonthKey(fee.month))
         };
       } else {
-        // Add current item details to the list of grouped items
-        groups[id].items.push({ 
-          label: (fee.itemName || fee.type), 
-          amount: itemFull, 
-          discount: itemDiscount,
-          paidAmount: itemPaid,
-          remainingAmount: itemRem,
-          type: fee.type, 
-          itemName: fee.itemName, 
-          category: fee.category 
-        });
-
-        if (fee.type === 'Monthly Tuition') {
-          groups[id].displayMonth = fee.month;
+        if (fee.month && !groups[id].batchMonths.includes(fee.month)) {
+          groups[id].batchMonths.push(fee.month);
+          groups[id].displayMonth = formatMonthsList(groups[id].batchMonths);
         }
 
-        // If batchFull is valid and non-zero, let's use it directly
+        const existingItem = groups[id].items.find((i: any) => i.label === (fee.itemName || fee.type) && i.type === fee.type);
+        if (existingItem && fee.batchMonths && fee.batchMonths.length > 1) {
+          existingItem.amount += itemFull;
+          existingItem.discount += itemDiscount;
+          existingItem.paidAmount += itemPaid;
+          existingItem.remainingAmount += itemRem;
+        } else {
+          groups[id].items.push({ 
+            label: (fee.itemName || fee.type), 
+            amount: itemFull, 
+            discount: itemDiscount,
+            paidAmount: itemPaid,
+            remainingAmount: itemRem,
+            type: fee.type, 
+            itemName: fee.itemName, 
+            category: fee.category 
+          });
+        }
+
         if (batchFull !== null && !isNaN(batchFull) && batchFull > 0) {
           groups[id].totalAmount = batchFull;
           groups[id].batchSubTotal = batchFull;
@@ -523,8 +600,13 @@ export default function CollectFee() {
     setPaymentData({
       method: sourceFee.method,
       date: sourceFee.date,
-      month: sourceFee.month || new Date().toISOString().slice(0, 7),
     });
+
+    if (sourceFee.batchMonths && Array.isArray(sourceFee.batchMonths) && sourceFee.batchMonths.length > 0) {
+      setSelectedMonths(sourceFee.batchMonths);
+    } else if (sourceFee.month) {
+      setSelectedMonths([sourceFee.month]);
+    }
 
     if (sourceFee.batchDiscount || sourceFee.discount) {
       setDiscountValue(Number(sourceFee.batchDiscountValue || sourceFee.batchDiscount || sourceFee.discount) || 0);
@@ -541,6 +623,7 @@ export default function CollectFee() {
       type: it.type,
       label: it.label,
       itemName: it.itemName,
+      baseAmount: it.amount,
       amount: it.amount,
       category: it.category
     })) : [{
@@ -548,6 +631,7 @@ export default function CollectFee() {
       type: sourceFee.type || 'Monthly Tuition',
       label: sourceFee.type === 'Subject Fee' ? sourceFee.itemName : sourceFee.type,
       itemName: sourceFee.itemName,
+      baseAmount: parseInt(sourceFee.fullFee || sourceFee.amount) || 0,
       amount: parseInt(sourceFee.fullFee || sourceFee.amount) || 0
     }]);
   };
@@ -559,10 +643,12 @@ export default function CollectFee() {
     const netPayable = Number(fee.batchNetPayable) || Math.max(0, subTotal - discount);
     const amountPaid = Number(fee.batchAmountPaid ?? fee.amountPaid ?? fee.amount) || 0;
     const remainingAmount = Number(fee.batchRemaining ?? fee.remainingAmount ?? (netPayable - amountPaid)) || 0;
+    const displayMonths = fee.batchMonthsFormatted || (fee.batchMonths ? formatMonthsList(fee.batchMonths) : (fee.month ? formatMonthKey(fee.month) : ""));
 
     if (fee.items) {
       setReceiptData({
         ...fee,
+        month: displayMonths || fee.displayMonth || fee.month,
         subTotal: subTotal,
         totalAmount: subTotal,
         discount: discount,
@@ -575,6 +661,7 @@ export default function CollectFee() {
     } else {
       setReceiptData({
         ...fee,
+        month: displayMonths || fee.month,
         items: [{ 
           label: fee.itemName || fee.type, 
           amount: parseInt(fee.fullFee || fee.amount) || 0, 
@@ -601,16 +688,23 @@ export default function CollectFee() {
       return;
     }
     
+    const numMonths = selectedMonths.length || 1;
+    const formattedMonths = formatMonthsList(selectedMonths);
+
     setIsUnpaidReceipt(true);
     setReceiptData({
       studentId: selectedStudent.student_id || selectedStudent.id,
       studentName: selectedStudent.name,
       grade: selectedStudent.grade,
       rollNo: selectedStudent.rollNo || "",
-      month: paymentData.month,
+      month: formattedMonths,
+      batchMonths: selectedMonths,
+      batchMonthsFormatted: formattedMonths,
       date: paymentData.date,
       items: selectedItems.map(item => ({
         ...item,
+        label: numMonths > 1 ? `${item.itemName || item.label} (${numMonths} Months)` : (item.itemName || item.label),
+        subLabel: numMonths > 1 ? `${formattedMonths} (${numMonths} × LKR ${item.baseAmount || Math.round(item.amount / numMonths)})` : formattedMonths,
         paidAmount: 0,
         remainingAmount: parseInt(item.amount) || 0
       })),
@@ -832,54 +926,195 @@ export default function CollectFee() {
                     </div>
                   </div>
 
+                  {/* Multi-Month Selection & Payment Date Panel */}
+                  <div className="mb-8 p-5 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 rounded-xl border border-blue-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-blue-200/60">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Calendar size={18} className="text-blue-600" />
+                          <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">
+                            Select Fee Month(s) / கட்டண மாதங்கள் ({selectedMonths.length} Selected)
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          ஒரே நேரத்தில் பல மாதங்களைத் தேர்வு செய்து கட்டணம் செலுத்தலாம் (Multi-month fee payment)
+                        </p>
+                      </div>
+
+                      {/* Year Selector and Quick Presets */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center bg-white rounded-lg border border-blue-200 shadow-xs px-2 py-1">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedYear(prev => prev - 1)}
+                            className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-1.5 py-0.5 rounded"
+                          >
+                            ◀
+                          </button>
+                          <span className="text-xs font-black text-slate-800 px-2">{selectedYear}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedYear(prev => prev + 1)}
+                            className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-1.5 py-0.5 rounded"
+                          >
+                            ▶
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={selectCurrentMonth}
+                          className="px-2.5 py-1 text-xs font-bold rounded-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 shadow-xs transition-colors"
+                        >
+                          1 Month
+                        </button>
+                        <button
+                          type="button"
+                          onClick={selectTwoMonths}
+                          className="px-2.5 py-1 text-xs font-bold rounded-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 shadow-xs transition-colors"
+                        >
+                          2 Months
+                        </button>
+                        <button
+                          type="button"
+                          onClick={selectThreeMonths}
+                          className="px-2.5 py-1 text-xs font-bold rounded-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 shadow-xs transition-colors"
+                        >
+                          3 Months
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Months Grid */}
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                      {MONTH_LIST.map((m) => {
+                        const mKey = `${selectedYear}-${m.index}`;
+                        const isSelected = selectedMonths.includes(mKey);
+                        return (
+                          <button
+                            key={m.index}
+                            type="button"
+                            onClick={() => toggleMonth(mKey)}
+                            className={`p-2.5 rounded-lg border text-center transition-all flex flex-col items-center justify-center relative ${
+                              isSelected
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-300'
+                                : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:bg-blue-50/50'
+                            }`}
+                          >
+                            <span className="text-xs font-black tracking-tight">{m.full}</span>
+                            <span className={`text-[11px] font-bold ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
+                              {m.ta}
+                            </span>
+                            {isSelected && (
+                              <span className="absolute top-1 right-1 w-2 h-2 bg-amber-300 rounded-full"></span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Selected Summary Bar */}
+                    <div className="mt-4 pt-3 border-t border-blue-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2 flex-wrap text-slate-700 font-medium">
+                        <span className="font-bold text-blue-900">தேர்வு செய்யப்பட்ட மாதங்கள்:</span>
+                        <span className="font-black text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200">
+                          {formatMonthsList(selectedMonths) || "எந்த மாதமும் தேர்ந்தெடுக்கப்படவில்லை"}
+                        </span>
+                      </div>
+                      
+                      {/* Optional Custom Month Picker */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-500">Other month:</span>
+                        <input
+                          type="month"
+                          value={customMonthInput}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCustomMonthInput(val);
+                            if (val && !selectedMonths.includes(val)) {
+                              setSelectedMonths(prev => [...prev, val].sort());
+                            }
+                          }}
+                          className="text-xs border border-slate-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Payment Inputs */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                     <div className="md:col-span-2 space-y-6">
                        <div>
-                         <label className="block text-xs font-black text-blue-500 uppercase tracking-widest mb-3 border-l-4 border-blue-500 pl-2">Main Subjects & Tuition</label>
+                         <div className="flex items-center justify-between mb-3">
+                           <label className="block text-xs font-black text-blue-500 uppercase tracking-widest border-l-4 border-blue-500 pl-2">
+                             Main Subjects & Tuition
+                           </label>
+                           {monthCount > 1 && (
+                             <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                               Calculating for {monthCount} Months
+                             </span>
+                           )}
+                         </div>
                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                            {/* Monthly Tuition Checkbox */}
-                           <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedItems.find(i => i.type === 'Monthly Tuition') ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
-                             <input 
-                               type="checkbox"
-                               checked={!!selectedItems.find(i => i.type === 'Monthly Tuition')}
-                               onChange={() => toggleItem('Monthly Tuition', '', 0, false)}
-                               className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                             />
-                             <div className="flex-1">
-                               <p className="text-sm font-bold text-gray-800">Monthly Tuition</p>
-                               <div className="flex items-center gap-2 mt-1">
-                                 <input 
-                                   type="month" 
-                                   value={paymentData.month}
-                                   onClick={(e) => e.stopPropagation()}
-                                   onChange={(e) => {
-                                     e.stopPropagation();
-                                     setPaymentData({...paymentData, month: e.target.value});
-                                   }}
-                                   className="text-[10px] border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                 />
-                               </div>
-                             </div>
-                             <p className="font-bold text-blue-600">LKR {classes.find(c => c.name === selectedStudent?.grade)?.monthlyTuitionFees || 1500}</p>
-                           </label>
-
-                           {/* Main Subjects Checkboxes */}
-                           {subjects.filter(s => s.category === "Main").map((sub) => {
-                             const isSelected = !!selectedItems.find(i => i.itemName === sub.name && i.type === 'Subject Fee');
+                           {(() => {
+                             const classData = classes.find(c => c.name === selectedStudent?.grade);
+                             const baseTuition = classData ? parseInt(classData.monthlyTuitionFees.toString().replace(/\D/g, '')) : 1500;
+                             const calculatedTuition = baseTuition * monthCount;
+                             const isSelected = !!selectedItems.find(i => i.type === 'Monthly Tuition');
                              return (
-                               <label key={sub.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+                               <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-blue-50 border-blue-300 shadow-sm ring-1 ring-blue-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
                                  <input 
                                    type="checkbox"
                                    checked={isSelected}
-                                   onChange={() => toggleItem('Subject Fee', sub.name, parseInt(sub.fee) || 0, true, 'Main')}
+                                   onChange={() => toggleItem('Monthly Tuition', '', baseTuition, false)}
+                                   className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                 />
+                                 <div className="flex-1">
+                                   <p className="text-sm font-bold text-gray-800">Monthly Tuition</p>
+                                   <p className="text-[11px] text-gray-500">
+                                     {monthCount > 1 ? `${monthCount} Months × LKR ${baseTuition}` : `LKR ${baseTuition} / month`}
+                                   </p>
+                                 </div>
+                                 <div className="text-right">
+                                   <p className="font-bold text-blue-600">LKR {calculatedTuition}</p>
+                                   {monthCount > 1 && (
+                                     <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded">
+                                       {monthCount} M
+                                     </span>
+                                   )}
+                                 </div>
+                               </label>
+                             );
+                           })()}
+
+                           {/* Main Subjects Checkboxes */}
+                           {subjects.filter(s => s.category === "Main").map((sub) => {
+                             const baseFee = parseInt(sub.fee) || 0;
+                             const calculatedFee = baseFee * monthCount;
+                             const isSelected = !!selectedItems.find(i => i.itemName === sub.name && i.type === 'Subject Fee');
+                             return (
+                               <label key={sub.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-blue-50 border-blue-300 shadow-sm ring-1 ring-blue-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+                                 <input 
+                                   type="checkbox"
+                                   checked={isSelected}
+                                   onChange={() => toggleItem('Subject Fee', sub.name, baseFee, true, 'Main')}
                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                  />
                                  <div className="flex-1">
                                    <p className="text-sm font-bold text-gray-800">{sub.name}</p>
-                                   <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500">Main Subject</p>
+                                   <p className="text-[11px] text-blue-600 font-medium">
+                                     {monthCount > 1 ? `${monthCount} Months × LKR ${baseFee}` : `Main Subject (LKR ${baseFee})`}
+                                   </p>
                                  </div>
-                                 <p className="font-bold text-blue-600">LKR {sub.fee || 0}</p>
+                                 <div className="text-right">
+                                   <p className="font-bold text-blue-600">LKR {calculatedFee}</p>
+                                   {monthCount > 1 && (
+                                     <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded">
+                                       {monthCount} M
+                                     </span>
+                                   )}
+                                 </div>
                                </label>
                              );
                            })}
@@ -887,24 +1122,44 @@ export default function CollectFee() {
                        </div>
 
                        <div>
-                         <label className="block text-xs font-black text-pink-500 uppercase tracking-widest mb-3 border-l-4 border-pink-500 pl-2">Sub Subjects (Extra Classes)</label>
+                         <div className="flex items-center justify-between mb-3">
+                           <label className="block text-xs font-black text-pink-500 uppercase tracking-widest border-l-4 border-pink-500 pl-2">
+                             Sub Subjects (Extra Classes)
+                           </label>
+                           {monthCount > 1 && (
+                             <span className="text-xs font-bold text-pink-700 bg-pink-100 px-2 py-0.5 rounded-full">
+                               Calculating for {monthCount} Months
+                             </span>
+                           )}
+                         </div>
                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                            {/* Sub Subjects Checkboxes */}
                            {subjects.filter(s => s.category === "Sub").map((sub) => {
+                             const baseFee = parseInt(sub.fee) || 0;
+                             const calculatedFee = baseFee * monthCount;
                              const isSelected = !!selectedItems.find(i => i.itemName === sub.name && i.type === 'Subject Fee');
                              return (
-                               <label key={sub.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-pink-50 border-pink-200 shadow-sm' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+                               <label key={sub.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-pink-50 border-pink-300 shadow-sm ring-1 ring-pink-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
                                  <input 
                                    type="checkbox"
                                    checked={isSelected}
-                                   onChange={() => toggleItem('Subject Fee', sub.name, parseInt(sub.fee) || 0, true, 'Sub')}
+                                   onChange={() => toggleItem('Subject Fee', sub.name, baseFee, true, 'Sub')}
                                    className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
                                  />
                                  <div className="flex-1">
                                    <p className="text-sm font-bold text-gray-800">{sub.name}</p>
-                                   <p className="text-[10px] font-bold uppercase tracking-widest text-pink-500">Sub Subject</p>
+                                   <p className="text-[11px] text-pink-600 font-medium">
+                                     {monthCount > 1 ? `${monthCount} Months × LKR ${baseFee}` : `Sub Subject (LKR ${baseFee})`}
+                                   </p>
                                  </div>
-                                 <p className="font-bold text-pink-600">LKR {sub.fee || 0}</p>
+                                 <div className="text-right">
+                                   <p className="font-bold text-pink-600">LKR {calculatedFee}</p>
+                                   {monthCount > 1 && (
+                                     <span className="text-[10px] bg-pink-100 text-pink-800 font-bold px-1.5 py-0.5 rounded">
+                                       {monthCount} M
+                                     </span>
+                                   )}
+                                 </div>
                                </label>
                              );
                            })}

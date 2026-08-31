@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getSubjects, saveSubjects, getClasses, saveClasses, getStudents } from "../../lib/db";
+import { getSubjects, saveSubjects, deleteSubject, syncSubjectsFromRecords, getClasses, saveClasses, getStudents } from "../../lib/db";
 import { Plus, Trash2, BookOpen, Edit2, Check, X, IndianRupee, GraduationCap, Search, RefreshCw } from "lucide-react";
 
 export default function SubjectsGrades() {
@@ -41,9 +41,8 @@ export default function SubjectsGrades() {
   const handleSyncSubjects = async () => {
     setIsSyncing(true);
     try {
-      const updated = await getSubjects();
+      const updated = await syncSubjectsFromRecords();
       setSubjects(updated);
-      await saveSubjects(updated);
       alert(`அனைத்து பாடங்களும் வெற்றிகரமாக ஒருங்கிணைக்கப்பட்டன! / All subjects (${updated.length}) synced successfully!`);
     } catch (err) {
       console.error(err);
@@ -63,7 +62,7 @@ export default function SubjectsGrades() {
     }
 
     const updated = [...subjects, { 
-      id: Date.now().toString(), 
+      id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`, 
       name: newSubject.trim(),
       category: newCategory,
       fee: newFee || "0"
@@ -94,12 +93,10 @@ export default function SubjectsGrades() {
   };
 
   const handleDeleteSubject = async (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to delete "${name}"?`)) {
+    if (window.confirm(`நீங்கள் "${name}" என்ற பாடத்தை நிரந்தரமாக நீக்க விரும்புகிறீர்களா?\n(Are you sure you want to permanently delete "${name}"?)`)) {
       try {
-        const cleanName = String(name || "").trim().toLowerCase();
-        const updated = subjects.filter(s => s.id !== id && String(s?.name || "").trim().toLowerCase() !== cleanName);
+        const updated = await deleteSubject(id, name);
         setSubjects(updated);
-        await saveSubjects(updated);
       } catch (error) {
         console.error("Delete failed:", error);
         alert("Failed to delete subject. Please try again.");
@@ -295,18 +292,22 @@ export default function SubjectsGrades() {
                         </div>
                       )}
                     </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-2 pt-2 border-t border-gray-100 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                       <button 
+                        type="button"
                         onClick={() => startEditing(subject)} 
-                        className="flex-1 text-blue-500 hover:bg-blue-50 p-2 rounded-lg border border-blue-100 transition-colors flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-widest"
+                        className="flex-1 text-blue-600 hover:bg-blue-50 p-2 rounded-lg border border-blue-100 transition-colors flex items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider"
+                        title="Edit Subject"
                       >
-                        <Edit2 size={12} /> Edit
+                        <Edit2 size={13} /> Edit
                       </button>
                       <button 
+                        type="button"
                         onClick={() => handleDeleteSubject(subject.id, subject.name)} 
-                        className="flex-1 text-red-500 hover:bg-red-50 p-2 rounded-lg border border-red-50 transition-colors flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-widest"
+                        className="flex-1 text-red-600 hover:bg-red-50 p-2 rounded-lg border border-red-100 transition-colors flex items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider"
+                        title="Delete Subject"
                       >
-                        <Trash2 size={12} /> Del
+                        <Trash2 size={13} /> Delete
                       </button>
                     </div>
                   </>

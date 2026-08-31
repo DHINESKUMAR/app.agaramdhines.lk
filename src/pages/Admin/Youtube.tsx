@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Youtube as YoutubeIcon, PlayCircle, Trash2, ArrowLeft, Plus, ExternalLink, BookOpen, Folder, Globe, FileText, LayoutGrid, List, Share2, ChevronDown } from 'lucide-react';
-import { getYoutubeLinks, saveYoutubeLinks, getWebPosts, saveWebPosts, addNotification, getSubjects, saveSubjects, getClasses, saveClasses } from '../../lib/db';
+import { getYoutubeLinks, saveYoutubeLinks, getWebPosts, saveWebPosts, addNotification, getSubjects, saveSubjects, deleteSubject, getClasses, saveClasses } from '../../lib/db';
 
 export default function Youtube() {
   const [activeTab, setActiveTab] = useState<'youtube' | 'webposts'>('youtube');
@@ -108,9 +108,9 @@ export default function Youtube() {
     }
 
     const cleanSubName = String(subjectName || "").trim().toLowerCase();
-    const updatedDbSubjects = dbSubjects.filter(s => String(s?.name || "").trim().toLowerCase() !== cleanSubName);
+    const subjectItem = dbSubjects.find(s => String(s?.name || "").trim().toLowerCase() === cleanSubName);
+    const updatedDbSubjects = await deleteSubject(subjectItem?.id || '', subjectName);
     setDbSubjects(updatedDbSubjects);
-    await saveSubjects(updatedDbSubjects);
 
     setFormData(prev => ({ ...prev, subject: '', subjects: [] }));
     alert("பாடம் நீக்கப்பட்டது.");

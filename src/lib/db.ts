@@ -804,42 +804,6 @@ export const getStudents = async (): Promise<any[]> => {
 export const saveStudents = async (students: any) => {
   const cleanList = deduplicateAndSanitizeStudents(Array.isArray(students) ? students : []);
   const res = await saveData('students', cleanList);
-
-  // Synchronize any new student subjects into the master subjects database
-  try {
-    const rawSubs = await getData('subjects', []);
-    const subMap = new Map<string, any>();
-    (Array.isArray(rawSubs) ? rawSubs : []).forEach((s: any) => {
-      if (s?.name) subMap.set(String(s.name).trim().toLowerCase(), s);
-    });
-
-    let hasNew = false;
-    cleanList.forEach((s: any) => {
-      const subs = Array.isArray(s.subjects) ? s.subjects : (s.enrolledClasses || []);
-      subs.forEach((subName: any) => {
-        if (!subName || typeof subName !== 'string') return;
-        const clean = subName.trim();
-        if (!clean) return;
-        const key = clean.toLowerCase();
-        if (!subMap.has(key)) {
-          hasNew = true;
-          subMap.set(key, {
-            id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-            name: clean,
-            category: 'Sub',
-            fee: '0',
-            grade: s.grade || 'தரம் 11'
-          });
-        }
-      });
-    });
-
-    if (hasNew) {
-      const updatedList = Array.from(subMap.values());
-      await saveData('subjects', updatedList);
-    }
-  } catch (_) {}
-
   return res;
 };
 
@@ -1126,42 +1090,6 @@ export const getClasses = async () => {
 };
 export const saveClasses = async (classes: any) => {
   const res = await saveData('classes', classes);
-
-  // Synchronize any new class subjects into the master subjects database
-  try {
-    const rawSubs = await getData('subjects', []);
-    const subMap = new Map<string, any>();
-    (Array.isArray(rawSubs) ? rawSubs : []).forEach((s: any) => {
-      if (s?.name) subMap.set(String(s.name).trim().toLowerCase(), s);
-    });
-
-    let hasNew = false;
-    (Array.isArray(classes) ? classes : []).forEach((c: any) => {
-      const subs = Array.isArray(c.subjects) ? c.subjects : (c.subject ? [c.subject] : []);
-      subs.forEach((subName: any) => {
-        if (!subName || typeof subName !== 'string') return;
-        const clean = subName.trim();
-        if (!clean) return;
-        const key = clean.toLowerCase();
-        if (!subMap.has(key)) {
-          hasNew = true;
-          subMap.set(key, {
-            id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-            name: clean,
-            category: 'Main',
-            fee: '0',
-            grade: c.name || 'தரம் 11'
-          });
-        }
-      });
-    });
-
-    if (hasNew) {
-      const updatedList = Array.from(subMap.values());
-      await saveData('subjects', updatedList);
-    }
-  } catch (_) {}
-
   return res;
 };
 
@@ -1616,9 +1544,97 @@ export const deleteDailyWorkUpload = async (id: string) => {
 
 
 
-export const getSubjects = async () => {
+export const getDeletedSubjectsList = (): string[] => {
+  try {
+    const raw = localStorage.getItem('subjects_deleted');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map(s => String(s).trim().toLowerCase()).filter(Boolean);
+    }
+  } catch (_) {}
+  return [];
+};
+
+export const markSubjectDeleted = (idOrName: string) => {
+  if (!idOrName) return;
+  const clean = String(idOrName).trim().toLowerCase();
+  try {
+    const list = getDeletedSubjectsList();
+    if (!list.includes(clean)) {
+      list.push(clean);
+      const capped = list.slice(-500);
+      localStorage.setItem('subjects_deleted', JSON.stringify(capped));
+      if (isFirebaseConfigured) {
+        setDoc(doc(db, 'singletons', 'subjects_deleted'), { data: capped, updatedAt: Date.now() }, { merge: true }).catch(() => {});
+      }
+    }
+  } catch (_) {}
+};
+
+export const unmarkSubjectDeleted = (idOrName: string) => {
+  if (!idOrName) return;
+  const clean = String(idOrName).trim().toLowerCase();
+  try {
+    const list = getDeletedSubjectsList();
+    const updated = list.filter(item => item !== clean);
+    localStorage.setItem('subjects_deleted', JSON.stringify(updated));
+    if (isFirebaseConfigured) {
+      setDoc(doc(db, 'singletons', 'subjects_deleted'), { data: updated, updatedAt: Date.now() }, { merge: true }).catch(() => {});
+    }
+  } catch (_) {}
+};
+
+export const getSubjects = async (): Promise<any[]> => {
   const rawList = await getData('subjects', null);
-  
+  const deletedSet = new Set(getDeletedSubjectsList());
+
+  // Consolidate redundant variants into single "தமிழ் இலக்கிய நயம்"
+  const redundantIlakkiaNayamVariants = new Set([
+    "இலக்கிய நயம்",
+    "இலக்கிய நயம் (தரம் 11)",
+    "தமிழ் இலக்கிய நயம் (தரம் 11)"
+  ]);
+
+  if (Array.isArray(rawList)) {
+    const map = new Map<string, any>();
+    for (const item of rawList) {
+      if (!item) continue;
+      const nameStr = typeof item === 'string' ? item : item.name;
+      if (!nameStr) continue;
+      let rawName = String(nameStr).replace(/\s+/g, ' ').trim();
+      if (!rawName) continue;
+
+      if (redundantIlakkiaNayamVariants.has(rawName)) {
+        rawName = "தமிழ் இலக்கிய நயம்";
+      }
+
+      const idStr = String(typeof item === 'object' && item.id ? item.id : '').trim().toLowerCase();
+      const nameKey = rawName.toLowerCase();
+
+      // Check against deleted tombstone list
+      if (deletedSet.has(idStr) || deletedSet.has(nameKey)) {
+        continue;
+      }
+
+      if (!map.has(nameKey)) {
+        map.set(nameKey, {
+          id: (typeof item === 'object' && item.id) ? String(item.id) : `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          name: rawName,
+          category: (typeof item === 'object' && item.category) ? item.category : "Main",
+          fee: (typeof item === 'object' && item.fee !== undefined) ? String(item.fee) : "0",
+          grade: (typeof item === 'object' && item.grade) ? item.grade : "தரம் 11"
+        });
+      } else if (typeof item === 'object') {
+        const existing = map.get(nameKey);
+        if ((!existing.fee || existing.fee === "0") && item.fee && item.fee !== "0") {
+          map.set(nameKey, { ...existing, ...item, name: rawName });
+        }
+      }
+    }
+    return Array.from(map.values());
+  }
+
+  // Fallback defaults for a completely fresh uninitialized system only
   const defaultSubjects = [
     { id: "sub_1", name: "தமிழ் வினா விடை", category: "Sub", fee: "500", grade: "தரம் 11" },
     { id: "sub_2", name: "30 நாள் தமிழ் பாடநெறி (தரம் 11)", category: "Sub", fee: "6000", grade: "தரம் 11" },
@@ -1629,141 +1645,151 @@ export const getSubjects = async () => {
     { id: "sub_7", name: "தமிழ்", category: "Main", fee: "0" }
   ];
 
-  const listArray = Array.isArray(rawList) ? rawList : (rawList === null || rawList === undefined ? defaultSubjects : []);
+  return defaultSubjects.filter(s => 
+    !deletedSet.has(String(s.id).toLowerCase()) && 
+    !deletedSet.has(String(s.name).trim().toLowerCase())
+  );
+};
 
-  // Deduplicate and sanitize list array
-  const map = new Map<string, any>();
-  
-  // Known variants of "இலக்கிய நயம்" to consolidate into a single "தமிழ் இலக்கிய நயம்"
-  const redundantIlakkiaNayamVariants = new Set([
-    "இலக்கிய நயம்",
-    "இலக்கிய நயம் (தரம் 11)",
-    "தமிழ் இலக்கிய நயம் (தரம் 11)"
-  ]);
+export const saveSubjects = async (subjects: any) => {
+  const cleanList = Array.isArray(subjects) ? subjects.filter(Boolean) : [];
 
-  const addSubjectToMap = (item: any, defaultCat: "Main" | "Sub" = "Sub", defaultGrade = "தரம் 11") => {
-    if (!item) return;
-    const nameStr = typeof item === 'string' ? item : item.name;
-    if (!nameStr) return;
-    let rawName = String(nameStr).replace(/\s+/g, ' ').trim();
-    if (!rawName) return;
-
-    // Consolidate redundant variants into single "தமிழ் இலக்கிய நயம்"
-    if (redundantIlakkiaNayamVariants.has(rawName)) {
-      rawName = "தமிழ் இலக்கிய நயம்";
-    }
-
-    const nameKey = rawName.toLowerCase();
-
-    if (!map.has(nameKey)) {
-      map.set(nameKey, {
-        id: (typeof item === 'object' && item.id) ? item.id : `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        name: rawName,
-        category: (typeof item === 'object' && item.category) ? item.category : defaultCat,
-        fee: (typeof item === 'object' && item.fee) ? String(item.fee) : "0",
-        grade: (typeof item === 'object' && item.grade) ? item.grade : defaultGrade
-      });
-    } else if (typeof item === 'object') {
-      const existing = map.get(nameKey);
-      if ((!existing.fee || existing.fee === "0") && item.fee && item.fee !== "0") {
-        map.set(nameKey, { ...existing, ...item, name: rawName });
-      }
-    }
-  };
-
-  // 1. Process stored subjects
-  for (const item of listArray) {
-    addSubjectToMap(item);
-  }
-
-  // 2. Ensure default main subjects exist
-  defaultSubjects.forEach(def => {
-    addSubjectToMap(def, def.category as any, def.grade);
+  // Remove saved subjects from deleted tombstones
+  cleanList.forEach(s => {
+    if (s?.id) unmarkSubjectDeleted(String(s.id));
+    if (s?.name) unmarkSubjectDeleted(String(s.name));
   });
 
-  // 3. Harvest any subjects from students records so no assigned subject ever disappears
+  // Local caching
   try {
-    const rawStudents = await getData('students', []);
-    if (Array.isArray(rawStudents)) {
-      rawStudents.forEach((s: any) => {
-        const subs = Array.isArray(s?.subjects) ? s.subjects : (s?.enrolledClasses || []);
-        subs.forEach((subName: any) => addSubjectToMap(subName, 'Sub', s?.grade || 'தரம் 11'));
-      });
-    }
-  } catch (_) {}
+    localStorage.setItem('subjects', JSON.stringify(cleanList));
+    localStorage.setItem('subjects_lastSavedAt', String(Date.now()));
+  } catch (e) {
+    console.warn("Error caching subjects locally:", e);
+  }
 
-  // 4. Harvest subjects from classes records
+  // Dispatch UI update
+  window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'subjects', data: cleanList } }));
+
+  // Cloud Firestore saving
+  if (isFirebaseConfigured) {
+    try {
+      const now = Date.now();
+      const savePromises: Promise<any>[] = [
+        setDoc(doc(db, 'singletons', 'subjects'), {
+          data: cleanList,
+          updatedAt: now
+        }, { merge: false })
+      ];
+
+      for (const item of cleanList) {
+        if (item && item.id) {
+          savePromises.push(
+            setDoc(doc(db, 'subjects', String(item.id)), {
+              ...item,
+              updatedAt: now
+            }, { merge: true })
+          );
+        }
+      }
+
+      await Promise.race([
+        Promise.all(savePromises),
+        new Promise(resolve => setTimeout(resolve, 3500))
+      ]);
+    } catch (fbErr: any) {
+      console.warn("Firebase saveSubjects warning:", fbErr?.message || fbErr);
+    }
+  }
+
+  return cleanList;
+};
+
+export const deleteSubject = async (id: string, name?: string) => {
+  const targetId = String(id || '').trim();
+  const targetName = String(name || '').trim().toLowerCase();
+
+  // 1. Record in persistent deleted blacklist
+  if (targetId) markSubjectDeleted(targetId);
+  if (targetName) markSubjectDeleted(targetName);
+
+  // 2. Filter out from current subjects
+  const current = await getSubjects();
+  const updated = current.filter(s => {
+    const sId = String(s?.id || '').trim();
+    const sName = String(s?.name || '').trim().toLowerCase();
+    if (targetId && sId === targetId) return false;
+    if (targetName && sName === targetName) return false;
+    return true;
+  });
+
+  // 3. Save clean list to storage and singleton
+  await saveSubjects(updated);
+
+  // 4. Delete document permanently from Firestore collection
+  if (isFirebaseConfigured) {
+    try {
+      if (targetId) {
+        deleteDoc(doc(db, 'subjects', targetId)).catch(() => {});
+      }
+      if (targetName) {
+        const querySnapshot = await getDocs(collection(db, 'subjects'));
+        querySnapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          const docName = String(data?.name || '').trim().toLowerCase();
+          if (docName === targetName || docSnap.id === targetId) {
+            deleteDoc(doc(db, 'subjects', docSnap.id)).catch(() => {});
+          }
+        });
+      }
+    } catch (err) {
+      console.warn("Firebase deleteSubject warning:", err);
+    }
+  }
+
+  return updated;
+};
+
+export const syncSubjectsFromRecords = async () => {
+  const currentSubjects = await getSubjects();
+  const deletedSet = new Set(getDeletedSubjectsList());
+  const map = new Map<string, any>();
+
+  // Keep existing current subjects
+  currentSubjects.forEach(s => {
+    if (s?.name) {
+      map.set(String(s.name).trim().toLowerCase(), s);
+    }
+  });
+
+  // Harvest missing non-deleted subjects from classes
   try {
     const rawClasses = await getData('classes', []);
     if (Array.isArray(rawClasses)) {
       rawClasses.forEach((c: any) => {
         const subs = Array.isArray(c?.subjects) ? c.subjects : (c?.subject ? [c.subject] : []);
-        subs.forEach((subName: any) => addSubjectToMap(subName, 'Main', c?.name || 'தரம் 11'));
+        subs.forEach((subName: any) => {
+          if (!subName || typeof subName !== 'string') return;
+          const cleanName = subName.trim();
+          const key = cleanName.toLowerCase();
+          if (cleanName && !deletedSet.has(key) && !map.has(key)) {
+            map.set(key, {
+              id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              name: cleanName,
+              category: 'Main',
+              fee: '0',
+              grade: c?.name || 'தரம் 11'
+            });
+          }
+        });
       });
     }
   } catch (_) {}
 
-  // 5. Harvest subjects from courses records
-  try {
-    const rawCourses = await getData('courses', []);
-    if (Array.isArray(rawCourses)) {
-      rawCourses.forEach((cr: any) => {
-        const subs = Array.isArray(cr?.subjects) ? cr.subjects : (cr?.subject ? [cr.subject] : []);
-        subs.forEach((subName: any) => addSubjectToMap(subName, 'Main', cr?.grade || 'தரம் 11'));
-      });
-    }
-  } catch (_) {}
-
-  // 6. Harvest subjects from youtubeLinks & webPosts
-  try {
-    const rawYoutube = await getData('youtubeLinks', []);
-    if (Array.isArray(rawYoutube)) {
-      rawYoutube.forEach((y: any) => {
-        const subs = Array.isArray(y?.subjects) ? y.subjects : (y?.subject ? [y.subject] : []);
-        subs.forEach((subName: any) => addSubjectToMap(subName, 'Main', y?.grade || 'தரம் 11'));
-      });
-    }
-    const rawWebPosts = await getData('webPosts', []);
-    if (Array.isArray(rawWebPosts)) {
-      rawWebPosts.forEach((wp: any) => {
-        const subs = Array.isArray(wp?.subjects) ? wp.subjects : (wp?.subject ? [wp.subject] : []);
-        subs.forEach((subName: any) => addSubjectToMap(subName, 'Main', wp?.grade || 'தரம் 11'));
-      });
-    }
-  } catch (_) {}
-
-  // 7. Harvest subjects from courseMaterials
-  try {
-    const rawMats = await getData('courseMaterials', []);
-    if (Array.isArray(rawMats)) {
-      rawMats.forEach((m: any) => {
-        const subs = Array.isArray(m?.subjects) ? m.subjects : (m?.subject ? [m.subject] : []);
-        subs.forEach((subName: any) => addSubjectToMap(subName, 'Main', m?.grade || 'தரம் 11'));
-      });
-    }
-  } catch (_) {}
-
-  // 8. Harvest subjects from fees records
-  try {
-    const rawFees = await getData('fees', []);
-    if (Array.isArray(rawFees)) {
-      rawFees.forEach((f: any) => {
-        if (f?.subject) addSubjectToMap(f.subject, 'Sub', f?.grade || 'தரம் 11');
-        if (f?.packageName) addSubjectToMap(f.packageName, 'Sub', f?.grade || 'தரம் 11');
-      });
-    }
-  } catch (_) {}
-
-  const deduplicated = Array.from(map.values());
-
-  // If cleanup or addition changed the stored list, persist the cleaned list
-  if (deduplicated.length !== listArray.length || rawList === null || rawList === undefined) {
-    saveData('subjects', deduplicated).catch(() => {});
-  }
-
-  return deduplicated;
+  const merged = Array.from(map.values());
+  await saveSubjects(merged);
+  return merged;
 };
-export const saveSubjects = (subjects: any) => saveData('subjects', subjects);
 
 export const getIncomeExpense = () => getData('incomeExpense', []);
 export const saveIncomeExpense = (data: any) => saveData('incomeExpense', data);

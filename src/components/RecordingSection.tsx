@@ -1133,26 +1133,36 @@ function ColorfulPostCard({
             {item.title}
           </h3>
 
-          {/* Embedded Mini Live Web View Preview */}
-          <div className="rounded-2xl border border-slate-300 overflow-hidden bg-slate-900 shadow-inner my-2">
-            <div className="bg-slate-800 px-3 py-1.5 flex items-center justify-between text-xs text-slate-300 border-b border-slate-700">
-              <span className="flex items-center gap-1.5 font-mono text-[11px] text-emerald-400">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Live Web View Sandbox
+          {/* Interactive Code Preview Sandbox Card (Click to open full interactive sandbox) */}
+          <div className="rounded-2xl border border-slate-700/80 overflow-hidden bg-slate-950 shadow-md my-2">
+            <div className="bg-slate-900 px-3.5 py-2 flex items-center justify-between text-xs text-slate-300 border-b border-slate-800">
+              <span className="flex items-center gap-1.5 font-mono text-[11px] text-emerald-400 font-bold">
+                <Code size={13} className="text-emerald-400" />
+                HTML Live Interactive Sandbox
               </span>
               <button
+                type="button"
                 onClick={onOpenCode}
-                className="text-xs text-indigo-300 hover:text-white flex items-center gap-1 font-bold"
+                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all shadow-xs cursor-pointer"
               >
-                <Maximize2 size={12} /> Fullscreen
+                <Eye size={11} /> நேரலை காட்சி (Live View ↗)
               </button>
             </div>
-            <iframe
-              title={item.title}
-              srcDoc={rawCode}
-              sandbox="allow-scripts allow-modals"
-              className="w-full h-44 bg-white border-0"
-            />
+            <div 
+              onClick={onOpenCode}
+              className="p-3.5 bg-slate-950/90 cursor-pointer group hover:bg-slate-900/90 transition-all"
+            >
+              <pre className="text-[11px] font-mono text-emerald-400/90 line-clamp-3 overflow-hidden select-none bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                {rawCode.slice(0, 300) || '<!DOCTYPE html>...'}
+              </pre>
+              <div className="mt-2.5 text-[11px] text-indigo-300 font-black flex items-center justify-between group-hover:text-emerald-400 transition-colors">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  முழுத்திரை நேரலை காட்சிக்கு கிளிக் செய்க
+                </span>
+                <span className="text-xs">திறக்குக ↗</span>
+              </div>
+            </div>
           </div>
 
           {itemSubjects.length > 1 && (
