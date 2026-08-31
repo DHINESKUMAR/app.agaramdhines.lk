@@ -3,7 +3,12 @@ import { getStudents, saveStudents, deleteStudent, getClasses, getAdminSettings,
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { secondaryAuth } from "../../lib/firebase";
 import * as XLSX from "xlsx";
-import { Printer, X, QrCode, Download, FileText, Copy, Check, User, LayoutGrid, List, Search, Eye, Edit, Trash2, ArrowLeft, BookOpen, ShieldCheck, ShieldAlert, RefreshCw } from "lucide-react";
+import { 
+  Printer, X, QrCode, Download, FileText, Copy, Check, User, LayoutGrid, List, Search, Eye, Edit, Trash2, 
+  ArrowLeft, BookOpen, ShieldCheck, ShieldAlert, RefreshCw, UserPlus, Users, Upload, Key, CheckCircle2, 
+  AlertTriangle, Sparkles, Phone, MapPin, Calendar, Lock, GraduationCap, School, Shield, Image as ImageIcon, 
+  CheckSquare, Square, Info, ChevronRight, Hash, Trash, CheckCircle
+} from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
@@ -847,95 +852,228 @@ export default function Students() {
   };
 
   if (view === "menu") {
-    return (
-      <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-6 flex flex-col space-y-4">
-        <button
-          onClick={() => setView("add")}
-          className="bg-[#1e3a8a] text-white py-3 px-6 rounded-md hover:bg-blue-800 transition-colors font-medium text-center"
-        >
-          Add Student
-        </button>
-        <button
-          onClick={() => setView("view")}
-          className="bg-[#1e3a8a] text-white py-3 px-6 rounded-md hover:bg-blue-800 transition-colors font-medium text-center"
-        >
-          View Students
-        </button>
-        <button
-          onClick={() => setView("import")}
-          className="bg-[#1e3a8a] text-white py-3 px-6 rounded-md hover:bg-blue-800 transition-colors font-medium text-center"
-        >
-          Bulk Import Students
-        </button>
-        <button 
-          onClick={() => setView("view-id-pin")}
-          className="bg-[#1e3a8a] text-white py-3 px-6 rounded-md hover:bg-blue-800 transition-colors font-medium text-center"
-        >
-          View ID & PIN
-        </button>
-      </div>
-    );
-  }
+    const totalStudentsCount = students.length;
+    const totalClassesCount = unifiedGrades.length;
+    const zoomBlockedCount = students.filter(s => s.zoomBlocked).length;
+    const zoomActiveCount = totalStudentsCount - zoomBlockedCount;
 
-  if (view === "import") {
     return (
-      <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center mb-6">
-          <button
-            onClick={() => setView("menu")}
-            className="mr-4 text-gray-600 hover:text-gray-900"
-          >
-            ← Back
-          </button>
-          <h2 className="text-xl font-bold text-gray-800">Bulk Import Students</h2>
+      <div className="w-full max-w-7xl mx-auto space-y-6">
+        {/* Top Header & Metrics Bar (Landscape Widescreen) */}
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white shadow-lg border border-indigo-900/40 relative overflow-hidden">
+          <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-indigo-600/30 border border-indigo-400/30 text-amber-300">
+                  <GraduationCap size={26} />
+                </span>
+                <div>
+                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
+                    மாணவர் நிர்வாகம்
+                    <span className="text-sm sm:text-base font-semibold text-indigo-200">/ Student Management</span>
+                  </h1>
+                  <p className="text-xs sm:text-sm text-slate-300 mt-0.5">
+                    மாணவர் சேர்க்கை, விபரங்கள், அடையாள அட்டை (ID Card), மற்றும் Zoom அணுகல் மேலாண்மை
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSyncAndCleanData}
+                disabled={isSyncing}
+                className="bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-xl px-4 py-2 text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 backdrop-blur-md shadow-sm disabled:opacity-60"
+              >
+                <RefreshCw size={15} className={isSyncing ? "animate-spin text-amber-300" : ""} />
+                {isSyncing ? "Syncing..." : "Sync Database"}
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Metrics Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-6 pt-5 border-t border-white/10">
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/10">
+              <span className="text-[11px] sm:text-xs font-semibold text-slate-300 block">மொத்த மாணவர்கள் (Total)</span>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <span className="text-xl sm:text-2xl font-black text-white">{totalStudentsCount}</span>
+                <span className="text-[11px] text-indigo-200 font-medium">Students</span>
+              </div>
+            </div>
+            
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/10">
+              <span className="text-[11px] sm:text-xs font-semibold text-slate-300 block">வகுப்புகள் (Grades)</span>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <span className="text-xl sm:text-2xl font-black text-amber-300">{totalClassesCount}</span>
+                <span className="text-[11px] text-amber-200/80 font-medium">Classes</span>
+              </div>
+            </div>
+
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/10">
+              <span className="text-[11px] sm:text-xs font-semibold text-slate-300 block">செயலில் உள்ளோர் (Active)</span>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <span className="text-xl sm:text-2xl font-black text-emerald-400">{zoomActiveCount}</span>
+                <span className="text-[11px] text-emerald-200/80 font-medium">Zoom Active</span>
+              </div>
+            </div>
+
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/10">
+              <span className="text-[11px] sm:text-xs font-semibold text-slate-300 block">முடக்கப்பட்டோர் (Blocked)</span>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <span className="text-xl sm:text-2xl font-black text-red-400">{zoomBlockedCount}</span>
+                <span className="text-[11px] text-red-200/80 font-medium">Due Defaulters</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
-            <h3 className="font-semibold text-blue-800 mb-2">File Format Requirements:</h3>
-            <p className="text-sm text-blue-700 mb-2">Your CSV or Excel file must include the following headers in the first row:</p>
-            <ul className="list-disc list-inside text-sm text-blue-700 space-y-1">
-              <li><strong>Grade</strong> (Optional if selected below)</li>
-              <li><strong>Name</strong></li>
-              <li><strong>Username</strong></li>
-              <li><strong>Password</strong></li>
-              <li><strong>Roll No</strong> (Optional)</li>
-              <li><strong>Subjects</strong> (Optional. If left blank, default subjects for the selected class will be auto-assigned. To add custom, separate by commas or semicolons.)</li>
-            </ul>
+        {/* 4 Main Action Hub Cards (Landscape Grid) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* Card 1: Add Student */}
+          <div 
+            onClick={() => {
+              resetForm();
+              setEditingStudentId(null);
+              setView("add");
+            }}
+            className="group bg-white hover:bg-gradient-to-br hover:from-blue-50 hover:to-indigo-50/50 rounded-2xl p-6 border-2 border-slate-200 hover:border-blue-500 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-13 h-13 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 group-hover:scale-110 transition-transform mb-4">
+                <UserPlus size={26} />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                புதிய மாணவர் சேர்க்கை
+              </h3>
+              <p className="text-xs text-blue-600 font-semibold mt-0.5">Add New Student</p>
+              <p className="text-xs text-slate-500 mt-2.5 leading-relaxed">
+                புதிய மாணவரை வகுப்பில் சேர்க்க, கடவுச்சொல், பாடங்கள் & புகைப்படத்துடன் பதிவு செய்யவும்.
+              </p>
+            </div>
+            <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-blue-600 font-bold text-xs group-hover:translate-x-1 transition-transform">
+              <span>மாணவரைச் சேர் ➜</span>
+              <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded-full font-bold">Landscape Form</span>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Default Class / Grade (If missing in Excel)
-            </label>
-              <select
-                value={bulkImportGrade}
-                onChange={(e) => setBulkImportGrade(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">-- Select Class --</option>
-                {unifiedGrades.map(g => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
+          {/* Card 2: View Students */}
+          <div 
+            onClick={() => setView("view")}
+            className="group bg-white hover:bg-gradient-to-br hover:from-indigo-50 hover:to-purple-50/50 rounded-2xl p-6 border-2 border-slate-200 hover:border-indigo-500 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-13 h-13 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30 group-hover:scale-110 transition-transform mb-4">
+                <Users size={26} />
+              </div>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-slate-900 group-hover:text-indigo-700 transition-colors">
+                  மாணவர்கள் விபரம்
+                </h3>
+                <span className="bg-indigo-100 text-indigo-800 font-extrabold text-xs px-2.5 py-0.5 rounded-full">
+                  {students.length}
+                </span>
+              </div>
+              <p className="text-xs text-indigo-600 font-semibold mt-0.5">View & Manage Students</p>
+              <p className="text-xs text-slate-500 mt-2.5 leading-relaxed">
+                அனைத்து மாணவர்கள் பட்டியல், வகுப்பு வாரியாக தேடல், ID Card, சான்றிதழ் & Zoom கட்டுப்பாடு.
+              </p>
+            </div>
+            <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-indigo-600 font-bold text-xs group-hover:translate-x-1 transition-transform">
+              <span>பட்டியலை காண்க ➜</span>
+              <span className="text-[10px] text-slate-400 font-medium">Table & Grid</span>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Upload CSV or Excel File
-            </label>
-            <input
-              type="file"
-              accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
-              onChange={handleBulkImport}
-              disabled={importing}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-            />
+          {/* Card 3: Bulk Import */}
+          <div 
+            onClick={() => setView("import")}
+            className="group bg-white hover:bg-gradient-to-br hover:from-emerald-50 hover:to-teal-50/50 rounded-2xl p-6 border-2 border-slate-200 hover:border-emerald-500 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-13 h-13 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 group-hover:scale-110 transition-transform mb-4">
+                <Upload size={26} />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                Excel / CSV இறக்குமதி
+              </h3>
+              <p className="text-xs text-emerald-600 font-semibold mt-0.5">Bulk Import Students</p>
+              <p className="text-xs text-slate-500 mt-2.5 leading-relaxed">
+                Excel அல்லது CSV கோப்பு மூலம் ஒரே நேரத்தில் பல மாணவர்களை விரைவாக சேர்க்கலாம்.
+              </p>
+            </div>
+            <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-emerald-600 font-bold text-xs group-hover:translate-x-1 transition-transform">
+              <span>கோப்பு பதிவேற்று ➜</span>
+              <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold">XLSX / CSV</span>
+            </div>
           </div>
 
-          {importing && (
-            <div className="text-center text-blue-600 font-medium py-4">
-              Importing students... Please wait.
+          {/* Card 4: View ID & PIN */}
+          <div 
+            onClick={() => setView("view-id-pin")}
+            className="group bg-white hover:bg-gradient-to-br hover:from-amber-50 hover:to-orange-50/50 rounded-2xl p-6 border-2 border-slate-200 hover:border-amber-500 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-13 h-13 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30 group-hover:scale-110 transition-transform mb-4">
+                <Key size={26} />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 group-hover:text-amber-700 transition-colors">
+                அடையாள அட்டை & PIN
+              </h3>
+              <p className="text-xs text-amber-600 font-semibold mt-0.5">View ID & PIN List</p>
+              <p className="text-xs text-slate-500 mt-2.5 leading-relaxed">
+                மாணவர்களின் பயனர் பெயர், கடவுச்சொல் & QR குறியீடுகளை ஒரே பார்வையில் பார்க்க/அச்சிட.
+              </p>
+            </div>
+            <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-amber-600 font-bold text-xs group-hover:translate-x-1 transition-transform">
+              <span>விபரம் காண்க ➜</span>
+              <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold">QR & PIN</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Recent Students Landscape Preview */}
+        <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/90 shadow-sm">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-bold text-slate-900">சமீபத்தில் சேர்க்கப்பட்ட மாணவர்கள் (Recent Students)</h3>
+              <span className="text-xs text-slate-500">({students.slice(0, 6).length} loaded)</span>
+            </div>
+            <button
+              onClick={() => setView("view")}
+              className="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
+            >
+              அனைத்தையும் பார்க்க (View All) ➜
+            </button>
+          </div>
+
+          {students.length === 0 ? (
+            <div className="text-center py-8 text-slate-400 text-sm">
+              மாணவர்கள் எவரும் இன்னும் சேர்க்கப்படவில்லை. புதிய மாணவரைச் சேர்க்க மேலே உள்ள பொத்தானைப் பயன்படுத்தவும்.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {students.slice(0, 6).map((st) => (
+                <div 
+                  key={st.id} 
+                  onClick={() => handleEditClick(st)}
+                  className="p-3 bg-slate-50 hover:bg-indigo-50/70 border border-slate-200 hover:border-indigo-300 rounded-xl transition-all cursor-pointer flex flex-col items-center text-center group"
+                >
+                  <div className="w-11 h-11 rounded-full bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold flex items-center justify-center overflow-hidden mb-2 shadow-2xs group-hover:scale-105 transition-transform">
+                    {st.image ? (
+                      <img src={st.image} alt={st.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{st.name ? st.name.charAt(0).toUpperCase() : 'S'}</span>
+                    )}
+                  </div>
+                  <h4 className="font-bold text-xs text-slate-900 truncate w-full group-hover:text-indigo-700">{st.name}</h4>
+                  <span className="text-[10px] font-semibold text-indigo-700 bg-white border border-indigo-100 px-2 py-0.5 rounded-full mt-1">
+                    {st.grade || 'No Grade'}
+                  </span>
+                  <p className="text-[10px] text-slate-400 mt-1">Roll: {st.rollNo || '-'}</p>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -943,271 +1081,654 @@ export default function Students() {
     );
   }
 
-  if (view === "add" || view === "edit") {
+  if (view === "import") {
     return (
-      <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center mb-6">
-          <button
-            onClick={() => {
-              setView(view === "edit" ? "view" : "menu");
-              resetForm();
-              setEditingStudentId(null);
-            }}
-            className="mr-4 text-gray-600 hover:text-gray-900"
-          >
-            ← Back
-          </button>
-          <h2 className="text-xl font-bold text-gray-800">{view === "edit" ? "Edit Student" : "Add Student"}</h2>
+      <div className="w-full max-w-5xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-7 lg:p-8">
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setView("menu")}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors flex items-center justify-center"
+              title="Back to Menu"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Bulk Import Students (மொத்த மாணவர்கள் இறக்குமதி)</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Upload CSV or Excel spreadsheets to quickly register batches of students</p>
+            </div>
+          </div>
         </div>
 
-        <form onSubmit={view === "edit" ? handleEditStudent : handleAddStudent} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Student Class And Section
-            </label>
-            <select 
-              value={formData.grade}
-              onChange={(e) => setFormData({...formData, grade: e.target.value})}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-            >
-              <option value="">Select Class</option>
-              {unifiedGrades.map((grade) => (
-                <option key={grade} value={grade}>
-                  {grade}
-                </option>
-              ))}
-              {formData.grade && !unifiedGrades.includes(formData.grade) && (
-                <option key={formData.grade} value={formData.grade}>
-                  {formData.grade}
-                </option>
-              )}
-            </select>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Instructions Left Column */}
+          <div className="lg:col-span-6 space-y-4">
+            <div className="bg-indigo-50/80 p-5 rounded-2xl border border-indigo-100 space-y-3">
+              <h3 className="font-bold text-indigo-900 text-sm flex items-center gap-2">
+                <Info size={16} className="text-indigo-600" />
+                File Format Requirements (கோப்பு முறை விபரம்):
+              </h3>
+              <p className="text-xs text-indigo-800 leading-relaxed">
+                உங்கள் Excel (.xlsx, .xls) அல்லது CSV கோப்பின் முதல் வரியில் கீழ்க்கண்ட தலைப்புகள் (Headers) இருக்க வேண்டும்:
+              </p>
+              <ul className="list-disc list-inside text-xs text-indigo-900/90 space-y-1.5 bg-white/70 p-3.5 rounded-xl border border-indigo-200/60">
+                <li><strong>Name (பெயர்)</strong> <span className="text-red-500 font-bold">*கட்டாயம்</span></li>
+                <li><strong>Username (பயனர் பெயர்)</strong> <span className="text-red-500 font-bold">*கட்டாயம்</span></li>
+                <li><strong>Password (கடவுச்சொல்)</strong> <span className="text-red-500 font-bold">*கட்டாயம்</span></li>
+                <li><strong>Grade / Class (வகுப்பு)</strong> (Optional if selected on the right)</li>
+                <li><strong>Roll No (பதிவு எண்)</strong> (Optional - e.g. 101, 102)</li>
+                <li><strong>Subjects (பாடங்கள்)</strong> (Optional - Comma separated, e.g. தமிழ், கணிதம்)</li>
+              </ul>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <span className="text-xs font-bold text-slate-700 block mb-1">💡 குறிப்பு (Important Note):</span>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                கோப்பில் பாடம் (Subjects) குறிப்பிடப்படாவிட்டால், நீங்கள் தேர்ந்தெடுக்கும் வகுப்பின் இயல்புநிலை பாடங்கள் (Default Subjects) மாணவருக்கு தானாகவே ஒதுக்கப்படும்.
+              </p>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Student Name
-            </label>
-            <input
-              type="text"
-              placeholder="Enter Student Name"
-              value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+          {/* Upload Form Right Column */}
+          <div className="lg:col-span-6 space-y-5 flex flex-col justify-between">
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                  இயல்புநிலை வகுப்பு / Default Class (If missing in Excel)
+                </label>
+                <select
+                  value={bulkImportGrade}
+                  onChange={(e) => setBulkImportGrade(e.target.value)}
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white font-medium text-slate-800"
+                >
+                  <option value="">-- வகுப்பைத் தேர்ந்தெடுக்கவும் (Select Class) --</option>
+                  {unifiedGrades.map(g => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Date Of Birth
-            </label>
-            <input
-              type="date"
-              value={formData.dob}
-              onChange={(e) => setFormData({...formData, dob: e.target.value})}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                  Excel / CSV கோப்பைத் தேர்ந்தெடுக்கவும் (Upload File)
+                </label>
+                <div className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 bg-indigo-50/30 hover:bg-indigo-50/60 transition-colors rounded-2xl p-6 text-center cursor-pointer relative">
+                  <Upload size={32} className="mx-auto text-indigo-500 mb-2" />
+                  <span className="text-sm font-bold text-indigo-950 block">Click to select or drag and drop spreadsheet</span>
+                  <span className="text-xs text-slate-500 mt-1 block">Supports .xlsx, .xls, .csv files</span>
+                  <input
+                    type="file"
+                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                    onChange={handleBulkImport}
+                    disabled={importing}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  />
+                </div>
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Gender
-            </label>
-            <select 
-              value={formData.gender}
-              onChange={(e) => setFormData({...formData, gender: e.target.value})}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-            >
-              <option value="">Select Gender</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Username
-            </label>
-            <input
-              type="text"
-              placeholder="Enter Username"
-              value={formData.username}
-              onChange={(e) => setFormData({...formData, username: e.target.value})}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Guardian Name
-            </label>
-            <input
-              type="text"
-              placeholder="Enter Guardian Name"
-              value={formData.guardianName}
-              onChange={(e) => setFormData({...formData, guardianName: e.target.value})}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Address
-            </label>
-            <textarea
-              placeholder="Enter Address"
-              rows={3}
-              value={formData.address}
-              onChange={(e) => setFormData({...formData, address: e.target.value})}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-            ></textarea>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Contact No
-            </label>
-            <input
-              type="tel"
-              placeholder="Enter Contact No"
-              value={formData.phone}
-              onChange={(e) => setFormData({...formData, phone: e.target.value})}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Roll No
-            </label>
-            <input
-              type="text"
-              placeholder="Enter Roll No"
-              value={formData.rollNo}
-              onChange={(e) => setFormData({...formData, rollNo: e.target.value})}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Student Code (Optional)
-            </label>
-            <input
-              type="text"
-              placeholder="Enter Student Code (If any)"
-              value={formData.studentCode}
-              onChange={(e) => setFormData({...formData, studentCode: e.target.value})}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Date Of Admission
-            </label>
-            <input
-              type="date"
-              value={formData.admissionDate}
-              onChange={(e) => setFormData({...formData, admissionDate: e.target.value})}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password {view === "edit" && "(Leave unchanged to keep current)"}
-            </label>
-            <input
-              type="text"
-              placeholder="Enter Password"
-              value={formData.password}
-              onChange={(e) => setFormData({...formData, password: e.target.value})}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Student Image (Optional)
-            </label>
-            <div className="flex items-center space-x-4">
-              {formData.image && (
-                <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100">
-                  <img src={formData.image} alt="Profile" className="w-full h-full object-cover" />
+              {importing && (
+                <div className="bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl p-4 text-center font-bold text-sm flex items-center justify-center gap-2 animate-pulse">
+                  <RefreshCw size={18} className="animate-spin text-indigo-600" />
+                  Importing students into database... Please wait.
                 </div>
               )}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+            </div>
+
+            <div className="pt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setView("menu")}
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-colors"
+              >
+                ரத்து செய் (Cancel)
+              </button>
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Subjects
-            </label>
-            <div className="grid grid-cols-2 gap-2 border border-gray-300 rounded-md p-3 bg-white">
-              {availableSubjects.length > 0 ? (
-                availableSubjects.map((subject: string) => (
-                  <label key={subject} className="flex items-center space-x-2 text-sm">
-                    <input 
-                      type="checkbox" 
-                      checked={formData.subjects.some((s: string) => s.trim().toLowerCase() === subject.trim().toLowerCase())}
-                      onChange={() => handleSubjectToggle(subject)}
-                      className="rounded text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>{subject}</span>
-                  </label>
-                ))
-              ) : (
-                <p className="text-sm text-gray-500 col-span-2">
-                  No subjects available in the system yet. Please create subjects in Admin Settings.
-                </p>
-              )}
-            </div>
-          </div>
+  if (view === "add" || view === "edit") {
+    // Helper to auto-suggest subjects when class changes if subjects are empty
+    const handleClassChange = (selectedGrade: string) => {
+      setFormData(prev => {
+        let updatedSubjects = prev.subjects;
+        if (selectedGrade && updatedSubjects.length === 0) {
+          const matchedClass = classes.find(c => c.name === selectedGrade);
+          if (matchedClass && Array.isArray(matchedClass.subjects) && matchedClass.subjects.length > 0) {
+            updatedSubjects = sanitizeSubjectList(matchedClass.subjects);
+          }
+        }
+        return { ...prev, grade: selectedGrade, subjects: updatedSubjects };
+      });
+    };
 
-          <div className="col-span-full mt-4">
-            <label className="flex items-center space-x-3 cursor-pointer p-3 bg-red-50 border border-red-200 rounded-md">
-              <input
-                type="checkbox"
-                checked={formData.zoomBlocked}
-                onChange={(e) => setFormData({...formData, zoomBlocked: e.target.checked})}
-                className="w-5 h-5 text-red-600 border-gray-300 rounded focus:ring-red-500"
-              />
-              <span className="text-red-700 font-medium">
-                Block Zoom Access (Unpaid Fee) / கட்டணம் செலுத்தாததால் Zoom-ஐ முடக்கு
-              </span>
-            </label>
-          </div>
+    // Helper to auto-suggest roll number if empty
+    const handleSuggestRollNo = () => {
+      if (formData.grade) {
+        const gradeStudents = students.filter(s => s.grade === formData.grade && s.rollNo);
+        const maxRoll = gradeStudents.reduce((max, s) => {
+          const num = parseInt(s.rollNo, 10);
+          return !isNaN(num) && num > max ? num : max;
+        }, 0);
+        const nextRoll = maxRoll > 0 ? (maxRoll + 1).toString() : "101";
+        setFormData(prev => ({ ...prev, rollNo: nextRoll }));
+      } else {
+        const nextRoll = "10" + (students.length + 1);
+        setFormData(prev => ({ ...prev, rollNo: nextRoll }));
+      }
+    };
 
-          <div className="pt-4 flex justify-center">
+    // Helper to select all subjects
+    const handleSelectAllSubjects = () => {
+      setFormData(prev => ({ ...prev, subjects: sanitizeSubjectList(availableSubjects) }));
+    };
+
+    // Helper to clear all subjects
+    const handleClearAllSubjects = () => {
+      setFormData(prev => ({ ...prev, subjects: [] }));
+    };
+
+    return (
+      <div className="w-full max-w-7xl mx-auto space-y-5">
+        {/* Top Landscape Header Bar */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
             <button
-              type="submit"
-              disabled={updateProgress >= 0}
-              className={`text-white px-8 py-2 rounded-md transition-all duration-300 font-medium relative overflow-hidden flex justify-center items-center ${
-                updateProgress >= 0 ? "bg-amber-500 w-48" : "bg-pink-600 hover:bg-pink-700 w-48"
-              }`}
+              onClick={() => {
+                setView(view === "edit" ? "view" : "menu");
+                resetForm();
+                setEditingStudentId(null);
+              }}
+              className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors flex items-center justify-center"
+              title="Back"
             >
-              {/* Progress Background */}
-              {updateProgress >= 0 && (
-                <div 
-                  className="absolute left-0 top-0 bottom-0 bg-emerald-500 transition-all duration-300"
-                  style={{ width: `${updateProgress}%` }}
-                />
-              )}
-              
-              {/* Button Text */}
-              <span className="relative z-10 font-bold whitespace-nowrap">
-                {updateProgress >= 0 
-                  ? `Saving... ${updateProgress}%`
-                  : (view === "edit" ? "Update Student" : "Save")}
-              </span>
+              <ArrowLeft size={18} />
             </button>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+                  {view === "edit" ? "மாணவர் விபரம் திருத்தம் (Edit Student)" : "புதிய மாணவர் சேர்க்கை (Add Student)"}
+                </h1>
+                <span className="bg-indigo-50 text-indigo-700 font-bold text-xs px-2.5 py-1 rounded-full border border-indigo-100">
+                  {formData.grade ? formData.grade : "வகுப்பு தேர்வு தேவை"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                கணினி மற்றும் கைபேசிக்கு ஏற்ற முழு அகல லேண்ட்ஸ்கேப் படிவம் (Responsive Landscape Form)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 sm:self-center">
+            <button
+              type="button"
+              onClick={resetForm}
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
+            >
+              படிவத்தை அழிக்க (Reset)
+            </button>
+            <button
+              onClick={(e) => {
+                const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+                if (view === "edit") {
+                  handleEditStudent(fakeEvent);
+                } else {
+                  handleAddStudent(fakeEvent);
+                }
+              }}
+              disabled={updateProgress >= 0}
+              className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-indigo-200 transition-all flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <CheckCircle2 size={16} />
+              {updateProgress >= 0 
+                ? `Saving... ${updateProgress}%` 
+                : (view === "edit" ? "விபரங்களை புதுப்பி (Update)" : "மாணவரைச் சேமி (Save)")}
+            </button>
+          </div>
+        </div>
+
+        {/* Main Landscape Multi-Column Form Grid */}
+        <form onSubmit={view === "edit" ? handleEditStudent : handleAddStudent}>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6">
+            
+            {/* Column 1: கல்வி & தனிப்பட்ட விபரங்கள் (Academic & Identity Profile) - lg:col-span-4 */}
+            <div className="lg:col-span-4 bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm space-y-4 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                  <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+                    <School size={18} />
+                  </span>
+                  <h3 className="font-bold text-slate-900 text-sm">1. கல்வி & தனிப்பட்ட விபரம் (Academic Profile)</h3>
+                </div>
+
+                {/* Class / Grade Selection */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    வகுப்பு / தரம் (Class & Section) <span className="text-red-500">*</span>
+                  </label>
+                  <select 
+                    value={formData.grade}
+                    onChange={(e) => handleClassChange(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50/50 font-semibold text-slate-900"
+                  >
+                    <option value="">-- வகுப்பைத் தேர்ந்தெடுக்கவும் --</option>
+                    {unifiedGrades.map((grade) => (
+                      <option key={grade} value={grade}>
+                        {grade} ({getStudentCountForGrade(grade)} மாணவர்கள்)
+                      </option>
+                    ))}
+                    {formData.grade && !unifiedGrades.includes(formData.grade) && (
+                      <option key={formData.grade} value={formData.grade}>
+                        {formData.grade}
+                      </option>
+                    )}
+                  </select>
+                </div>
+
+                {/* Student Full Name */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    மாணவர் முழுப் பெயர் (Student Name) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="எ.கா. க. தினேஷ் நிவாஸ் (Dhines Nivas)"
+                    value={formData.name}
+                    onChange={(e) => {
+                      const newName = e.target.value;
+                      setFormData(prev => {
+                        // Auto-fill username if blank
+                        let newUsername = prev.username;
+                        if (!newUsername && newName.trim()) {
+                          newUsername = newName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10);
+                        }
+                        return { ...prev, name: newName, username: newUsername };
+                      });
+                    }}
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+
+                {/* Roll Number with Suggestion Button */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700">
+                      பதிவு எண் (Roll No)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleSuggestRollNo}
+                      className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline"
+                    >
+                      + தானியங்கி எண் (Suggest)
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Hash size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="எ.கா. 101, 202401"
+                      value={formData.rollNo}
+                      onChange={(e) => setFormData({...formData, rollNo: e.target.value})}
+                      className="w-full pl-9 pr-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Student Code / Index (Optional) */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    மாணவர் குறியீடு (Student Code - Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="எ.கா. AGA-2024-001"
+                    value={formData.studentCode}
+                    onChange={(e) => setFormData({...formData, studentCode: e.target.value})}
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                  />
+                </div>
+
+                {/* Date of Admission */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    சேர்க்கை தேதி (Date Of Admission)
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.admissionDate}
+                    onChange={(e) => setFormData({...formData, admissionDate: e.target.value})}
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                  />
+                </div>
+
+                {/* DOB & Gender Row */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      பிறந்த தேதி (DOB)
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.dob}
+                      onChange={(e) => setFormData({...formData, dob: e.target.value})}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      பாலினம் (Gender)
+                    </label>
+                    <select 
+                      value={formData.gender}
+                      onChange={(e) => setFormData({...formData, gender: e.target.value})}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                    >
+                      <option value="">தேர்வு செய்</option>
+                      <option value="Male">ஆண் (Male)</option>
+                      <option value="Female">பெண் (Female)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-[11px] text-slate-500 mt-2">
+                📌 மாணவர் பெயர் மற்றும் வகுப்பு கட்டாயமானது.
+              </div>
+            </div>
+
+            {/* Column 2: தொடர்பு & பாதுகாப்பு கணக்கு (Contact & Security Credentials) - lg:col-span-4 */}
+            <div className="lg:col-span-4 bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm space-y-4 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                  <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+                    <Key size={18} />
+                  </span>
+                  <h3 className="font-bold text-slate-900 text-sm">2. தொடர்பு & உள்நுழைவு (Contact & Login)</h3>
+                </div>
+
+                {/* Guardian Name */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    பெற்றோர் / பாதுகாவலர் பெயர் (Guardian Name)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="பெற்றோர் பெயர்"
+                    value={formData.guardianName}
+                    onChange={(e) => setFormData({...formData, guardianName: e.target.value})}
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+
+                {/* Contact No */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    தொலைபேசி எண் (Contact Phone / WhatsApp)
+                  </label>
+                  <div className="relative">
+                    <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="tel"
+                      placeholder="எ.கா. 0771234567"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      className="w-full pl-9 pr-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Address */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    முகவரி (Address)
+                  </label>
+                  <textarea
+                    placeholder="மாணவர் வசிக்கும் முகவரி"
+                    rows={2}
+                    value={formData.address}
+                    onChange={(e) => setFormData({...formData, address: e.target.value})}
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  ></textarea>
+                </div>
+
+                {/* Username & Password Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      பயனர் பெயர் (User) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="username"
+                      value={formData.username}
+                      onChange={(e) => setFormData({...formData, username: e.target.value})}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700">
+                        கடவுச்சொல் (PIN) <span className="text-red-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const randPin = Math.floor(1000 + Math.random() * 9000).toString();
+                          setFormData(prev => ({ ...prev, password: randPin }));
+                        }}
+                        className="text-[10px] font-bold text-amber-600 hover:underline"
+                      >
+                        + 4-Digit
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="password / PIN"
+                      value={formData.password}
+                      onChange={(e) => setFormData({...formData, password: e.target.value})}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono font-bold text-indigo-700"
+                    />
+                  </div>
+                </div>
+
+                {/* Student Image Upload with Preview */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    மாணவர் புகைப்படம் (Student Photo)
+                  </label>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <div className="w-14 h-14 rounded-full overflow-hidden bg-white border-2 border-indigo-200 shrink-0 flex items-center justify-center shadow-xs">
+                      {formData.image ? (
+                        <img src={formData.image} alt="Profile" className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={24} className="text-slate-400" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                      />
+                      {formData.image && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, image: "" }))}
+                          className="text-[11px] text-red-600 hover:underline mt-1 font-semibold flex items-center gap-1"
+                        >
+                          <Trash size={12} /> புகைப்படத்தை நீக்கு (Remove)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-100 text-[11px] text-amber-800">
+                🔒 மாணவர் இணையத்தளத்தில் நுழைய Username & Password அவசியமாகும்.
+              </div>
+            </div>
+
+            {/* Column 3: பாடங்கள், Zoom கட்டுப்பாடு & நேரலை அட்டை (Subjects, Access & Real-Time Card Preview) - lg:col-span-4 */}
+            <div className="lg:col-span-4 bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm space-y-4 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
+                      <BookOpen size={18} />
+                    </span>
+                    <h3 className="font-bold text-slate-900 text-sm">3. பாடங்கள் & அணுகல் (Subjects & Access)</h3>
+                  </div>
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                    {formData.subjects.length} பாடங்கள்
+                  </span>
+                </div>
+
+                {/* Subject Selector Header Controls */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700">
+                      ஒதுக்கப்படும் பாடங்கள் (Assigned Subjects):
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllSubjects}
+                        className="text-[11px] font-bold text-indigo-600 hover:underline"
+                      >
+                        All
+                      </button>
+                      <span className="text-slate-300">•</span>
+                      <button
+                        type="button"
+                        onClick={handleClearAllSubjects}
+                        className="text-[11px] font-bold text-slate-500 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Scrollable Subjects Grid */}
+                  <div className="max-h-40 overflow-y-auto p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 custom-scrollbar">
+                    {availableSubjects.length > 0 ? (
+                      availableSubjects.map((subject: string) => {
+                        const isChecked = formData.subjects.some(s => s.trim().toLowerCase() === subject.trim().toLowerCase());
+                        return (
+                          <label 
+                            key={subject} 
+                            className={`flex items-center space-x-2.5 text-xs p-2 rounded-lg cursor-pointer transition-colors ${
+                              isChecked ? 'bg-indigo-50/80 font-bold text-indigo-950 border border-indigo-200' : 'hover:bg-white text-slate-700'
+                            }`}
+                          >
+                            <input 
+                              type="checkbox" 
+                              checked={isChecked}
+                              onChange={() => handleSubjectToggle(subject)}
+                              className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                            />
+                            <span className="truncate">{subject}</span>
+                          </label>
+                        );
+                      })
+                    ) : (
+                      <p className="text-xs text-slate-400 p-2 text-center">
+                        பாடங்கள் எதுவும் கிடைக்கவில்லை (No subjects found).
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Zoom Access Block Toggle */}
+                <div className="pt-1">
+                  <label className={`flex items-start space-x-3 cursor-pointer p-3.5 rounded-xl border transition-colors ${
+                    formData.zoomBlocked 
+                      ? 'bg-red-50/90 border-red-300' 
+                      : 'bg-emerald-50/50 border-emerald-200 hover:bg-emerald-50'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={formData.zoomBlocked}
+                      onChange={(e) => setFormData({...formData, zoomBlocked: e.target.checked})}
+                      className="w-5 h-5 mt-0.5 text-red-600 border-gray-300 rounded focus:ring-red-500 shrink-0"
+                    />
+                    <div>
+                      <span className={`text-xs font-bold block ${formData.zoomBlocked ? 'text-red-700' : 'text-emerald-800'}`}>
+                        {formData.zoomBlocked ? "⛔ Zoom Access Blocked (முடக்கப்பட்டது)" : "✅ Zoom Access Active (செயலில் உள்ளது)"}
+                      </span>
+                      <span className="text-[11px] text-slate-500 block mt-0.5">
+                        கட்டணம் செலுத்தாததால் மாணவரின் நேரலை Zoom வகுப்பை முடக்க இந்த தேர்வை இயக்கவும்.
+                      </span>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Real-time Mini ID Preview Badge */}
+                <div className="p-3 bg-gradient-to-br from-indigo-900 via-blue-900 to-indigo-950 rounded-xl text-white shadow-md relative overflow-hidden">
+                  <div className="flex items-center justify-between text-[9px] font-mono text-indigo-200 pb-1 border-b border-white/10">
+                    <span>LIVE CARD PREVIEW</span>
+                    <span>{formData.rollNo ? `ROLL: ${formData.rollNo}` : 'ID PREVIEW'}</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 mt-2">
+                    <div className="w-10 h-10 rounded-full bg-white/20 border border-white/40 overflow-hidden flex items-center justify-center shrink-0">
+                      {formData.image ? (
+                        <img src={formData.image} alt="preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={18} className="text-white" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-xs font-bold text-white truncate leading-tight">
+                        {formData.name || "Student Name"}
+                      </h4>
+                      <p className="text-[10px] text-amber-300 font-semibold truncate">
+                        {formData.grade || "Class / Grade"}
+                      </p>
+                      <p className="text-[9px] font-mono text-indigo-200 truncate mt-0.5">
+                        User: {formData.username || "-"} | PIN: {formData.password || "-"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Submit Action */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={updateProgress >= 0}
+                  className={`w-full text-white py-3 px-6 rounded-xl transition-all duration-300 font-bold text-sm relative overflow-hidden flex justify-center items-center shadow-lg ${
+                    updateProgress >= 0 
+                      ? "bg-amber-500 shadow-amber-200" 
+                      : (view === "edit" 
+                          ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-indigo-200" 
+                          : "bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 shadow-pink-200")
+                  }`}
+                >
+                  {/* Progress Background */}
+                  {updateProgress >= 0 && (
+                    <div 
+                      className="absolute left-0 top-0 bottom-0 bg-emerald-500 transition-all duration-300"
+                      style={{ width: `${updateProgress}%` }}
+                    />
+                  )}
+                  
+                  {/* Button Text */}
+                  <span className="relative z-10 font-bold whitespace-nowrap flex items-center gap-2">
+                    <CheckCircle2 size={18} />
+                    {updateProgress >= 0 
+                      ? `Saving to Database... ${updateProgress}%`
+                      : (view === "edit" ? "மாணவர் விபரங்களை சேமி (Update Student)" : "மாணவர் சேர்க்கையை உறுதி செய் (Save Student)")}
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
         </form>
       </div>
