@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { getStudents, saveStudents, deleteStudent, getClasses, getAdminSettings, sanitizeSubjectList, areSubjectsMatching } from "../../lib/db";
+import { isSubjectValidForGrade, getCanonicalSubjectCategory } from "../../components/RecordingSection";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { secondaryAuth } from "../../lib/firebase";
 import * as XLSX from "xlsx";
@@ -333,15 +334,31 @@ export default function Students() {
 
   const sortedClasses = [...classes].sort((a, b) => getGradeSortValue(a.name) - getGradeSortValue(b.name));
 
-  const coreDefaultSubjects = ["tamil", "தமிழ்", "தமிழ் மொழி இலக்கியம்", "தமிழ் வினா விடை", "தமிழ் இலக்கிய நயம்", "தமிழ் மொழி வளம் (GAME)", "30 நாள் தமிழ் பாடநெறி (தரம் 11)", "30 நாள் (15 - 30) வது நாள்"];
+  const coreDefaultSubjects = ["தமிழ்", "கணிதம்", "விஞ்ஞானம்", "ஆங்கிலம்", "வரலாறு", "தமிழ் மொழி இலக்கியம்", "தமிழ் வினா விடை", "தமிழ் இலக்கிய நயம்", "தமிழ் மொழி வளம் (GAME)", "30 நாள் தமிழ் பாடநெறி (தரம் 11)", "30 நாள் (15 - 30) வது நாள்"];
 
-  const availableSubjects = Array.from(new Set([
+  const rawAvailableSubjects = Array.from(new Set([
     ...coreDefaultSubjects,
     ...allSubjects.map(s => (typeof s === 'string' ? s : s?.name)).filter(Boolean),
     ...classes.flatMap(c => (Array.isArray(c?.subjects) ? c.subjects : (c?.subject ? [c.subject] : []))).filter(Boolean),
     ...(formData.subjects || []),
     ...students.flatMap(s => s.subjects || s.enrolledClasses || [])
-  ])).map(s => String(s).trim()).filter(s => s.length > 0);
+  ])).map(s => String(s).trim()).filter(s => {
+    if (!s) return false;
+    return isSubjectValidForGrade(s, formData.grade || "");
+  });
+
+  const availableSubjectsMap = new Map<string, string>();
+  rawAvailableSubjects.forEach(s => {
+    const cat = getCanonicalSubjectCategory(s) || s.toLowerCase().trim();
+    if (!availableSubjectsMap.has(cat)) {
+      if (cat === "tamil") {
+        availableSubjectsMap.set(cat, "தமிழ்");
+      } else {
+        availableSubjectsMap.set(cat, s.trim());
+      }
+    }
+  });
+  const availableSubjects = Array.from(availableSubjectsMap.values());
 
   const handleSubjectToggle = (subject: string) => {
     setFormData(prev => {

@@ -65,7 +65,15 @@ export default function Classes() {
       getClasses().then(setClasses);
       getStudents().then(setStudents);
       getStaffs().then(setStaffs);
-      getSubjects().then(setAvailableSubjects);
+      getSubjects().then(subs => {
+        const cleaned = (subs || []).map(s => {
+          if ((s?.name || '').trim().toLowerCase() === 'tamil') {
+            return { ...s, name: 'தமிழ்' };
+          }
+          return s;
+        }).filter((s, idx, arr) => arr.findIndex(x => x?.name === s?.name) === idx);
+        setAvailableSubjects(cleaned);
+      });
     };
 
     loadData();
@@ -257,8 +265,8 @@ export default function Classes() {
                   <div>
                     <h3 className="font-medium text-gray-800 text-sm pr-12">{cls.name}</h3>
                     {cls.subjects && cls.subjects.length > 0 && (
-                      <p className="text-xs text-gray-500 mt-1 line-clamp-2" title={cls.subjects.join(", ")}>
-                        {cls.subjects.join(", ")}
+                      <p className="text-xs text-gray-500 mt-1 line-clamp-2" title={cls.subjects.map((s: string) => s.toLowerCase() === 'tamil' ? 'தமிழ்' : s).join(", ")}>
+                        {cls.subjects.map((s: string) => s.toLowerCase() === 'tamil' ? 'தமிழ்' : s).join(", ")}
                       </p>
                     )}
                   </div>

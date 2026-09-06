@@ -233,7 +233,18 @@ export const getCanonicalSubjectCategory = (name: string): string => {
     return "tamil_30_days";
   }
 
-  // Question & Answer / Paper Class
+  // 2026 Question & Answer / Paper Class (Strictly isolated from general Q&A and other courses)
+  if (
+    (clean.includes("2026") || clean.includes("26") || name.includes("2026") || name.includes("26")) &&
+    (clean.includes("வினா விடை") || clean.includes("வினாவிடை") || clean.includes("வினா-விடை") || 
+     clean.includes("paper class") || clean.includes("பேப்பர் கிளாஸ்") || clean.includes("q&a") || 
+     clean.includes("வினாத்தாள்") || clean.includes("மாதிரி வினா") || clean.includes("வினாக்கள்") ||
+     clean.includes("past paper") || clean.includes("model paper") || clean.includes("வினா பத்திரம்"))
+  ) {
+    return "tamil_q_and_a_2026";
+  }
+
+  // Standard Question & Answer / Paper Class
   if (
     clean.includes("வினா விடை") || clean.includes("வினாவிடை") || clean.includes("வினா-விடை") || 
     clean.includes("paper class") || clean.includes("பேப்பர் கிளாஸ்") || clean.includes("q&a") || 
@@ -369,9 +380,18 @@ export const areSubjectsMatching = (itemSub: string, studentSub: string): boolea
   return false;
 };
 
+export const SPECIALIZED_SUBJECT_CATEGORIES = new Set([
+  "tamil_30_days",
+  "tamil_30_days_part2",
+  "tamil_q_and_a_2026",
+  "tamil_q_and_a",
+  "tamil_literature",
+  "tamil_game"
+]);
+
 export const doesItemMatchStudentSubjects = (item: RecordingItem, studentSubs?: string[]): boolean => {
   if (!studentSubs || !Array.isArray(studentSubs) || studentSubs.length === 0) {
-    return true; // No filter if student subjects are not defined
+    return false; // Strict isolation: student must have enrolled subjects
   }
 
   const cleanStudentSubs = studentSubs
@@ -384,7 +404,7 @@ export const doesItemMatchStudentSubjects = (item: RecordingItem, studentSubs?: 
     });
 
   if (cleanStudentSubs.length === 0) {
-    return true;
+    return false;
   }
 
   // Check if student has wildcard / all access
@@ -396,12 +416,27 @@ export const doesItemMatchStudentSubjects = (item: RecordingItem, studentSubs?: 
   });
   if (hasWildcard) return true;
 
+  const itemPrimarySub = (item.subject || '').toString().trim();
   const itemSubs = Array.from(new Set([
     ...(Array.isArray(item.subjects) ? item.subjects : []),
-    item.subject
+    itemPrimarySub
   ].filter(Boolean))).map(s => String(s).trim());
 
   if (itemSubs.length === 0) return true;
+
+  // Determine item primary subject category
+  const primaryCat = getCanonicalSubjectCategory(itemPrimarySub);
+  const isSpecialized = SPECIALIZED_SUBJECT_CATEGORIES.has(primaryCat);
+
+  // If item is a specialized course package (e.g., 30 Days Course, 2026 Q&A, Literature, Game):
+  // The student MUST have an explicitly enrolled subject that matches this specialized category!
+  // Generic "tamil" enrollment does NOT grant access to specialized course packages.
+  if (isSpecialized) {
+    return cleanStudentSubs.some(stSub => {
+      const stCat = getCanonicalSubjectCategory(stSub);
+      return stCat === primaryCat;
+    });
+  }
 
   // Check if item is marked General / All
   const isItemGeneral = itemSubs.some(s => {
@@ -412,10 +447,96 @@ export const doesItemMatchStudentSubjects = (item: RecordingItem, studentSubs?: 
   });
   if (isItemGeneral) return true;
 
-  // Student receives post if AT LEAST ONE item subject matches AT LEAST ONE enrolled student subject
-  return itemSubs.some(itemSub => 
-    cleanStudentSubs.some(stSub => areSubjectsMatching(itemSub, stSub))
-  );
+  // For regular subjects: match any enrolled subject
+  return itemSubs.some(itemSub => {
+    const iCat = getCanonicalSubjectCategory(itemSub);
+    return cleanStudentSubs.some(stSub => {
+      const stCat = getCanonicalSubjectCategory(stSub);
+      // If student is enrolled in a specialized course only (e.g. 2026 Q&A), do not leak regular subjects
+      if (SPECIALIZED_SUBJECT_CATEGORIES.has(stCat)) {
+        return iCat === stCat;
+      }
+      return areSubjectsMatching(itemSub, stSub);
+    });
+  });
+};
+
+export const isSubjectValidForGrade = (subjectName: string, gradeStr: string): boolean => {
+  if (!subjectName || !gradeStr) return true;
+  const gradeNum = parseInt(gradeStr.replace(/[^0-9]/g, ''), 10);
+  if (isNaN(gradeNum)) return true;
+
+  // 1. Explicit grade tag in subject name (e.g., "(தரம் 11)", "(Grade 11)", "தரம் 06")
+  const match = subjectName.match(/(?:தரம்|grade)\s*(\d+)/i);
+  if (match && match[1]) {
+    const subGradeNum = parseInt(match[1], 10);
+    if (subGradeNum !== gradeNum) return false;
+  }
+
+  // 2. Canonical category constraints
+  const cat = getCanonicalSubjectCategory(subjectName);
+  // 30 days revision & 2026 Q&A packages are STRICTLY Grade 11 only
+  if (cat === "tamil_30_days" || cat === "tamil_30_days_part2" || cat === "tamil_q_and_a_2026") {
+    return gradeNum === 11;
+  }
+
+  // Literature & Q&A are for Grade 10 and Grade 11 only in O/L academy
+  if (cat === "tamil_literature" || cat === "tamil_q_and_a") {
+    return gradeNum === 10 || gradeNum === 11;
+  }
+
+  // Specialized Tamil Game is for Grade 11 or explicitly matched grade
+  if (cat === "tamil_game") {
+    return gradeNum >= 10;
+  }
+
+  return true;
+};
+
+export const filterSubjectsForStudentGrade = (rawSubjects: string[], gradeStr: string): string[] => {
+  if (!Array.isArray(rawSubjects) || rawSubjects.length === 0) return [];
+  const cleanGrade = (gradeStr || "").toString().trim();
+  const gradeNum = parseInt(cleanGrade.replace(/[^0-9]/g, ''), 10);
+
+  const validSubjects = rawSubjects
+    .map(s => String(s || "").trim())
+    .filter(s => {
+      if (!s) return false;
+      const lower = s.toLowerCase();
+      // Filter out raw grade strings if mistakenly stored as subject
+      if (lower === cleanGrade.toLowerCase()) return false;
+      if (!isNaN(gradeNum) && (lower === `தரம் ${gradeNum}` || lower === `தரம் 0${gradeNum}` || lower === `grade ${gradeNum}` || lower === `grade 0${gradeNum}`)) return false;
+      // Filter by strict grade validity
+      return isSubjectValidForGrade(s, cleanGrade);
+    });
+
+  // Canonical Deduplication:
+  // e.g. "tamil" and "தமிழ்" -> single "தமிழ்"
+  const catMap = new Map<string, string>();
+  validSubjects.forEach(s => {
+    const cat = getCanonicalSubjectCategory(s) || s.toLowerCase().trim();
+    if (!catMap.has(cat)) {
+      if (cat === "tamil") {
+        catMap.set(cat, "தமிழ்");
+      } else if (cat === "science") {
+        catMap.set(cat, "விஞ்ஞானம் (Science)");
+      } else if (cat === "maths") {
+        catMap.set(cat, "கணிதம் (Maths)");
+      } else if (cat === "english") {
+        catMap.set(cat, "ஆங்கிலம் (English)");
+      } else if (cat === "history") {
+        catMap.set(cat, "வரலாறு (History)");
+      } else if (cat === "ict") {
+        catMap.set(cat, "தகவல் தொடர்பாடல் (ICT)");
+      } else if (cat === "commerce") {
+        catMap.set(cat, "வணிகக் கல்வி (Commerce)");
+      } else {
+        catMap.set(cat, s.trim());
+      }
+    }
+  });
+
+  return Array.from(catMap.values());
 };
 
 export const normalizeGradeString = (g?: string): string => {
@@ -433,33 +554,55 @@ export const doesItemMatchGrade = (item: RecordingItem, targetGrade: string): bo
   const normTarget = normalizeGradeString(targetGrade);
   const targetDigits = targetGrade.toString().replace(/[^0-9]/g, '');
   const targetNum = targetDigits ? parseInt(targetDigits, 10) : null;
+  if (!targetNum) return false;
 
-  // 1. Check grades array (strictly matches the target grade only)
-  if (Array.isArray(item.grades) && item.grades.length > 0) {
-    for (const g of item.grades) {
-      if (!g) continue;
-      const normG = normalizeGradeString(String(g));
-      const gDigits = String(g).replace(/[^0-9]/g, '');
-      const gNum = gDigits ? parseInt(gDigits, 10) : null;
+  const checkGradeMatch = (gStr: any): boolean => {
+    if (!gStr) return false;
+    const str = String(gStr).trim();
+    if (normalizeGradeString(str) === normTarget) return true;
 
-      if (normG === normTarget || (targetNum !== null && gNum !== null && gNum === targetNum)) {
+    // Check range pattern like "06 - 11", "06-11", "6 to 11", "தரம் 06 - 11"
+    const rangeMatch = str.match(/(\d+)\s*(?:-|to|தொடக்கம்|வரை)\s*(\d+)/i);
+    if (rangeMatch && rangeMatch[1] && rangeMatch[2]) {
+      const min = parseInt(rangeMatch[1], 10);
+      const max = parseInt(rangeMatch[2], 10);
+      if (targetNum >= Math.min(min, max) && targetNum <= Math.max(min, max)) {
         return true;
+      }
+    }
+
+    const gDigits = str.replace(/[^0-9]/g, '');
+    if (gDigits && parseInt(gDigits, 10) === targetNum) {
+      return true;
+    }
+    return false;
+  };
+
+  let gradeMatches = false;
+  // 1. Check grades array
+  if (Array.isArray(item.grades) && item.grades.length > 0) {
+    gradeMatches = item.grades.some((g: any) => checkGradeMatch(g));
+  } else if (item.grade && typeof item.grade === 'string' && item.grade.trim()) {
+    gradeMatches = checkGradeMatch(item.grade);
+  }
+
+  if (!gradeMatches) return false;
+
+  // Anti-leak check: If item subject or title explicitly specifies a different single grade
+  // e.g., "(தரம் 11)" for a Grade 6 student
+  const itemText = `${item.subject || ''} ${item.title || ''}`;
+  const hasRangeInText = itemText.match(/(\d+)\s*(?:-|to|தொடக்கம்|வரை)\s*(\d+)/i);
+  if (!hasRangeInText) {
+    const explicitGradeMatch = itemText.match(/(?:தரம்|grade)\s*(\d+)/i);
+    if (explicitGradeMatch && explicitGradeMatch[1]) {
+      const explicitNum = parseInt(explicitGradeMatch[1], 10);
+      if (explicitNum !== targetNum) {
+        return false; // Belongs strictly to a different grade!
       }
     }
   }
 
-  // 2. Check direct grade property (strictly matches the target grade only)
-  if (item.grade && typeof item.grade === 'string' && item.grade.trim()) {
-    const normGrade = normalizeGradeString(item.grade);
-    const itemDigits = item.grade.toString().replace(/[^0-9]/g, '');
-    const itemNum = itemDigits ? parseInt(itemDigits, 10) : null;
-
-    if (normGrade === normTarget || (targetNum !== null && itemNum !== null && itemNum === targetNum)) {
-      return true;
-    }
-  }
-
-  return false;
+  return true;
 };
 
 export const deduplicateCourses = (coursesList: any[]): any[] => {

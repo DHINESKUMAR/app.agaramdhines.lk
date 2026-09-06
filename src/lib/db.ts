@@ -606,6 +606,17 @@ export const getCanonicalSubject = (s: string): string => {
     return "tamil_30_days";
   }
 
+  // 2026 Question & Answer / Paper Class (Strictly isolated from general Q&A and other courses)
+  if (
+    (clean.includes("2026") || clean.includes("26") || s.includes("2026") || s.includes("26")) &&
+    (clean.includes("வினா விடை") || clean.includes("வினாவிடை") || clean.includes("வினா-விடை") || 
+     clean.includes("paper class") || clean.includes("பேப்பர் கிளாஸ்") || clean.includes("q&a") || 
+     clean.includes("வினாத்தாள்") || clean.includes("மாதிரி வினா") || clean.includes("வினாக்கள்") ||
+     clean.includes("past paper") || clean.includes("model paper") || clean.includes("வினா பத்திரம்"))
+  ) {
+    return "tamil_q_and_a_2026";
+  }
+
   if (
     clean.includes("வினா விடை") || clean.includes("வினாவிடை") || clean.includes("வினா-விடை") || 
     clean.includes("paper class") || clean.includes("பேப்பர் கிளாஸ்") || clean.includes("q&a") || 
@@ -721,8 +732,11 @@ export const sanitizeSubjectList = (subs: any[]): string[] => {
   const map = new Map<string, string>();
   subs.forEach((s: any) => {
     if (!s) return;
-    const name = String(s).trim();
+    let name = String(s).trim();
     if (!name) return;
+    if (name.toLowerCase() === "tamil") {
+      name = "தமிழ்";
+    }
     const lowerKey = name.toLowerCase();
     if (!map.has(lowerKey)) {
       map.set(lowerKey, name);
@@ -990,11 +1004,68 @@ export const deleteCourse = async (id: string) => {
 
 export const getCourseMaterials = async () => {
   const raw = await getData('courseMaterials', []);
-  return Array.isArray(raw) ? raw : [];
+  if (!Array.isArray(raw)) return [];
+  let changed = false;
+  const sanitized = raw.map(item => {
+    if (!item) return item;
+    let itemChanged = false;
+    let subject = item.subject;
+    if (typeof subject === 'string' && subject.trim().toLowerCase() === 'tamil') {
+      subject = 'தமிழ்';
+      itemChanged = true;
+    }
+    let subjects = item.subjects;
+    if (Array.isArray(subjects)) {
+      const cleanSubs = sanitizeSubjectList(subjects);
+      if (JSON.stringify(cleanSubs) !== JSON.stringify(subjects)) {
+        subjects = cleanSubs;
+        itemChanged = true;
+      }
+    }
+    if (itemChanged) {
+      changed = true;
+      return { ...item, subject, subjects };
+    }
+    return item;
+  });
+  if (changed) {
+    saveData('courseMaterials', sanitized).catch(() => {});
+  }
+  return sanitized;
 };
 export const saveCourseMaterials = (materials: any) => saveData('courseMaterials', materials);
 
-export const getYoutubeLinks = () => getData('youtubeLinks', []);
+export const getYoutubeLinks = async () => {
+  const links = await getData('youtubeLinks', []);
+  if (!Array.isArray(links)) return [];
+  let changed = false;
+  const sanitized = links.map(item => {
+    if (!item) return item;
+    let itemChanged = false;
+    let subject = item.subject;
+    if (typeof subject === 'string' && subject.trim().toLowerCase() === 'tamil') {
+      subject = 'தமிழ்';
+      itemChanged = true;
+    }
+    let subjects = item.subjects;
+    if (Array.isArray(subjects)) {
+      const cleanSubs = sanitizeSubjectList(subjects);
+      if (JSON.stringify(cleanSubs) !== JSON.stringify(subjects)) {
+        subjects = cleanSubs;
+        itemChanged = true;
+      }
+    }
+    if (itemChanged) {
+      changed = true;
+      return { ...item, subject, subjects };
+    }
+    return item;
+  });
+  if (changed) {
+    saveData('youtubeLinks', sanitized).catch(() => {});
+  }
+  return sanitized;
+};
 export const saveYoutubeLinks = (links: any) => saveData('youtubeLinks', links);
 
 export const getFees = () => getData('fees', []);
@@ -1070,20 +1141,29 @@ export const getClasses = async () => {
   if (!Array.isArray(rawClasses)) return [];
   const classMap = new Map<string, any>();
   let hasDuplicates = false;
+  let hasChanged = false;
   rawClasses.forEach((item: any) => {
     if (!item) return;
     const key = (item.name || item.id || '').toString().trim().toLowerCase();
     if (!key) return;
+
+    const rawSubs = Array.isArray(item.subjects) ? item.subjects : (item.subject ? [item.subject] : []);
+    const cleanSubs = sanitizeSubjectList(rawSubs);
+    if (JSON.stringify(cleanSubs) !== JSON.stringify(item.subjects)) {
+      hasChanged = true;
+    }
+    const updatedItem = { ...item, subjects: cleanSubs };
+
     if (classMap.has(key)) {
       hasDuplicates = true;
       const existing = classMap.get(key);
-      classMap.set(key, { ...existing, ...item, id: existing.id || item.id });
+      classMap.set(key, { ...existing, ...updatedItem, id: existing.id || item.id });
     } else {
-      classMap.set(key, item);
+      classMap.set(key, updatedItem);
     }
   });
   const deduped = Array.from(classMap.values());
-  if (hasDuplicates) {
+  if (hasDuplicates || hasChanged) {
     saveData('classes', deduped).catch(() => {});
   }
   return deduped;
@@ -1599,14 +1679,13 @@ export const getSubjects = async (): Promise<any[]> => {
 
   // 1. Core Default Subjects (always available unless user explicitly clicked delete)
   const defaultSubjects = [
-    { id: "sub_tamil_main", name: "tamil", category: "Main", fee: "0" },
+    { id: "sub_tamil_main", name: "தமிழ்", category: "Main", fee: "0" },
     { id: "sub_1", name: "தமிழ் வினா விடை", category: "Sub", fee: "500", grade: "தரம் 11" },
     { id: "sub_2", name: "30 நாள் தமிழ் பாடநெறி (தரம் 11)", category: "Sub", fee: "6000", grade: "தரம் 11" },
     { id: "sub_3", name: "தமிழ் மொழி இலக்கியம்", category: "Main", fee: "0", grade: "தரம் 11" },
     { id: "sub_4", name: "தமிழ் மொழி வளம் (GAME)", category: "Main", fee: "0" },
     { id: "sub_5", name: "30 நாள் (15 - 30) வது நாள்", category: "Sub", fee: "3000", grade: "தரம் 11" },
-    { id: "sub_6", name: "தமிழ் இலக்கிய நயம்", category: "Sub", fee: "4000", grade: "தரம் 11" },
-    { id: "sub_7", name: "தமிழ்", category: "Main", fee: "0" }
+    { id: "sub_6", name: "தமிழ் இலக்கிய நயம்", category: "Sub", fee: "4000", grade: "தரம் 11" }
   ];
 
   for (const s of defaultSubjects) {
@@ -1628,6 +1707,9 @@ export const getSubjects = async (): Promise<any[]> => {
 
       if (redundantIlakkiaNayamVariants.has(rawName)) {
         rawName = "தமிழ் இலக்கிய நயம்";
+      }
+      if (rawName.toLowerCase() === "tamil") {
+        rawName = "தமிழ்";
       }
 
       const idStr = String(typeof item === 'object' && item.id ? item.id : '').trim().toLowerCase();
@@ -1776,7 +1858,8 @@ export const syncSubjectsFromRecords = async () => {
         const subs = Array.isArray(st?.subjects) ? st.subjects : (Array.isArray(st?.enrolledClasses) ? st.enrolledClasses : []);
         subs.forEach((subName: any) => {
           if (!subName || typeof subName !== 'string') return;
-          const cleanName = subName.trim();
+          let cleanName = subName.trim();
+          if (cleanName.toLowerCase() === "tamil") cleanName = "தமிழ்";
           const key = cleanName.toLowerCase();
           if (cleanName && !deletedSet.has(key) && !map.has(key)) {
             map.set(key, {
@@ -1800,7 +1883,8 @@ export const syncSubjectsFromRecords = async () => {
         const subs = Array.isArray(c?.subjects) ? c.subjects : (c?.subject ? [c.subject] : []);
         subs.forEach((subName: any) => {
           if (!subName || typeof subName !== 'string') return;
-          const cleanName = subName.trim();
+          let cleanName = subName.trim();
+          if (cleanName.toLowerCase() === "tamil") cleanName = "தமிழ்";
           const key = cleanName.toLowerCase();
           if (cleanName && !deletedSet.has(key) && !map.has(key)) {
             map.set(key, {

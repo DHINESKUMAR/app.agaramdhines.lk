@@ -39,7 +39,10 @@ import {
   ChevronRight,
   Copy,
   CheckCircle2,
-  Folder
+  Folder,
+  Search,
+  Grid,
+  List
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
@@ -47,7 +50,7 @@ import QrScanner from "../../components/QrScanner";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
-import RecordingSection, { deduplicateCourses, areSubjectsMatching, doesItemMatchGrade, doesItemMatchStudentSubjects, normalizeGradeString, getCanonicalSubjectCategory } from "../../components/RecordingSection";
+import RecordingSection, { deduplicateCourses, areSubjectsMatching, doesItemMatchGrade, doesItemMatchStudentSubjects, normalizeGradeString, getCanonicalSubjectCategory, filterSubjectsForStudentGrade, isSubjectValidForGrade } from "../../components/RecordingSection";
 
 import { getCourses, getCourseMaterials, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts, getStudentMenuLabels, DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels } from "../../lib/db";
 import { getUserSession, saveUserSession, clearUserSession } from "../../lib/authSession";
@@ -101,6 +104,13 @@ export const getCanonicalSubject = (s: string): string => {
   return raw;
 };
 
+export const formatSubjectDisplayName = (s?: any): string => {
+  if (!s) return "";
+  const str = String(s).trim();
+  if (str.toLowerCase() === "tamil") return "தமிழ்";
+  return str.replace(/\btamil\b/gi, "தமிழ்");
+};
+
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -135,6 +145,9 @@ export default function StudentDashboard() {
   const [selectedMaterialSubject, setSelectedMaterialSubject] = useState<string | null>(null);
   const [selectedELearningSubject, setSelectedELearningSubject] = useState<string>("All");
   const [showAccessBlockedModal, setShowAccessBlockedModal] = useState(false);
+  const [videoSearchQuery, setVideoSearchQuery] = useState("");
+  const [videoViewMode, setVideoViewMode] = useState<"grid" | "list">("grid");
+  const [activeWatchVideo, setActiveWatchVideo] = useState<any | null>(null);
 
   const handleTabSelect = (tabId: string) => {
     const restrictedTabs = ["youtube", "course_materials", "courses", "subjects"];
@@ -329,6 +342,39 @@ export default function StudentDashboard() {
       hash = folderName.charCodeAt(i) + ((hash << 5) - hash);
     }
     return colors[Math.abs(hash) % colors.length];
+  };
+
+  // Robust YouTube video ID parser
+  const getYouTubeVideoId = (url: string): string | null => {
+    if (!url) return null;
+    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
+    if (match) return match[1];
+    if (url.includes('youtu.be/')) {
+      const part = url.split('youtu.be/')[1];
+      return part ? part.split('?')[0].split('&')[0] : null;
+    }
+    if (url.includes('v=')) {
+      const part = url.split('v=')[1];
+      return part ? part.split('&')[0].split('?')[0] : null;
+    }
+    return null;
+  };
+
+  // Helper to neatly parse day prefix from folder name (e.g., "நாள் - 09 ...")
+  const parseFolderTitle = (folderName: string) => {
+    if (!folderName) return { dayBadge: null, title: "பொதுவானவை (General)" };
+    const dayMatch = folderName.match(/^(நாள்\s*[-–:]*\s*\d+|day\s*[-–:]*\s*\d+)(.*)/i);
+    if (dayMatch) {
+      const cleanTitle = dayMatch[2].replace(/^[\s\-–:,]+/, '').trim();
+      return {
+        dayBadge: dayMatch[1].trim(),
+        title: cleanTitle || folderName
+      };
+    }
+    return {
+      dayBadge: null,
+      title: folderName
+    };
   };
 
   const parseSafeDate = (d: any): Date | null => {
@@ -614,16 +660,29 @@ export default function StudentDashboard() {
       const studentGradeStr = (freshStudentData.grade || "").toString().trim().toLowerCase();
       const studentGradeNum = studentGradeStr.replace(/[^0-9]/g, '');
 
-      const studentSubjectsArray = rawStudentSubs
-        .map((s: any) => s?.toString().trim().toLowerCase())
-        .filter((s: string) => {
-          if (!s) return false;
-          // Filter out grade names if they were mistakenly stored as subjects in enrolledClasses
-          const cleanS = s.replace(/[^0-9]/g, '');
-          if (s === studentGradeStr) return false;
-          if (studentGradeNum && cleanS === studentGradeNum && (s.startsWith("தரம்") || s.startsWith("grade"))) return false;
-          return true;
+      let studentSubjectsArray = filterSubjectsForStudentGrade(rawStudentSubs, freshStudentData.grade || "");
+
+      // Fallback: If student has no individual subjects assigned, resolve default subjects for their grade from classes
+      if (studentSubjectsArray.length === 0) {
+        const matchingClass = allClasses.find((c: any) => {
+          if (!c?.name) return false;
+          const cName = c.name.toString().trim();
+          const cNum = cName.replace(/[^0-9]/g, '');
+          return (studentGradeNum && cNum === studentGradeNum) || (cName.toLowerCase() === studentGradeStr);
         });
+        if (matchingClass && Array.isArray(matchingClass.subjects) && matchingClass.subjects.length > 0) {
+          studentSubjectsArray = filterSubjectsForStudentGrade(matchingClass.subjects, freshStudentData.grade || "");
+        }
+      }
+      studentSubjectsArray = Array.from(new Set(studentSubjectsArray));
+
+      setEnrolledClasses(studentSubjectsArray);
+      freshStudentData = {
+        ...freshStudentData,
+        subjects: studentSubjectsArray,
+        enrolledClasses: studentSubjectsArray
+      };
+      setStudentData(freshStudentData);
 
       const filterItemByGradeAndSubject = (c: any) => {
         if (!c) return false;
@@ -1682,14 +1741,17 @@ export default function StudentDashboard() {
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Find all unique subjects offered for this grade from classes, or from enrolledClasses */}
-                {Array.from(new Set([
-                  ...(classes.find(c => 
-                    c.name === studentData.grade || 
-                    c.name?.replace(/[^0-9]/g, '') === studentData.grade?.toString().replace(/[^0-9]/g, '')
-                  )?.subjects || []),
-                  ...(studentData.subjects || []),
-                  ...(enrolledClasses || [])
-                ])).map((subjectName: any) => {
+                {filterSubjectsForStudentGrade(
+                  Array.from(new Set([
+                    ...(classes.find(c => 
+                      c.name === studentData.grade || 
+                      c.name?.replace(/[^0-9]/g, '') === studentData.grade?.toString().replace(/[^0-9]/g, '')
+                    )?.subjects || []),
+                    ...(studentData.subjects || []),
+                    ...(enrolledClasses || [])
+                  ])),
+                  studentData.grade || ""
+                ).map((subjectName: any) => {
                   const subLower = String(subjectName || "").trim().toLowerCase();
                   const isEnrolled = enrolledClasses.length === 0 || enrolledClasses.some((e: any) => {
                     const eLower = String(e || "").trim().toLowerCase();
@@ -2119,29 +2181,25 @@ export default function StudentDashboard() {
                     <div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {(() => {
-                          const studentSubs = (studentData?.subjects || studentData?.enrolledClasses || []).map((s: any) => s?.toString().trim()).filter(Boolean);
-                          const materialSubs = courseMaterials.flatMap((c: any) => [c.subject, ...(c.subjects || [])]).map((s: any) => s?.toString().trim()).filter(Boolean);
+                          const studentSubs = (studentData?.subjects || studentData?.enrolledClasses || enrolledClasses || []).map((s: any) => s?.toString().trim()).filter(Boolean);
                           
                           let rawSubs: string[] = [];
                           if (studentSubs.length > 0) {
-                            const matchingMaterials = materialSubs.filter(mSub => studentSubs.some(sSub => areSubjectsMatching(mSub, sSub)));
-                            rawSubs = [...studentSubs, ...matchingMaterials];
+                            rawSubs = [...studentSubs];
                           } else {
-                            rawSubs = [...materialSubs];
+                            const studentGrade = (studentData?.grade || "").toString().trim();
+                            const studentGradeNum = studentGrade.replace(/[^0-9]/g, '');
+                            const matchingClass = classes.find((c: any) => {
+                              if (!c?.name) return false;
+                              const cNum = c.name.toString().replace(/[^0-9]/g, '');
+                              return (studentGradeNum && cNum === studentGradeNum) || (c.name.toString().trim().toLowerCase() === studentGrade.toLowerCase());
+                            });
+                            if (matchingClass && Array.isArray(matchingClass.subjects) && matchingClass.subjects.length > 0) {
+                              rawSubs = matchingClass.subjects.map((s: any) => s?.toString().trim()).filter(Boolean);
+                            }
                           }
 
-                          const subjectMap = new Map<string, string>();
-                          rawSubs.forEach(name => {
-                            if (name && name.toLowerCase() !== 'general' && name.toLowerCase() !== 'all') {
-                              const displayName = name.trim();
-                              const catKey = getCanonicalSubjectCategory(displayName) || displayName.toLowerCase();
-                              if (catKey && !subjectMap.has(catKey)) {
-                                subjectMap.set(catKey, displayName);
-                              }
-                            }
-                          });
-
-                          const allAvailableSubjectNames = Array.from(subjectMap.values());
+                          const allAvailableSubjectNames = filterSubjectsForStudentGrade(rawSubs, studentData?.grade || "");
 
                           if (allAvailableSubjectNames.length === 0 && courseMaterials.length > 0) {
                             allAvailableSubjectNames.push("General");
@@ -2225,13 +2283,31 @@ export default function StudentDashboard() {
                       <h3 className="text-xl font-black text-slate-800 mt-2">Available PDF Documents</h3>
                     </div>
                     <span className="text-sm font-bold text-slate-400">
-                      {courseMaterials.filter((c: any) => selectedMaterialSubject === "ALL_MATERIALS" || areSubjectsMatching(c.subject, selectedMaterialSubject) || (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, selectedMaterialSubject)))).length} File(s)
+                      {courseMaterials.filter((c: any) => {
+                        if (selectedMaterialSubject === "ALL_MATERIALS") return true;
+                        const targetCat = getCanonicalSubjectCategory(selectedMaterialSubject);
+                        const cCat = getCanonicalSubjectCategory(c.subject);
+                        if (targetCat && cCat) {
+                          return cCat === targetCat;
+                        }
+                        return areSubjectsMatching(c.subject, selectedMaterialSubject) || 
+                          (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, selectedMaterialSubject)));
+                      }).length} File(s)
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {courseMaterials
-                      .filter((c: any) => selectedMaterialSubject === "ALL_MATERIALS" || areSubjectsMatching(c.subject, selectedMaterialSubject) || (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, selectedMaterialSubject))))
+                      .filter((c: any) => {
+                        if (selectedMaterialSubject === "ALL_MATERIALS") return true;
+                        const targetCat = getCanonicalSubjectCategory(selectedMaterialSubject);
+                        const cCat = getCanonicalSubjectCategory(c.subject);
+                        if (targetCat && cCat) {
+                          return cCat === targetCat;
+                        }
+                        return areSubjectsMatching(c.subject, selectedMaterialSubject) || 
+                          (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, selectedMaterialSubject)));
+                      })
                       .map((course: any) => (
                         <div 
                           key={course.id}
@@ -2282,44 +2358,48 @@ export default function StudentDashboard() {
           if (studentSubs.length > 0) {
             rawELearningSubjects = [...studentSubs];
           } else {
-            rawELearningSubjects = [
-              ...youtubeLinks.map((l: any) => l.subject?.toString().trim()),
-              ...youtubeLinks.flatMap((l: any) => Array.isArray(l.subjects) ? l.subjects.map((s: any) => s?.toString().trim()) : []),
-              ...webPosts.map((p: any) => p.subject?.toString().trim()),
-              ...webPosts.flatMap((p: any) => Array.isArray(p.subjects) ? p.subjects.map((s: any) => s?.toString().trim()) : []),
-            ].filter((s): s is string => !!s && s.toLowerCase() !== 'general' && s.toLowerCase() !== 'uncategorized' && s.toLowerCase() !== 'e-learning' && s.toLowerCase() !== 'public' && s.toLowerCase() !== 'all');
+            const studentGrade = (studentData?.grade || "").toString().trim();
+            const studentGradeNum = studentGrade.replace(/[^0-9]/g, '');
+            const matchingClass = classes.find((c: any) => {
+              if (!c?.name) return false;
+              const cNum = c.name.toString().replace(/[^0-9]/g, '');
+              return (studentGradeNum && cNum === studentGradeNum) || (c.name.toString().trim().toLowerCase() === studentGrade.toLowerCase());
+            });
+            if (matchingClass && Array.isArray(matchingClass.subjects) && matchingClass.subjects.length > 0) {
+              rawELearningSubjects = matchingClass.subjects.map((s: any) => s?.toString().trim()).filter(Boolean);
+            }
           }
 
-          // Deduplicate by normalized key while preserving clean human readable title
-          const activeELearningSubjectsMap = new Map<string, string>();
-          rawELearningSubjects.forEach(s => {
-            if (s) {
-              const key = s.trim().toLowerCase();
-              if (!activeELearningSubjectsMap.has(key)) {
-                activeELearningSubjectsMap.set(key, s.trim());
-              }
-            }
-          });
-          const activeELearningSubjects = Array.from(activeELearningSubjectsMap.values()).sort();
+          // Strict grade filtering and canonical deduplication
+          const activeELearningSubjects = filterSubjectsForStudentGrade(rawELearningSubjects, studentData?.grade || "");
 
           const isELearningSubjectMatch = (itemSubject: string | undefined, itemSubjects: string[] | undefined, target: string) => {
-            if (target === "All") return true;
+            if (target === "All") {
+              return doesItemMatchStudentSubjects({ subject: itemSubject, subjects: itemSubjects } as any, activeELearningSubjects);
+            }
 
             const allSubs = [
               itemSubject,
               ...(Array.isArray(itemSubjects) ? itemSubjects : [])
             ].filter((s): s is string => !!s);
 
-            return allSubs.some(s => areSubjectsMatching(s, target));
+            const targetCat = getCanonicalSubjectCategory(target);
+            return allSubs.some(s => {
+              const sCat = getCanonicalSubjectCategory(s);
+              if (targetCat && sCat) {
+                return sCat === targetCat;
+              }
+              return areSubjectsMatching(s, target);
+            });
           };
 
-          const filteredYoutubeLinks = selectedELearningSubject === "All"
-            ? youtubeLinks
-            : youtubeLinks.filter((link: any) => isELearningSubjectMatch(link.subject, link.subjects, selectedELearningSubject));
+          const filteredYoutubeLinks = youtubeLinks.filter((link: any) => 
+            isELearningSubjectMatch(link.subject, link.subjects, selectedELearningSubject)
+          );
 
-          const filteredWebPosts = selectedELearningSubject === "All"
-            ? webPosts
-            : webPosts.filter((post: any) => isELearningSubjectMatch(post.subject, post.subjects, selectedELearningSubject));
+          const filteredWebPosts = webPosts.filter((post: any) => 
+            isELearningSubjectMatch(post.subject, post.subjects, selectedELearningSubject)
+          );
 
           return (
             <div className="space-y-6">
@@ -2375,7 +2455,9 @@ export default function StudentDashboard() {
                         }}
                         className="bg-white border-2 border-indigo-200 text-slate-800 text-sm font-bold rounded-xl px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm cursor-pointer"
                       >
-                        <option value="All">அனைத்துப் பாடங்களும் (All Subjects)</option>
+                        {activeELearningSubjects.length > 1 && (
+                          <option value="All">அனைத்துப் பாடங்களும் (All Subjects)</option>
+                        )}
                         {activeELearningSubjects.map((sub: string) => (
                           <option key={sub} value={sub}>{sub}</option>
                         ))}
@@ -2386,21 +2468,23 @@ export default function StudentDashboard() {
                   {/* Subject Boxes / Cards */}
                   {activeELearningSubjects.length > 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 pt-1">
-                      <button
-                        onClick={() => setSelectedELearningSubject("All")}
-                        className={`p-3 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
-                          selectedELearningSubject === "All"
-                            ? "border-indigo-600 bg-indigo-600 text-white shadow-md font-bold"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300"
-                        }`}
-                      >
-                        <span className="text-xs font-black">All Subjects</span>
-                        <span className="text-[10px] opacity-80 mt-2 font-medium">அனைத்தும்</span>
-                      </button>
+                      {activeELearningSubjects.length > 1 && (
+                        <button
+                          onClick={() => setSelectedELearningSubject("All")}
+                          className={`p-3 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
+                            selectedELearningSubject === "All"
+                              ? "border-indigo-600 bg-indigo-600 text-white shadow-md font-bold"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300"
+                          }`}
+                        >
+                          <span className="text-xs font-black">All Subjects</span>
+                          <span className="text-[10px] opacity-80 mt-2 font-medium">அனைத்தும்</span>
+                        </button>
+                      )}
                       
                       {activeELearningSubjects.map((sub: string) => {
                         const color = getSubjectColorClasses(sub);
-                        const isSelected = selectedELearningSubject === sub;
+                        const isSelected = selectedELearningSubject === sub || (activeELearningSubjects.length === 1 && selectedELearningSubject === "All");
                         return (
                           <button
                             key={sub}
@@ -2433,10 +2517,12 @@ export default function StudentDashboard() {
                       <span className="text-slate-400">Selected Subject:</span>
                       <span className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-lg font-black flex items-center gap-1.5">
                         <CheckCircle2 size={14} className="text-indigo-600" />
-                        {selectedELearningSubject === "All" ? "அனைத்துப் பாடங்களும் (All Subjects)" : selectedELearningSubject}
+                        {activeELearningSubjects.length === 1
+                          ? activeELearningSubjects[0]
+                          : (selectedELearningSubject === "All" ? "அனைத்துப் பாடங்களும் (All Subjects)" : selectedELearningSubject)}
                       </span>
                     </div>
-                    {selectedELearningSubject !== "All" && (
+                    {activeELearningSubjects.length > 1 && selectedELearningSubject !== "All" && (
                       <button 
                         onClick={() => setSelectedELearningSubject("All")}
                         className="text-xs font-bold text-indigo-600 hover:underline"
@@ -2449,171 +2535,418 @@ export default function StudentDashboard() {
                 
                 {eLearningType === 'videos' ? (
                   <div className="space-y-4 pt-2">
+                    {/* Video Section Controls: Search, View Mode, Expand/Collapse */}
+                    {filteredYoutubeLinks.length > 0 && (
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pb-1">
+                        {/* Search Box */}
+                        <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+                          <input 
+                            type="text"
+                            placeholder="பாடங்கள் அல்லது வீடியோக்களைத் தேடுங்கள் (Search day, topic...)"
+                            value={videoSearchQuery}
+                            onChange={(e) => setVideoSearchQuery(e.target.value)}
+                            className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                          />
+                          {videoSearchQuery && (
+                            <button 
+                              onClick={() => setVideoSearchQuery("")}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-600"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* View Mode & Expand All */}
+                        <div className="flex items-center justify-between sm:justify-end gap-2">
+                          {(() => {
+                            const groupedFoldersMap: Record<string, any[]> = filteredYoutubeLinks.reduce((acc: any, link: any) => {
+                              const folder = link.folder || "இன்னும் வகைப்படுத்தப்படவில்லை (Uncategorized)";
+                              if (!acc[folder]) acc[folder] = [];
+                              acc[folder].push(link);
+                              return acc;
+                            }, {});
+                            const allFolders = Object.keys(groupedFoldersMap);
+                            const allExpanded = allFolders.length > 0 && allFolders.every(f => expandedFolders[f] !== false);
+
+                            return (
+                              <button
+                                onClick={() => {
+                                  const nextState: Record<string, boolean> = {};
+                                  allFolders.forEach(f => {
+                                    nextState[f] = !allExpanded;
+                                  });
+                                  setExpandedFolders(nextState);
+                                }}
+                                className="px-3 py-1.5 sm:py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors whitespace-nowrap shadow-2xs"
+                              >
+                                {allExpanded ? "அனைத்தும் சுருக்கு (Collapse All)" : "அனைத்தும் விரி (Expand All)"}
+                              </button>
+                            );
+                          })()}
+
+                          {/* Grid vs List toggle */}
+                          <div className="flex bg-slate-100 p-1 rounded-xl">
+                            <button
+                              onClick={() => setVideoViewMode("grid")}
+                              className={`p-1.5 rounded-lg transition-all ${videoViewMode === 'grid' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-400 hover:text-slate-700'}`}
+                              title="சதுர கிரிட் (Grid View)"
+                            >
+                              <Grid size={15} />
+                            </button>
+                            <button
+                              onClick={() => setVideoViewMode("list")}
+                              className={`p-1.5 rounded-lg transition-all ${videoViewMode === 'list' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-400 hover:text-slate-700'}`}
+                              title="பட்டியல் (List View)"
+                            >
+                              <List size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {filteredYoutubeLinks.length === 0 ? (
                       <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
                         <Youtube className="mx-auto h-12 w-12 text-slate-300 mb-3" />
                         <p className="font-bold">No videos found for this subject selection.</p>
                         <p className="text-xs text-slate-400 mt-1">Try selecting a different subject or "All Subjects".</p>
                       </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {Object.entries(filteredYoutubeLinks.reduce((acc: any, link: any) => {
-                          const folder = link.folder || "இன்னும் வகைப்படுத்தப்படவில்லை (Uncategorized)";
-                          if (!acc[folder]) acc[folder] = [];
-                          acc[folder].push(link);
-                          return acc;
-                        }, {})).sort(([folderA, linksA]: any, [folderB, linksB]: any) => {
-                          return getMaxElementTime(linksB) - getMaxElementTime(linksA);
-                        }).map(([folder, folderLinks]: [string, any]) => {
-                          const isExpanded = expandedFolders[folder] !== false; // Default expanded for clear visibility
-                          const folderColor = getFolderColor(folder);
-                          return (
-                            <div key={folder} className={`bg-white border ${folderColor.border} rounded-3xl overflow-hidden shadow-sm transition-all hover:shadow-md`}>
-                              {/* Accordion Header */}
-                              <button 
-                                onClick={() => setExpandedFolders(prev => ({ ...prev, [folder]: !isExpanded }))}
-                                className={`w-full flex items-center justify-between p-6 sm:p-7 hover:bg-white/50 transition-colors group ${folderColor.bg}`}
-                              >
-                              <div className="flex items-center gap-5 text-left">
-                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 ${isExpanded ? `${folderColor.icon} text-white shadow-lg ${folderColor.shadow} rotate-6` : `${folderColor.bg} ${folderColor.text} group-hover:scale-110 border ${folderColor.border}`}`}>
-                                  <Megaphone size={28} className={isExpanded ? "animate-pulse" : ""} />
-                                </div>
-                                <div>
-                                  {(() => {
-                                    const maxTime = getMaxElementTime(folderLinks);
-                                    return maxTime > 0 ? (
-                                      <p className="text-slate-400 text-xs font-semibold mb-1">
-                                        கடைசியாகப் புதுப்பிக்கப்பட்டது: {formatSafeDate(maxTime)} {formatSafeTimeString(maxTime, { hour: '2-digit', minute: '2-digit' })}
-                                      </p>
-                                    ) : null;
-                                  })()}
-                                  <h3 className={`text-xl font-black ${folderColor.text} leading-tight`}>
-                                    {folder}
-                                  </h3>
-                                  <p className="text-slate-500 text-sm font-medium mt-1">
-                                    {folderLinks.length} அலகுகள் மற்றும் RECORDING
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-6">
-                                <span className={`hidden sm:inline-flex text-sm font-black ${folderColor.text} ${folderColor.bg} px-3 py-1.5 rounded-xl border ${folderColor.border}`}>
-                                  {folderLinks.length} Videos
-                                </span>
-                                <div className={`transition-transform duration-500 ${isExpanded ? 'rotate-180' : ''} ${folderColor.text}`}>
-                                  <ChevronDown size={24} />
-                                </div>
-                              </div>
-                            </button>
+                    ) : (() => {
+                      const searchLower = videoSearchQuery.toLowerCase().trim();
 
-                            {/* Accordion Content - Image 2 Video Grid style */}
-                            <AnimatePresence>
-                              {isExpanded && (
-                                <motion.div
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: 'auto', opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  transition={{ duration: 0.4, ease: "easeInOut" }}
-                                  className="overflow-hidden"
-                                >
-                                  <div className="p-6 sm:p-8 pt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 bg-slate-50/50">
-                                    {[...folderLinks].sort((a: any, b: any) => {
-                                      return getElementTime(b) - getElementTime(a);
-                                    }).map((link: any, index: number) => {
-                                      const videoId = link.link.includes('youtu.be/') 
-                                        ? link.link.split('youtu.be/')[1].split('?')[0] 
-                                        : (link.link.includes('v=') ? link.link.split('v=')[1].split('&')[0] : null);
-                                      
-                                      return (
-                                        <motion.a
-                                          initial={{ opacity: 0, y: 20 }}
-                                          animate={{ opacity: 1, y: 0 }}
-                                          transition={{ delay: index * 0.05 }}
-                                          key={link.id}
-                                          href={link.link}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="group/item flex flex-col bg-white rounded-3xl overflow-hidden shadow-lg border-2 border-transparent hover:border-red-500 transition-all duration-300"
-                                        >
-                                          {/* Thumbnail container */}
-                                          <div className="aspect-video relative overflow-hidden bg-slate-900">
-                                            {videoId ? (
-                                              <img 
-                                                src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`} 
-                                                alt={link.title}
-                                                className="w-full h-full object-cover transition-transform duration-700 group-hover/item:scale-110 opacity-90 group-hover/item:opacity-100"
-                                                referrerPolicy="no-referrer"
-                                              />
-                                            ) : (
-                                              <div className="w-full h-full flex items-center justify-center text-red-500/20">
-                                                <Youtube size={64} />
-                                              </div>
-                                            )}
-                                            
-                                            {/* Video Overlay Info */}
-                                            <div className="absolute top-4 left-4 flex gap-2">
-                                              <span className="bg-red-600 text-white text-[10px] font-black px-2.5 py-1 rounded-lg shadow-lg uppercase tracking-tighter">
-                                                TAMIL
-                                              </span>
-                                            </div>
-                                            
-                                            {/* Play Button Overlay */}
-                                            <div className="absolute inset-0 bg-black/40 group-hover/item:bg-black/10 transition-all flex items-center justify-center">
-                                              <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center text-white scale-90 group-hover/item:scale-100 transition-transform shadow-[0_0_40px_rgba(220,38,38,0.5)] border-4 border-white/20">
-                                                <Play size={32} className="ml-1" fill="currentColor" />
-                                              </div>
-                                            </div>
-                                            
-                                            {/* Index Batch */}
-                                            <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-xl shadow-lg">
-                                              <span className="text-slate-900 font-black text-sm">
-                                                {String(index + 1).padStart(2, '0')}
-                                              </span>
-                                            </div>
-                                          </div>
-                                          
-                                          {/* Content */}
-                                          <div className="p-6">
-                                            <div className="flex items-center gap-2 mb-3">
-                                              <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center">
-                                                <BookOpen size={12} className="text-indigo-600" />
-                                              </div>
-                                              <span className="text-indigo-600 text-xs font-black uppercase tracking-widest">
-                                                {(link.subjects && link.subjects.length > 0 ? link.subjects.join(', ') : link.subject) || "E-Learning"}
-                                              </span>
-                                            </div>
-                                            
-                                            <h4 className="text-lg font-black text-slate-800 leading-tight line-clamp-2 h-14 group-hover/item:text-red-600 transition-colors">
-                                              {link.title}
-                                            </h4>
-                                            
-                                            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                                              <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover/item:bg-red-50 group-hover/item:text-red-500 transition-colors">
-                                                  <Youtube size={16} />
-                                                </div>
-                                                <span className="text-xs font-bold text-slate-500 group-hover/item:text-slate-800 transition-colors">YouTube Link</span>
-                                              </div>
-                                              {link.date && parseSafeDate(link.date) && (
-                                                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
-                                                  {formatSafeDate(link.date, { day: 'numeric', month: 'short' })}
-                                                </span>
-                                              )}
-                                            </div>
-                                          </div>
-                                        </motion.a>
-                                      );
-                                    })}
-                                  </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
+                      // Group links by folder
+                      const grouped: Record<string, any[]> = filteredYoutubeLinks.reduce((acc: any, link: any) => {
+                        const folder = link.folder || "இன்னும் வகைப்படுத்தப்படவில்லை (Uncategorized)";
+                        if (!acc[folder]) acc[folder] = [];
+                        acc[folder].push(link);
+                        return acc;
+                      }, {});
+
+                      // Filter by search query if any
+                      const matchingFolders = Object.entries(grouped).map(([folder, links]) => {
+                        if (!searchLower) return [folder, links] as [string, any[]];
+                        
+                        const folderMatches = folder.toLowerCase().includes(searchLower);
+                        const matchingLinks = (links as any[]).filter((link: any) => {
+                          return (link.title && link.title.toLowerCase().includes(searchLower)) ||
+                            (link.subject && link.subject.toLowerCase().includes(searchLower)) ||
+                            (Array.isArray(link.subjects) && link.subjects.some((s: string) => s.toLowerCase().includes(searchLower)));
+                        });
+
+                        if (folderMatches) {
+                          return [folder, links] as [string, any[]];
+                        } else if (matchingLinks.length > 0) {
+                          return [folder, matchingLinks] as [string, any[]];
+                        }
+                        return null;
+                      }).filter(Boolean) as [string, any[]][];
+
+                      if (matchingFolders.length === 0) {
+                        return (
+                          <div className="text-center py-10 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200">
+                            <Search className="mx-auto h-10 w-10 text-slate-300 mb-2" />
+                            <p className="font-bold text-sm text-slate-700">தேடலுக்குப் பொருத்தமான வீடியோக்கள் இல்லை</p>
+                            <p className="text-xs text-slate-400 mt-1">"{videoSearchQuery}" தொடர்பான பதிவுகள் கிடைக்கவில்லை.</p>
+                            <button
+                              onClick={() => setVideoSearchQuery("")}
+                              className="mt-3 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-bold"
+                            >
+                              தேடலை அழிக்க (Clear Search)
+                            </button>
                           </div>
                         );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ) : (
+                      }
+
+                      // Sort folders by max element time (most recent first)
+                      const sortedFolders = matchingFolders.sort(([folderA, linksA]: any, [folderB, linksB]: any) => {
+                        return getMaxElementTime(linksB) - getMaxElementTime(linksA);
+                      });
+
+                      return (
+                        <div className="space-y-3.5">
+                          {sortedFolders.map(([folder, folderLinks]: [string, any], folderIndex: number) => {
+                            // First folder defaults open, or if searching default open, or check user toggle
+                            const isExpanded = videoSearchQuery.trim() !== "" 
+                              ? (expandedFolders[folder] !== false)
+                              : (expandedFolders[folder] ?? (folderIndex === 0));
+                            const folderColor = getFolderColor(folder);
+                            const parsed = parseFolderTitle(folder);
+                            const maxTime = getMaxElementTime(folderLinks);
+
+                            return (
+                              <div 
+                                key={folder} 
+                                className={`bg-white border transition-all duration-200 rounded-2xl overflow-hidden shadow-2xs ${
+                                  isExpanded ? `${folderColor.border} ring-1 ring-indigo-500/10 shadow-sm` : 'border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
+                                {/* Sleek Compact Accordion Header */}
+                                <button 
+                                  onClick={() => setExpandedFolders(prev => ({ ...prev, [folder]: !isExpanded }))}
+                                  className={`w-full flex items-center justify-between p-3 sm:p-4 text-left transition-colors group ${
+                                    isExpanded ? `${folderColor.bg}` : 'hover:bg-slate-50/80 bg-white'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1 pr-2">
+                                    {/* Icon Badge */}
+                                    <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-300 ${
+                                      isExpanded 
+                                        ? `${folderColor.icon} text-white shadow-md ${folderColor.shadow}` 
+                                        : `${folderColor.bg} ${folderColor.text} border ${folderColor.border} group-hover:scale-105`
+                                    }`}>
+                                      <Youtube size={20} className={isExpanded ? "scale-110" : ""} />
+                                    </div>
+
+                                    {/* Title & Metadata */}
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                        {parsed.dayBadge && (
+                                          <span className="bg-indigo-600 text-white text-[10px] sm:text-[11px] font-black px-2 py-0.5 rounded-md shadow-2xs whitespace-nowrap">
+                                            {parsed.dayBadge}
+                                          </span>
+                                        )}
+                                        <h3 className="text-xs sm:text-sm md:text-base font-black text-slate-800 leading-snug line-clamp-1 group-hover:text-indigo-600 transition-colors">
+                                          {parsed.title}
+                                        </h3>
+                                      </div>
+
+                                      <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium mt-0.5">
+                                        <span className="font-bold text-indigo-600">
+                                          {folderLinks.length} வீடியோக்கள்
+                                        </span>
+                                        {maxTime > 0 && (
+                                          <>
+                                            <span className="text-slate-300">•</span>
+                                            <span className="text-slate-400 line-clamp-1">
+                                              {formatSafeDate(maxTime, { day: 'numeric', month: 'short' })}
+                                            </span>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Right side: Video count pill & Chevron */}
+                                  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                    <span className={`text-[11px] sm:text-xs font-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg border ${folderColor.border} ${folderColor.bg} ${folderColor.text} whitespace-nowrap`}>
+                                      {folderLinks.length} Videos
+                                    </span>
+                                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-slate-400 group-hover:text-slate-700 transition-transform duration-300 ${
+                                      isExpanded ? 'rotate-180 bg-slate-100 text-slate-700' : ''
+                                    }`}>
+                                      <ChevronDown size={16} />
+                                    </div>
+                                  </div>
+                                </button>
+
+                                {/* Accordion Content: Compact Square Video Grid */}
+                                <AnimatePresence>
+                                  {isExpanded && (
+                                    <motion.div
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: 'auto', opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      transition={{ duration: 0.3, ease: "easeInOut" }}
+                                      className="overflow-hidden border-t border-slate-100 bg-slate-50/60"
+                                    >
+                                      <div className="p-2.5 sm:p-4">
+                                        {videoViewMode === "grid" ? (
+                                          /* 2 Columns on Mobile, 3 on Tablet, 4 on Desktop: Square-ish Compact Cards */
+                                          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+                                            {[...folderLinks].sort((a: any, b: any) => {
+                                              return getElementTime(b) - getElementTime(a);
+                                            }).map((link: any, index: number) => {
+                                              const videoId = getYouTubeVideoId(link.link);
+
+                                              return (
+                                                <motion.div
+                                                  initial={{ opacity: 0, scale: 0.95 }}
+                                                  animate={{ opacity: 1, scale: 1 }}
+                                                  transition={{ delay: Math.min(index * 0.03, 0.3) }}
+                                                  key={link.id || index}
+                                                  className="group/item flex flex-col bg-white rounded-xl sm:rounded-2xl overflow-hidden shadow-2xs hover:shadow-md border border-slate-200/90 hover:border-red-400 transition-all duration-200"
+                                                >
+                                                  {/* Compact Thumbnail Container (Aspect 16/10 for balanced square proportion) */}
+                                                  <div 
+                                                    onClick={() => setActiveWatchVideo(link)}
+                                                    className="aspect-[16/10] relative overflow-hidden bg-slate-900 cursor-pointer"
+                                                  >
+                                                    {videoId ? (
+                                                      <img 
+                                                        src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`} 
+                                                        alt={link.title}
+                                                        className="w-full h-full object-cover transition-transform duration-500 group-hover/item:scale-105"
+                                                        referrerPolicy="no-referrer"
+                                                        loading="lazy"
+                                                      />
+                                                    ) : (
+                                                      <div className="w-full h-full flex items-center justify-center text-red-500/30">
+                                                        <Youtube size={32} />
+                                                      </div>
+                                                    )}
+
+                                                    {/* Top-Left: Lesson Index Badge */}
+                                                    <div className="absolute top-1.5 left-1.5 z-10">
+                                                      <span className="bg-black/75 backdrop-blur-xs text-white text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 rounded shadow-xs">
+                                                        {String(index + 1).padStart(2, '0')}
+                                                      </span>
+                                                    </div>
+
+                                                    {/* Top-Right: Subject Badge */}
+                                                    <div className="absolute top-1.5 right-1.5 z-10 max-w-[55%]">
+                                                      <span className="bg-red-600 text-white text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 rounded shadow-xs tracking-tight line-clamp-1 block truncate">
+                                                        {formatSubjectDisplayName((link.subjects && link.subjects.length > 0 ? link.subjects[0] : link.subject) || "தமிழ்")}
+                                                      </span>
+                                                    </div>
+
+                                                    {/* Center Play Button Overlay */}
+                                                    <div className="absolute inset-0 bg-black/25 group-hover/item:bg-black/10 transition-colors flex items-center justify-center">
+                                                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-red-600 rounded-full flex items-center justify-center text-white scale-95 group-hover/item:scale-110 transition-transform shadow-[0_2px_12px_rgba(220,38,38,0.5)] border-2 border-white/30">
+                                                        <Play size={14} className="ml-0.5" fill="currentColor" />
+                                                      </div>
+                                                    </div>
+                                                  </div>
+
+                                                  {/* Compact Card Content */}
+                                                  <div className="p-2 sm:p-3 flex flex-col flex-1 justify-between gap-2">
+                                                    <div>
+                                                      <h4 
+                                                        onClick={() => setActiveWatchVideo(link)}
+                                                        className="text-[11px] sm:text-xs md:text-sm font-black text-slate-800 leading-snug line-clamp-2 min-h-[1.8rem] sm:min-h-[2.2rem] group-hover/item:text-red-600 transition-colors cursor-pointer"
+                                                        title={link.title}
+                                                      >
+                                                        {link.title}
+                                                      </h4>
+                                                    </div>
+
+                                                    {/* Bottom Row: YouTube link + Date */}
+                                                    <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between gap-1 text-[10px] sm:text-xs">
+                                                      <a
+                                                        href={link.link}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="inline-flex items-center gap-1 font-bold text-red-600 hover:text-red-700 hover:underline"
+                                                      >
+                                                        <Youtube size={13} className="shrink-0" />
+                                                        <span className="text-[10px] sm:text-[11px]">YouTube</span>
+                                                      </a>
+
+                                                      {link.date && parseSafeDate(link.date) && (
+                                                        <span className="text-[9px] sm:text-[10px] font-semibold text-slate-400">
+                                                          {formatSafeDate(link.date, { day: 'numeric', month: 'short' })}
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                </motion.div>
+                                              );
+                                            })}
+                                          </div>
+                                        ) : (
+                                          /* Compact Horizontal List View */
+                                          <div className="space-y-2">
+                                            {[...folderLinks].sort((a: any, b: any) => {
+                                              return getElementTime(b) - getElementTime(a);
+                                            }).map((link: any, index: number) => {
+                                              const videoId = getYouTubeVideoId(link.link);
+
+                                              return (
+                                                <div 
+                                                  key={link.id || index}
+                                                  className="flex items-center gap-2.5 sm:gap-3 p-2 sm:p-2.5 bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 hover:border-red-400 hover:shadow-xs transition-all"
+                                                >
+                                                  {/* Left: Mini Square Thumbnail */}
+                                                  <div 
+                                                    onClick={() => setActiveWatchVideo(link)}
+                                                    className="w-20 sm:w-28 aspect-video sm:aspect-square rounded-lg sm:rounded-xl overflow-hidden bg-slate-900 relative shrink-0 cursor-pointer"
+                                                  >
+                                                    {videoId ? (
+                                                      <img 
+                                                        src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`} 
+                                                        alt={link.title} 
+                                                        className="w-full h-full object-cover" 
+                                                        referrerPolicy="no-referrer"
+                                                        loading="lazy"
+                                                      />
+                                                    ) : (
+                                                      <div className="w-full h-full flex items-center justify-center text-red-500">
+                                                        <Youtube size={20} />
+                                                      </div>
+                                                    )}
+                                                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                                                      <div className="w-6 h-6 bg-red-600 rounded-full flex items-center justify-center text-white">
+                                                        <Play size={10} className="ml-0.5" fill="currentColor" />
+                                                      </div>
+                                                    </div>
+                                                    <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[8px] sm:text-[9px] font-bold px-1 rounded">
+                                                      {String(index + 1).padStart(2, '0')}
+                                                    </span>
+                                                  </div>
+
+                                                  {/* Middle: Title & Subject */}
+                                                  <div className="flex-1 min-w-0">
+                                                    <h4 
+                                                      onClick={() => setActiveWatchVideo(link)}
+                                                      className="text-xs sm:text-sm font-black text-slate-800 line-clamp-1 cursor-pointer hover:text-red-600"
+                                                      title={link.title}
+                                                    >
+                                                      {link.title}
+                                                    </h4>
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                      <span className="text-[10px] text-indigo-600 font-bold line-clamp-1">
+                                                        {(link.subjects && link.subjects.length > 0 ? link.subjects.map(formatSubjectDisplayName).join(', ') : formatSubjectDisplayName(link.subject)) || "E-Learning"}
+                                                      </span>
+                                                      {link.date && parseSafeDate(link.date) && (
+                                                        <>
+                                                          <span className="text-slate-300">•</span>
+                                                          <span className="text-[10px] text-slate-400">
+                                                            {formatSafeDate(link.date, { day: 'numeric', month: 'short' })}
+                                                          </span>
+                                                        </>
+                                                      )}
+                                                    </div>
+                                                  </div>
+
+                                                  {/* Right: Watch Button */}
+                                                  <div className="flex items-center gap-1.5 shrink-0">
+                                                    <button
+                                                      onClick={() => setActiveWatchVideo(link)}
+                                                      className="p-1.5 sm:px-2.5 sm:py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 text-xs font-bold rounded-lg transition-colors"
+                                                      title="Watch inside app"
+                                                    >
+                                                      <Play size={13} />
+                                                    </button>
+                                                    <a
+                                                      href={link.link}
+                                                      target="_blank"
+                                                      rel="noreferrer"
+                                                      className="p-1.5 sm:px-2.5 sm:py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
+                                                      title="Open on YouTube"
+                                                    >
+                                                      <Youtube size={14} />
+                                                      <span className="hidden sm:inline">YouTube</span>
+                                                    </a>
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
                 <div className="space-y-12">
                   {filteredWebPosts.length === 0 ? (
                     <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
@@ -2666,7 +2999,7 @@ export default function StudentDashboard() {
                                     <div className="flex-1">
                                       <div className="flex items-center justify-between gap-2 mb-2">
                                         <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                                          {post.subjects && post.subjects.length > 0 ? post.subjects.join(', ') : post.subject}
+                                          {post.subjects && post.subjects.length > 0 ? post.subjects.map(formatSubjectDisplayName).join(', ') : formatSubjectDisplayName(post.subject)}
                                         </span>
                                         {post.date && parseSafeDate(post.date) && (
                                           <span className="text-[10px] font-bold text-slate-400">
@@ -4183,6 +4516,95 @@ export default function StudentDashboard() {
           </div>
         </div>
       )}
+
+      {/* In-app YouTube Video Player Modal */}
+      <AnimatePresence>
+        {activeWatchVideo && (
+          <div 
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
+            onClick={() => setActiveWatchVideo(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-900 text-white rounded-2xl sm:rounded-3xl overflow-hidden max-w-3xl w-full shadow-2xl border border-slate-800 flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800 bg-slate-950/60">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                  <div className="w-8 h-8 rounded-xl bg-red-600/20 text-red-500 flex items-center justify-center shrink-0">
+                    <Youtube size={18} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-bold text-xs sm:text-sm md:text-base truncate">
+                      {activeWatchVideo.title}
+                    </h3>
+                    <p className="text-[10px] sm:text-[11px] text-slate-400">
+                      {(activeWatchVideo.subjects && activeWatchVideo.subjects.length > 0 ? activeWatchVideo.subjects.map(formatSubjectDisplayName).join(', ') : formatSubjectDisplayName(activeWatchVideo.subject)) || "E-Learning"}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setActiveWatchVideo(null)}
+                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors shrink-0"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Embedded Player */}
+              <div className="relative aspect-video bg-black w-full">
+                {(() => {
+                  const vidId = getYouTubeVideoId(activeWatchVideo.link);
+                  return vidId ? (
+                    <iframe
+                      src={`https://www.youtube-nocookie.com/embed/${vidId}?autoplay=1&rel=0`}
+                      title={activeWatchVideo.title}
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center text-slate-400">
+                      <Youtube size={48} className="text-red-500 mb-3" />
+                      <p className="text-sm font-bold text-white">நேரடி YouTube இணைப்பு</p>
+                      <a 
+                        href={activeWatchVideo.link} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all"
+                      >
+                        YouTube-ல் பார்க்க
+                      </a>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Footer */}
+              <div className="p-3 sm:p-3.5 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between flex-wrap gap-2 text-xs">
+                <span className="text-[11px] text-slate-400">
+                  {activeWatchVideo.date && parseSafeDate(activeWatchVideo.date) ? `தேதி: ${formatSafeDate(activeWatchVideo.date)}` : 'பதிவு செய்யப்பட்டுள்ளது'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={activeWatchVideo.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                  >
+                    <Youtube size={14} />
+                    YouTube App-ல் திறக்க
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
