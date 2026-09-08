@@ -7,7 +7,7 @@ import * as XLSX from "xlsx";
 import { 
   Printer, X, QrCode, Download, FileText, Copy, Check, User, LayoutGrid, List, Search, Eye, Edit, Trash2, 
   ArrowLeft, BookOpen, ShieldCheck, ShieldAlert, RefreshCw, UserPlus, Users, Upload, Key, CheckCircle2, 
-  AlertTriangle, Sparkles, Phone, MapPin, Calendar, Lock, GraduationCap, School, Shield, Image as ImageIcon, 
+  AlertTriangle, AlertCircle, Sparkles, Phone, MapPin, Calendar, Lock, GraduationCap, School, Shield, Image as ImageIcon, 
   CheckSquare, Square, Info, ChevronRight, Hash, Trash, CheckCircle, Share2, MessageSquare
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
@@ -380,52 +380,62 @@ export default function Students() {
       return;
     }
     
+    const cleanRollNo = formData.rollNo ? formData.rollNo.toString().trim() : "";
+
+    // 1. Strict Duplicate Roll Number Check for NEW student
+    if (cleanRollNo) {
+      const duplicateStudentByRoll = students.find((s: any) => {
+        if (!s || !s.rollNo) return false;
+        return String(s.rollNo).trim().toLowerCase() === cleanRollNo.toLowerCase();
+      });
+
+      if (duplicateStudentByRoll) {
+        alert(`ரோல் நம்பர் ஏற்கனவே பதிவு செய்யப்பட்டிருக்கிறது!\n\n("${cleanRollNo}" என்ற ரோல் எண் ஏற்கனவே "${duplicateStudentByRoll.name || duplicateStudentByRoll.username}" (${duplicateStudentByRoll.grade || 'வகுப்பு குறிப்பிடப்படவில்லை'}) என்ற மாணவருக்கு பதிவு செய்யப்பட்டுள்ளது. தயவுசெய்து வேறு ரோல் நம்பரை உள்ளிடவும்.)`);
+        return;
+      }
+    }
+
+    // 2. Duplicate Username Check for NEW student
+    const targetUser = formData.username.trim().toLowerCase();
+    if (targetUser && targetUser !== 'student') {
+      const duplicateStudentByUser = students.find((s: any) => {
+        if (!s || !s.username) return false;
+        return String(s.username).trim().toLowerCase() === targetUser;
+      });
+
+      if (duplicateStudentByUser) {
+        alert(`பயனர்பெயர் (Username: "${formData.username}") ஏற்கனவே பயன்பாட்டில் உள்ளது! தயவுசெய்து வேறு பயனர்பெயரை உள்ளிடவும்.`);
+        return;
+      }
+    }
+
     setUpdateProgress(30);
     
     try {
       const currentStudents = await getStudents();
-      const targetUser = formData.username.trim().toLowerCase();
-      const targetUserNorm = targetUser.replace(/[\s_\-\.]+/g, '');
-      const cleanRollNo = formData.rollNo ? formData.rollNo.toString().trim() : "";
-      const cleanNameNorm = formData.name.trim().toLowerCase().replace(/[\s_\-\.]+/g, '');
 
-      // Check if this student already exists by exact ID or username
-      const existingStudentIndex = currentStudents.findIndex((s: any) => {
-        if (!s) return false;
-        const sUser = s.username ? String(s.username).trim().toLowerCase() : "";
-        const sId = s.id ? String(s.id).trim().toLowerCase() : "";
-
-        if ((formData as any).id && sId === String((formData as any).id).trim().toLowerCase()) return true;
-        if (targetUser && targetUser !== 'student' && sUser && sUser === targetUser) return true;
-        return false;
-      });
-
-      let updatedStudents: any[];
-
-      if (existingStudentIndex !== -1) {
-        // Update existing record and preserve stable ID
-        const existingStudent = currentStudents[existingStudentIndex];
-        updatedStudents = currentStudents.map((s: any, idx: number) => {
-          if (idx === existingStudentIndex) {
-            return {
-              ...existingStudent,
-              ...formData,
-              rollNo: cleanRollNo || existingStudent.rollNo || "",
-              id: existingStudent.id
-            };
-          }
-          return s;
+      // Double check in fresh database snapshot
+      if (cleanRollNo) {
+        const duplicateInDb = currentStudents.find((s: any) => {
+          if (!s || !s.rollNo) return false;
+          return String(s.rollNo).trim().toLowerCase() === cleanRollNo.toLowerCase();
         });
-      } else {
-        // Create new student
-        const generatedId = (formData as any).id || "STU" + Math.floor(100000 + Math.random() * 900000);
-        const newStudent = {
-          ...formData,
-          rollNo: cleanRollNo,
-          id: String(generatedId)
-        };
-        updatedStudents = [newStudent, ...currentStudents.filter((s: any) => String(s.id) !== String(newStudent.id))];
+
+        if (duplicateInDb) {
+          setUpdateProgress(-1);
+          alert(`ரோல் நம்பர் ஏற்கனவே பதிவு செய்யப்பட்டிருக்கிறது!\n\n("${cleanRollNo}" என்ற ரோல் எண் ஏற்கனவே "${duplicateInDb.name || duplicateInDb.username}" (${duplicateInDb.grade || ''}) என்ற மாணவருக்கு பதிவு செய்யப்பட்டுள்ளது. தயவுசெய்து வேறு ரோல் நம்பரை உள்ளிடவும்.)`);
+          return;
+        }
       }
+
+      // Create new student with unique ID
+      const generatedId = (formData as any).id || "STU" + Math.floor(100000 + Math.random() * 900000);
+      const newStudent = {
+        ...formData,
+        rollNo: cleanRollNo,
+        id: String(generatedId)
+      };
+      const updatedStudents = [newStudent, ...currentStudents.filter((s: any) => String(s.id) !== String(newStudent.id))];
       
       setUpdateProgress(70);
       
@@ -436,7 +446,7 @@ export default function Students() {
       setUpdateProgress(100);
       
       setTimeout(() => {
-        alert("Student saved successfully!");
+        alert("மாணவர் சேர்க்கை வெற்றிகரமாக சேர்க்கப்பட்டது! / Student saved successfully!");
         resetForm();
         setView("menu");
         setUpdateProgress(-1);
@@ -455,29 +465,56 @@ export default function Students() {
       return;
     }
     
+    const cleanRollNo = formData.rollNo ? formData.rollNo.toString().trim() : "";
+    const targetId = editingStudentId ? String(editingStudentId).trim().toLowerCase() : "";
+
+    // Check if roll number changed to another student's existing roll number
+    if (cleanRollNo) {
+      const duplicateStudentByRoll = students.find((s: any) => {
+        if (!s || !s.rollNo) return false;
+        const sId = s.id ? String(s.id).trim().toLowerCase() : "";
+        // If editing the SAME student, their own roll number is NEVER a duplicate!
+        if (targetId && sId === targetId) return false;
+        return String(s.rollNo).trim().toLowerCase() === cleanRollNo.toLowerCase();
+      });
+
+      if (duplicateStudentByRoll) {
+        alert(`ரோல் நம்பர் ஏற்கனவே பதிவு செய்யப்பட்டிருக்கிறது!\n\n("${cleanRollNo}" என்ற ரோல் எண் ஏற்கனவே வேறொரு மாணவருக்கு ("${duplicateStudentByRoll.name || duplicateStudentByRoll.username}") பதிவு செய்யப்பட்டுள்ளது. தயவுசெய்து வேறு ரோல் நம்பரை பயன்படுத்தவும்.)`);
+        return;
+      }
+    }
+
     setUpdateProgress(30);
     
     try {
       const currentStudents = await getStudents();
-      const targetId = editingStudentId ? String(editingStudentId).trim().toLowerCase() : "";
       const targetUser = formData.username ? formData.username.trim().toLowerCase() : "";
-      const targetUserNorm = targetUser.replace(/[\s_\-\.]+/g, '');
-      const cleanRollNo = formData.rollNo ? formData.rollNo.toString().trim() : "";
+
+      // Double check in fresh database snapshot for other students
+      if (cleanRollNo) {
+        const duplicateInDb = currentStudents.find((s: any) => {
+          if (!s || !s.rollNo) return false;
+          const sId = s.id ? String(s.id).trim().toLowerCase() : "";
+          if (targetId && sId === targetId) return false;
+          return String(s.rollNo).trim().toLowerCase() === cleanRollNo.toLowerCase();
+        });
+
+        if (duplicateInDb) {
+          setUpdateProgress(-1);
+          alert(`ரோல் நம்பர் ஏற்கனவே பதிவு செய்யப்பட்டிருக்கிறது!\n\n("${cleanRollNo}" என்ற ரோல் எண் ஏற்கனவே வேறொரு மாணவருக்கு பதிவு செய்யப்பட்டுள்ளது.)`);
+          return;
+        }
+      }
 
       let matched = false;
       const updatedStudents = currentStudents.map((s: any) => {
         const sId = s.id ? String(s.id).trim().toLowerCase() : "";
-        const sUser = s.username ? String(s.username).trim().toLowerCase() : "";
-        const sUserNorm = sUser.replace(/[\s_\-\.]+/g, '');
-
-        const isMatch = (targetId && sId === targetId) ||
-                        (targetUser && (sUser === targetUser || sUserNorm === targetUserNorm));
-        if (isMatch) {
+        if (targetId && sId === targetId) {
           matched = true;
           return { 
             ...s, 
             ...formData, 
-            rollNo: cleanRollNo || s.rollNo || "",
+            rollNo: cleanRollNo,
             id: s.id || targetId || "STU" + Math.floor(100000 + Math.random() * 900000)
           };
         }
@@ -500,7 +537,7 @@ export default function Students() {
       setUpdateProgress(100);
 
       setTimeout(() => {
-        alert("Student updated successfully!");
+        alert("மாணவர் விபரங்கள் வெற்றிகரமாக சேமிக்கப்பட்டன! / Student updated successfully!");
         resetForm();
         setEditingStudentId(null);
         setView("view");
@@ -1308,6 +1345,19 @@ ${portalUrl}
   }
 
   if (view === "add" || view === "edit") {
+    // Check if roll number is already taken by another student
+    const cleanRollNoInput = formData.rollNo ? formData.rollNo.toString().trim() : "";
+    const duplicateRollStudent = cleanRollNoInput
+      ? students.find((s: any) => {
+          if (!s || !s.rollNo) return false;
+          const sId = s.id ? String(s.id).trim().toLowerCase() : "";
+          if (view === "edit" && editingStudentId && sId === String(editingStudentId).trim().toLowerCase()) {
+            return false;
+          }
+          return String(s.rollNo).trim().toLowerCase() === cleanRollNoInput.toLowerCase();
+        })
+      : null;
+
     // Helper when class changes - purely updates grade without auto-checking subjects
     const handleClassChange = (selectedGrade: string) => {
       setFormData(prev => ({ ...prev, grade: selectedGrade }));
@@ -1315,17 +1365,26 @@ ${portalUrl}
 
     // Helper to auto-suggest roll number if empty
     const handleSuggestRollNo = () => {
+      const existingRollSet = new Set(
+        students.map(s => String(s.rollNo || '').trim().toLowerCase())
+      );
       if (formData.grade) {
         const gradeStudents = students.filter(s => s.grade === formData.grade && s.rollNo);
-        const maxRoll = gradeStudents.reduce((max, s) => {
+        let maxRoll = gradeStudents.reduce((max, s) => {
           const num = parseInt(s.rollNo, 10);
           return !isNaN(num) && num > max ? num : max;
         }, 0);
-        const nextRoll = maxRoll > 0 ? (maxRoll + 1).toString() : "101";
-        setFormData(prev => ({ ...prev, rollNo: nextRoll }));
+        let candidate = maxRoll > 0 ? maxRoll + 1 : 101;
+        while (existingRollSet.has(candidate.toString().toLowerCase())) {
+          candidate++;
+        }
+        setFormData(prev => ({ ...prev, rollNo: candidate.toString() }));
       } else {
-        const nextRoll = "10" + (students.length + 1);
-        setFormData(prev => ({ ...prev, rollNo: nextRoll }));
+        let candidate = 100 + students.length + 1;
+        while (existingRollSet.has(candidate.toString().toLowerCase())) {
+          candidate++;
+        }
+        setFormData(prev => ({ ...prev, rollNo: candidate.toString() }));
       }
     };
 
@@ -1475,15 +1534,30 @@ ${portalUrl}
                     </button>
                   </div>
                   <div className="relative">
-                    <Hash size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Hash size={15} className={`absolute left-3 top-1/2 -translate-y-1/2 ${duplicateRollStudent ? 'text-rose-500' : 'text-slate-400'}`} />
                     <input
                       type="text"
                       placeholder="எ.கா. 101, 202401"
                       value={formData.rollNo}
                       onChange={(e) => setFormData({...formData, rollNo: e.target.value})}
-                      className="w-full pl-9 pr-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                      className={`w-full pl-9 pr-3.5 py-2 border rounded-xl text-sm font-mono transition-colors ${
+                        duplicateRollStudent 
+                          ? 'border-rose-400 bg-rose-50/40 text-rose-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-500' 
+                          : 'border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+                      }`}
                     />
                   </div>
+                  {duplicateRollStudent && (
+                    <div className="mt-1.5 flex items-start gap-1.5 p-2 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold">
+                      <AlertCircle size={15} className="text-rose-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">ரோல் நம்பர் ஏற்கனவே பதிவு செய்யப்பட்டிருக்கிறது!</p>
+                        <p className="text-[11px] text-rose-600 font-normal mt-0.5">
+                          "{formData.rollNo.trim()}" என்ற எண் ஏற்கனவே <strong>{duplicateRollStudent.name || duplicateRollStudent.username}</strong> {duplicateRollStudent.grade ? `(${duplicateRollStudent.grade})` : ''} என்ற மாணவருக்கு பதிவு செய்யப்பட்டுள்ளது.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Student Code / Index (Optional) */}
