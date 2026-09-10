@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getTimeTable, addNotification } from '../lib/db';
+import { getTimeTable } from '../lib/db';
 
 export interface TimetableReminder {
   id: string;
@@ -114,7 +114,8 @@ export function useTimetableNotifications(
           activeReminders.push(reminderObj);
 
           // Browser Desktop Notification
-          const notificationKey = `notified_tt_${entry.id}_${todayStr}_${diffMinutes <= 30 ? '30m' : '60m'}`;
+          const entryId = entry.id || `${entry.grade || 'all'}_${entry.subject || 'sub'}_${entry.startTime || 'time'}`.replace(/[^a-zA-Z0-9]/g, '_');
+          const notificationKey = `notified_tt_${entryId}_${todayStr}_${diffMinutes <= 30 ? '30m' : '60m'}`;
           if (!localStorage.getItem(notificationKey)) {
             localStorage.setItem(notificationKey, 'true');
 
@@ -123,24 +124,11 @@ export function useTimetableNotifications(
                 new Notification(`Class Reminder: ${entry.subject}`, {
                   body: message,
                   icon: '/logo.png',
-                  tag: entry.id
+                  tag: `class-${entryId}`
                 });
               } catch (e) {
                 console.warn('Browser notification error:', e);
               }
-            }
-
-            // Persist to central notification list for student grade / admin
-            try {
-              await addNotification({
-                grade: entry.grade || 'All',
-                title: `Upcoming Class Reminder: ${entry.subject}`,
-                message: message,
-                type: 'zoom_class',
-                createdAt: new Date().toISOString()
-              });
-            } catch (err) {
-              console.warn('Could not store timetable notification:', err);
             }
           }
         }

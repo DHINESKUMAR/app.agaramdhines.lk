@@ -132,13 +132,14 @@ export default function Home() {
     // Check for existing session (Permanent Remember Login)
     const session = getUserSession();
     if (session && session.role) {
-      if (session.role === 'Admin') {
+      const role = String(session.role).toLowerCase();
+      if (role === 'admin') {
         navigate('/admin', { replace: true });
         return;
-      } else if (session.role === 'Staff') {
+      } else if (role === 'staff') {
         navigate('/staff-dashboard', { state: session, replace: true });
         return;
-      } else if (session.role === 'Student') {
+      } else if (role === 'student') {
         navigate('/student-dashboard', { state: session, replace: true });
         return;
       }

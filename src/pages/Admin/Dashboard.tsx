@@ -50,7 +50,8 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
   const isChatOpen = location.pathname === "/admin/live-chat" || isChatModalOpen;
-  const { unreadCount, markAsRead } = useChatNotifications({ id: "admin-1", name: "Admin", role: "Admin" }, isChatOpen);
+  const adminUser = React.useMemo(() => ({ id: "admin-1", name: "Admin", role: "Admin" }), []);
+  const { unreadCount, markAsRead } = useChatNotifications(adminUser, isChatOpen);
 
   const { notifications } = useHomeworkNotifications('admin');
   const { reminders: timetableReminders } = useTimetableNotifications('admin');
@@ -83,7 +84,8 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const session = getUserSession();
-    if (!session || session.role !== 'Admin') {
+    const role = (session?.role || '').toString().toLowerCase();
+    if (!session || role !== 'admin') {
       navigate('/', { replace: true });
       return;
     }
