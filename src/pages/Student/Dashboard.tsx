@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { CursorTrail } from "../../components/CursorTrail";
 import {
@@ -71,6 +71,7 @@ import {
   showSystemNotification, 
   requestSystemNotificationPermission 
 } from "../../lib/badgeManager";
+import OfficialReportCard, { ReportCardData, generateSingleStudentPdf } from "../../components/OfficialReportCard";
 
 export const normalizeSub = (str: string) => {
   if (!str) return '';
@@ -162,7 +163,8 @@ export default function StudentDashboard() {
   const [termExams, setTermExams] = useState<any[]>([]);
   const [examSubmissions, setExamSubmissions] = useState<any[]>([]);
   const [activeExamTaking, setActiveExamTaking] = useState<any | null>(null);
-  const [marksSubTab, setMarksSubTab] = useState<"exams" | "results">("exams");
+  const [marksSubTab, setMarksSubTab] = useState<"exams" | "results" | "reports">("exams");
+  const [submittedSuccessExam, setSubmittedSuccessExam] = useState<{ examName: string; subject: string; obtained: number; total: number; percentage: number; gradeLetter: string } | null>(null);
   const [studentSelfMarksInput, setStudentSelfMarksInput] = useState<{ obtained: string; total: string; remarks: string }>({
     obtained: "",
     total: "100",
@@ -1097,6 +1099,15 @@ export default function StudentDashboard() {
       window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'examSubmissions' } }));
       window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'examMarks' } }));
 
+      setSubmittedSuccessExam({
+        examName: exam.examName,
+        subject: exam.subject || 'பொது',
+        obtained: obt,
+        total: tot,
+        percentage: percent,
+        gradeLetter: gl
+      });
+
       alert(`✅ உங்கள் மதிப்பெண் வெற்றிகரமாகப் பதிவுசெய்யப்பட்டது! பெற்ற புள்ளி: ${obt}/${tot} (${gl})`);
       setActiveExamTaking(null);
     } catch (err) {
@@ -1106,6 +1117,58 @@ export default function StudentDashboard() {
       setIsSubmittingMarks(false);
     }
   };
+
+  // Official Report Card Data for Student
+  const currentStudentReportCard = useMemo<ReportCardData>(() => {
+    const studentMarksList = examMarks.filter(m => m.studentId === studentData?.id);
+    const subjects = studentMarksList.map(m => {
+      const obt = Number(m.obtained) || 0;
+      const tot = Number(m.total) || 100;
+      const pct = tot > 0 ? (obt / tot) * 100 : 0;
+      let gl = 'W';
+      if (pct >= 75) gl = 'A';
+      else if (pct >= 65) gl = 'B';
+      else if (pct >= 55) gl = 'C';
+      else if (pct >= 35) gl = 'S';
+
+      return {
+        subject: m.subject || 'பொதுப் பாடம்',
+        obtained: obt,
+        total: tot,
+        percentage: pct,
+        gradeLetter: gl,
+        status: pct >= 35 ? ("Pass" as const) : ("Fail" as const),
+        remarks: m.remarks
+      };
+    });
+
+    const totalObt = subjects.reduce((sum, s) => sum + s.obtained, 0);
+    const totalPos = subjects.reduce((sum, s) => sum + s.total, 0);
+    const overallPct = totalPos > 0 ? (totalObt / totalPos) * 100 : 0;
+    let overallGrade = 'W';
+    if (overallPct >= 75) overallGrade = 'A';
+    else if (overallPct >= 65) overallGrade = 'B';
+    else if (overallPct >= 55) overallGrade = 'C';
+    else if (overallPct >= 35) overallGrade = 'S';
+
+    const numGrade = parseInt((studentData?.grade || '').replace(/\D/g, '')) || 10;
+
+    return {
+      studentId: studentData?.id || '',
+      studentName: studentData?.name || 'மாணவர்',
+      rollNo: studentData?.rollNo || studentData?.id || 'AG-000',
+      gradeNumber: numGrade,
+      gradeLabel: studentData?.grade || `Grade ${numGrade}`,
+      examName: studentMarksList[0]?.exam || "அகரம் உத்தியோகபூர்வ தவணைப் பரீட்சை",
+      subjects,
+      totalObtained: totalObt,
+      totalPossible: totalPos,
+      overallPercentage: overallPct,
+      overallGrade,
+      overallStatus: overallPct >= 35 ? "Pass" : "Fail",
+      date: new Date().toISOString().split('T')[0]
+    };
+  }, [examMarks, studentData]);
 
   const handleDownloadReportCard = async (examName: string, format: 'png' | 'pdf') => {
     const marksForExam = examMarks.filter(m => m.exam === examName);
@@ -1848,6 +1911,25 @@ export default function StudentDashboard() {
                 </div>
                 <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">{menuLabels.whatsapp || "WhatsApp"}</span>
               </a>
+
+              {/* Real-time Exams Card with Unattended Badge */}
+              <div
+                onClick={() => {
+                  setActiveTab("marks");
+                  setMarksSubTab("exams");
+                }}
+                className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group relative sm:col-span-1 md:col-span-1"
+              >
+                {unattendedExamsCount > 0 && (
+                  <span className="absolute top-3 right-3 flex h-6 w-6 items-center justify-center rounded-full bg-rose-500 text-xs font-black text-white shadow-sm border-2 border-white animate-pulse">
+                    {unattendedExamsCount}
+                  </span>
+                )}
+                <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-indigo-100 transition-colors">
+                  <Award size={28} />
+                </div>
+                <span className="font-bold text-slate-700 text-sm sm:text-base text-center line-clamp-1">தேர்வுகள் (Exams)</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -3576,17 +3658,17 @@ export default function StudentDashboard() {
                 </div>
 
                 {/* Sub-tab pills */}
-                <div className="flex items-center bg-black/30 backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shrink-0">
+                <div className="flex flex-wrap items-center bg-black/30 backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shrink-0 gap-1">
                   <button
                     onClick={() => setMarksSubTab("exams")}
-                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
+                    className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                       marksSubTab === "exams"
                         ? "bg-amber-400 text-indigo-950 shadow-md"
                         : "text-indigo-100 hover:text-white"
                     }`}
                   >
                     <BookOpen size={16} />
-                    <span>தவணைப் பரீட்சைகள்</span>
+                    <span>1. செய்யும் தேர்வுகள்</span>
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
                       marksSubTab === "exams" ? "bg-indigo-950 text-amber-300" : "bg-white/20 text-white"
                     }`}>
@@ -3603,19 +3685,31 @@ export default function StudentDashboard() {
 
                   <button
                     onClick={() => setMarksSubTab("results")}
-                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
+                    className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                       marksSubTab === "results"
                         ? "bg-amber-400 text-indigo-950 shadow-md"
                         : "text-indigo-100 hover:text-white"
                     }`}
                   >
                     <Award size={16} />
-                    <span>தேர்வு முடிவுகள் (Results)</span>
+                    <span>2. தேர்வு மதிப்பெண்கள்</span>
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
                       marksSubTab === "results" ? "bg-indigo-950 text-amber-300" : "bg-white/20 text-white"
                     }`}>
-                      {examMarks.length}
+                      {examMarks.filter(m => m.studentId === studentData?.id).length}
                     </span>
+                  </button>
+
+                  <button
+                    onClick={() => setMarksSubTab("reports")}
+                    className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      marksSubTab === "reports"
+                        ? "bg-amber-400 text-indigo-950 shadow-md"
+                        : "text-indigo-100 hover:text-white"
+                    }`}
+                  >
+                    <FileText size={16} />
+                    <span>3. உத்தியோகபூர்வ அறிக்கை அட்டை</span>
                   </button>
                 </div>
               </div>
@@ -3624,6 +3718,47 @@ export default function StudentDashboard() {
             {/* SUBTAB 1: TERM EXAMS LIST FOR STUDENT */}
             {marksSubTab === "exams" && (
               <div className="space-y-6">
+                {/* Exam Submission Success Celebration Banner */}
+                {submittedSuccessExam && (
+                  <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white rounded-3xl p-5 sm:p-6 shadow-xl border border-emerald-400/30 relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-3xl shrink-0">
+                        🎉
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-md">
+                          மதிப்பெண் பதிவு செய்யப்பட்டது!
+                        </span>
+                        <h4 className="text-lg font-black mt-1">
+                          வாழ்த்துகள் {studentData?.name}!
+                        </h4>
+                        <p className="text-xs text-emerald-100">
+                          {submittedSuccessExam.examName} ({submittedSuccessExam.subject}) • பெற்ற புள்ளி: <strong>{submittedSuccessExam.obtained}/{submittedSuccessExam.total} ({submittedSuccessExam.gradeLetter})</strong>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => {
+                          setMarksSubTab("reports");
+                          setSubmittedSuccessExam(null);
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-white text-emerald-900 hover:bg-emerald-50 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg transition-all cursor-pointer"
+                      >
+                        <FileText size={16} />
+                        அறிக்கை அட்டை பார்க்க (View Report Sheet)
+                      </button>
+                      <button
+                        onClick={() => setSubmittedSuccessExam(null)}
+                        className="p-2 text-white/80 hover:text-white rounded-lg transition-colors cursor-pointer"
+                        title="Dismiss"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {/* Notification & App Icon Badge Status Bar */}
                 <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
@@ -3872,6 +4007,13 @@ export default function StudentDashboard() {
                   </h2>
                   <p className="text-slate-500 ml-13 font-medium">Your academic performance and report cards.</p>
                 </div>
+                <button
+                  onClick={() => setMarksSubTab("reports")}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all cursor-pointer self-start md:self-auto"
+                >
+                  <FileText size={16} />
+                  உத்தியோகபூர்வ அறிக்கை அட்டை (Official Report Sheet)
+                </button>
               </div>
 
               {examMarks.length === 0 ? (
@@ -3896,18 +4038,24 @@ export default function StudentDashboard() {
                       <div key={examName} className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                         <div className="bg-white px-6 py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
                           <h3 className="text-lg font-black text-slate-800">{examName}</h3>
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <button 
-                              onClick={() => handleDownloadReportCard(examName, 'pdf')}
-                              className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-sm"
+                              onClick={() => setMarksSubTab("reports")}
+                              className="bg-emerald-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
                             >
-                              <Download size={14} /> PDF Result
+                              <FileText size={14} /> அறிக்கை அட்டை
+                            </button>
+                            <button 
+                              onClick={() => generateSingleStudentPdf(currentStudentReportCard)}
+                              className="bg-indigo-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                            >
+                              <Download size={14} /> PDF
                             </button>
                             <button 
                               onClick={() => handleDownloadReportCard(examName, 'png')}
-                              className="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-200 transition-colors flex items-center gap-2"
+                              className="bg-indigo-50 text-indigo-700 px-3 py-2 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors flex items-center gap-1.5 cursor-pointer"
                             >
-                              <Camera size={14} /> Image Result
+                              <Camera size={14} /> Image
                             </button>
                           </div>
                         </div>
@@ -3980,6 +4128,16 @@ export default function StudentDashboard() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* SUBTAB 3: OFFICIAL REPORT CARD / CERTIFICATE */}
+        {marksSubTab === "reports" && (
+          <div className="space-y-6">
+            <OfficialReportCard
+              data={currentStudentReportCard}
+              showActions={true}
+            />
           </div>
         )}
 

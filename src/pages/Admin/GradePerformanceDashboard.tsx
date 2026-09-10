@@ -33,8 +33,14 @@ import {
   Clock,
   Eye,
   Calendar,
-  X
+  X,
+  FileText,
+  Package,
+  Archive,
+  CheckCircle
 } from "lucide-react";
+import JSZip from "jszip";
+import OfficialReportCard, { ReportCardData, generateSingleStudentPdf } from "../../components/OfficialReportCard";
 import { 
   BarChart, 
   Bar, 
@@ -182,7 +188,9 @@ export default function GradePerformanceDashboard() {
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>("All");
   const [performanceFilter, setPerformanceFilter] = useState<"All" | "A" | "Pass" | "Fail">("All");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"analytics" | "roster" | "subjects">("analytics");
+  const [viewMode, setViewMode] = useState<"analytics" | "roster" | "subjects" | "reports">("analytics");
+  const [previewReportStudent, setPreviewReportStudent] = useState<ReportCardData | null>(null);
+  const [isGeneratingZip, setIsGeneratingZip] = useState<boolean>(false);
 
   // Print ref
   const printContainerRef = useRef<HTMLDivElement>(null);
@@ -548,6 +556,121 @@ export default function GradePerformanceDashboard() {
       .sort((a, b) => b.percentage - a.percentage)
       .slice(0, 6);
   }, [filteredRecords]);
+
+  // Aggregate individual student report cards from filtered records
+  const studentReportCards = useMemo<ReportCardData[]>(() => {
+    const studentMap = new Map<string, {
+      studentId: string;
+      studentName: string;
+      rollNo: string;
+      gradeNumber: number;
+      gradeLabel: string;
+      examName: string;
+      subjects: {
+        subject: string;
+        obtained: number;
+        total: number;
+        percentage: number;
+        gradeLetter: string;
+        status: "Pass" | "Fail";
+        remarks?: string;
+      }[];
+    }>();
+
+    filteredRecords.forEach(r => {
+      const key = `${r.studentId}_${r.gradeNumber}`;
+      const existing = studentMap.get(key) || {
+        studentId: r.studentId,
+        studentName: r.studentName,
+        rollNo: r.rollNo,
+        gradeNumber: r.gradeNumber,
+        gradeLabel: r.gradeLabel,
+        examName: r.examName,
+        subjects: []
+      };
+
+      existing.subjects.push({
+        subject: r.subject,
+        obtained: r.obtained,
+        total: r.total,
+        percentage: r.percentage,
+        gradeLetter: r.gradeLetter,
+        status: r.status,
+        remarks: r.remarks
+      });
+
+      studentMap.set(key, existing);
+    });
+
+    return Array.from(studentMap.values()).map(st => {
+      const totalObt = st.subjects.reduce((sum, s) => sum + s.obtained, 0);
+      const totalPos = st.subjects.reduce((sum, s) => sum + s.total, 0);
+      const avgPercent = totalPos > 0 ? (totalObt / totalPos) * 100 : 0;
+      let overallGrade = "W";
+      if (avgPercent >= 75) overallGrade = "A";
+      else if (avgPercent >= 65) overallGrade = "B";
+      else if (avgPercent >= 55) overallGrade = "C";
+      else if (avgPercent >= 35) overallGrade = "S";
+
+      const overallStatus: "Pass" | "Fail" = avgPercent >= 35 ? "Pass" : "Fail";
+
+      return {
+        studentId: st.studentId,
+        studentName: st.studentName,
+        rollNo: st.rollNo,
+        gradeNumber: st.gradeNumber,
+        gradeLabel: st.gradeLabel,
+        examName: st.examName,
+        subjects: st.subjects,
+        totalObtained: totalObt,
+        totalPossible: totalPos,
+        overallPercentage: avgPercent,
+        overallGrade,
+        overallStatus,
+        date: new Date().toISOString().split('T')[0]
+      };
+    }).sort((a, b) => b.overallPercentage - a.overallPercentage);
+  }, [filteredRecords]);
+
+  // Bulk ZIP Download for All Report Cards in Selected Grade
+  const handleBulkZipDownload = async () => {
+    if (studentReportCards.length === 0) {
+      alert("பதிவிறக்க எந்த மாணவர் அறிக்கை அட்டைகளும் கிடைக்கவில்லை.");
+      return;
+    }
+
+    setIsGeneratingZip(true);
+    try {
+      const zip = new JSZip();
+      const targetGradeText = selectedGradeFilter === "All" ? "Grades_6_to_11" : `Grade_${selectedGradeFilter}`;
+
+      for (let i = 0; i < studentReportCards.length; i++) {
+        const card = studentReportCards[i];
+        const doc = generateSingleStudentPdf(card);
+        const pdfArrayBuffer = doc.output('arraybuffer');
+        const safeName = (card.studentName || `Student_${i + 1}`).replace(/[^a-zA-Z0-9]/g, '_');
+        const fileName = `${safeName}_Grade${card.gradeNumber}_ReportCard.pdf`;
+        zip.file(fileName, pdfArrayBuffer);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const downloadUrl = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `Agaram_Dhines_${targetGradeText}_Report_Cards.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+
+      alert(`✅ ${studentReportCards.length} மாணவர்களின் உத்தியோகபூர்வ அறிக்கை அட்டைகளும் வெற்றிகரமாக ZIP கோப்பாகப் பதிவிறக்கப்பட்டது!`);
+    } catch (err) {
+      console.error("Bulk ZIP generation error:", err);
+      alert("ZIP கோப்பு உருவாக்குவதில் பிழை ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்.");
+    } finally {
+      setIsGeneratingZip(false);
+    }
+  };
 
   // Export to Excel / CSV
   const handleExportExcel = () => {
@@ -926,6 +1049,17 @@ export default function GradePerformanceDashboard() {
               <BookOpen size={14} />
               பாட வாரியாக (Subjects)
             </button>
+            <button
+              onClick={() => setViewMode("reports")}
+              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === "reports"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <FileText size={14} />
+              அறிக்கை அட்டை & ZIP (Report Cards)
+            </button>
           </div>
         </div>
       </div>
@@ -1263,6 +1397,7 @@ export default function GradePerformanceDashboard() {
       )}
 
       {/* VIEW: STUDENT MARKS ROSTER TABLE (All or Selected Grade) */}
+      {viewMode !== "reports" && (
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200/80 overflow-hidden" ref={printContainerRef}>
         
         {/* Table Header Controls */}
@@ -1403,6 +1538,153 @@ export default function GradePerformanceDashboard() {
           </div>
         )}
       </div>
+      )}
+
+      {/* VIEW: OFFICIAL REPORT CARDS & BULK ZIP EXPORT */}
+      {viewMode === "reports" && (
+        <div className="space-y-6">
+          {/* Top Info & Bulk Action Bar */}
+          <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-indigo-950">
+                    Official Certification & PDF Reports
+                  </span>
+                  {selectedGradeFilter !== "All" && (
+                    <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-white/20 text-white">
+                      தரம் {selectedGradeFilter}
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-xl sm:text-2xl font-black mt-2">
+                  மாணவர் உத்தியோகபூர்வ அறிக்கை அட்டைகள் (Student Report Cards)
+                </h3>
+                <p className="text-xs sm:text-sm text-indigo-200 mt-1 max-w-2xl">
+                  அகரம் தினைஸ் ஆன்லைன் அகாடமியின் உத்தியோகபூர்வ லோகோ, தொடர்பு எண்கள் (+94 77 805 4232) மற்றும் பாட வாரியான அடைவு மட்டங்களுடன் கூடிய அறிக்கை அட்டைகள்.
+                </p>
+              </div>
+
+              {/* Bulk Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
+                <button
+                  onClick={handleBulkZipDownload}
+                  disabled={isGeneratingZip || studentReportCards.length === 0}
+                  className="px-5 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-amber-400/20 transition-all cursor-pointer disabled:opacity-50"
+                  title="முழு வகுப்பு மாணவர்களின் PDF அறிக்கை அட்டைகளையும் ஒரே ZIP கோப்பாகப் பதிவிறக்கவும்"
+                >
+                  <Package size={18} />
+                  <span>
+                    {isGeneratingZip ? "ZIP உருவாக்கப்படுகிறது..." : `முழு வகுப்பு ZIP பதிவிறக்கம் (${studentReportCards.length})`}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-3 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer border border-white/15 backdrop-blur-md"
+                  title="அனைத்து அறிக்கைகளையும் அச்சிட"
+                >
+                  <Printer size={18} />
+                  <span>அனைத்தையும் அச்சிடு</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Student Cards Roster for Report Generation */}
+          {studentReportCards.length === 0 ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 space-y-3">
+              <FileText size={40} className="text-slate-400 mx-auto" />
+              <h4 className="font-bold text-slate-700">அறிக்கை அட்டைகள் உருவாக்கப் பதிவுகள் எதுவும் இல்லை</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                வகுப்பை அல்லது பரீட்சையைத் தெரிவுசெய்து மாணவர்களின் தேர்வுப் புள்ளிகள் உள்ளிடப்பட்டுள்ளதை உறுதிப்படுத்தவும்.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+              {studentReportCards.map((card, idx) => {
+                const gradeColor = card.overallGrade === 'A' ? 'text-emerald-600 bg-emerald-50 border-emerald-200' :
+                  card.overallGrade === 'B' ? 'text-blue-600 bg-blue-50 border-blue-200' :
+                  card.overallGrade === 'C' ? 'text-amber-600 bg-amber-50 border-amber-200' :
+                  card.overallGrade === 'S' ? 'text-indigo-600 bg-indigo-50 border-indigo-200' :
+                  'text-rose-600 bg-rose-50 border-rose-200';
+
+                return (
+                  <div key={card.studentId || idx} className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4">
+                    <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                            {card.gradeLabel} (Grade {card.gradeNumber})
+                          </span>
+                          <h4 className="text-base font-black text-slate-900 mt-1 line-clamp-1">
+                            {card.studentName}
+                          </h4>
+                          <span className="text-xs font-mono text-slate-400">ID: {card.rollNo || card.studentId}</span>
+                        </div>
+
+                        <div className={`w-10 h-10 rounded-2xl border flex items-center justify-center font-black text-base ${gradeColor}`}>
+                          {card.overallGrade}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2 text-center text-xs">
+                        <div className="bg-slate-50 p-2 rounded-xl">
+                          <span className="text-[10px] text-slate-400 block">பாடங்கள்</span>
+                          <strong className="text-slate-800 font-bold">{card.subjects.length}</strong>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-xl">
+                          <span className="text-[10px] text-slate-400 block">புள்ளிகள்</span>
+                          <strong className="text-indigo-900 font-bold">{card.totalObtained}/{card.totalPossible}</strong>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-xl">
+                          <span className="text-[10px] text-slate-400 block">சராசரி</span>
+                          <strong className="text-emerald-600 font-black">{card.overallPercentage.toFixed(1)}%</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex items-center gap-2">
+                      <button
+                        onClick={() => setPreviewReportStudent(card)}
+                        className="flex-1 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Eye size={14} />
+                        அறிக்கையைப் பார்
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const doc = generateSingleStudentPdf(card);
+                          const safeName = (card.studentName || 'Student').replace(/[^a-zA-Z0-9]/g, '_');
+                          doc.save(`${safeName}_Grade${card.gradeNumber}_ReportCard.pdf`);
+                        }}
+                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                        title="PDF பதிவிறக்கம்"
+                      >
+                        <Download size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Modal Preview for Individual Student Report Card */}
+      {previewReportStudent && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-4xl max-h-[95vh] overflow-y-auto bg-transparent">
+            <OfficialReportCard
+              data={previewReportStudent}
+              showActions={true}
+              onClose={() => setPreviewReportStudent(null)}
+            />
+          </div>
+        </div>
+      )}
 
     </div>
   );

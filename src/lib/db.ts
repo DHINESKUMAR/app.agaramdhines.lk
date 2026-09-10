@@ -891,9 +891,54 @@ export const deleteStudent = async (id: string | number) => {
   return updatedStudents;
 };
 
+export const isZoomLinkExpired = (link: any, bufferHours = 2): boolean => {
+  if (!link) return false;
+
+  // 1. If explicit datetime is provided (e.g. "2026-09-09T10:00:00" or "2026-09-09 10:00")
+  if (link.datetime) {
+    const classTime = new Date(link.datetime).getTime();
+    if (!isNaN(classTime)) {
+      // Buffer: link remains accessible during class and up to bufferHours (default 2 hours) after scheduled time
+      const expiry = classTime + (bufferHours * 60 * 60 * 1000);
+      return Date.now() > expiry;
+    }
+  }
+
+  // 2. If date + endTime or startTime is provided
+  if (link.date) {
+    const timeStr = link.endTime || link.startTime || "23:59";
+    const combinedStr = `${link.date}T${timeStr.length === 5 ? timeStr : timeStr.padStart(5, '0')}`;
+    const classTime = new Date(combinedStr).getTime();
+    if (!isNaN(classTime)) {
+      const expiry = classTime + (bufferHours * 60 * 60 * 1000);
+      return Date.now() > expiry;
+    }
+  }
+
+  return false;
+};
+
 export const getZoomLinks = async () => {
-  const links = await getData('zoomLinks', []);
-  return Array.isArray(links) ? links : [];
+  const rawLinks = await getData('zoomLinks', []);
+  const links = Array.isArray(rawLinks) ? rawLinks : [];
+
+  // Filter out any links whose class ended more than 2 hours ago
+  const activeLinks = links.filter(l => !isZoomLinkExpired(l, 2));
+  const expiredLinks = links.filter(l => isZoomLinkExpired(l, 2));
+
+  // Auto-delete expired Zoom links from database so they don't linger
+  if (expiredLinks.length > 0) {
+    if (isFirebaseConfigured) {
+      expiredLinks.forEach(exp => {
+        if (exp?.id) {
+          deleteDoc(doc(db, 'zoomLinks', String(exp.id))).catch(() => {});
+        }
+      });
+    }
+    saveData('zoomLinks', activeLinks).catch(() => {});
+  }
+
+  return activeLinks;
 };
 export const saveZoomLinks = (links: any) => saveData('zoomLinks', Array.isArray(links) ? links : []);
 
