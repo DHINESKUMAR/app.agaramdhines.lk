@@ -42,7 +42,9 @@ import {
   Folder,
   Search,
   Grid,
-  List
+  List,
+  Star,
+  Filter
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import WhatsAppIcon from "../../components/WhatsAppIcon";
@@ -52,7 +54,8 @@ import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
 import RecordingSection, { deduplicateCourses, areSubjectsMatching, doesItemMatchGrade, doesItemMatchStudentSubjects, normalizeGradeString, getCanonicalSubjectCategory, filterSubjectsForStudentGrade, isSubjectValidForGrade } from "../../components/RecordingSection";
 
-import { getCourses, getCourseMaterials, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, getWebPosts, getStudentMenuLabels, DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels } from "../../lib/db";
+import { getCourses, getCourseMaterials, getZoomLinks, getYoutubeLinks, getFees, getAttendance, saveAttendance, getClassLinks, getCourseWebsiteLinks, getHomework, getStaffs, getTimeTable, getStudents, saveStudents, getAdminSettings, getClasses, getExamMarks, saveExamMarks, getWebPosts, getStudentMenuLabels, DEFAULT_STUDENT_MENU_LABELS, StudentMenuLabels, getTermExams, getExamSubmissions, saveExamSubmissions } from "../../lib/db";
+import { formatEmbedUrl } from "../Admin/TermExam";
 import { getUserSession, saveUserSession, clearUserSession } from "../../lib/authSession";
 import CountdownTimer from "../../components/CountdownTimer";
 import PopupAnnouncement from "../../components/PopupAnnouncement";
@@ -61,6 +64,13 @@ import { useChatNotifications } from "../../hooks/useChatNotifications";
 import { useHomeworkNotifications } from "../../hooks/useHomeworkNotifications";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { useTimetableNotifications } from "../../hooks/useTimetableNotifications";
+import { 
+  getUnattendedExams, 
+  updateAppBadge, 
+  clearAppBadge, 
+  showSystemNotification, 
+  requestSystemNotificationPermission 
+} from "../../lib/badgeManager";
 
 export const normalizeSub = (str: string) => {
   if (!str) return '';
@@ -143,11 +153,22 @@ export default function StudentDashboard() {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [selectedMaterialSubject, setSelectedMaterialSubject] = useState<string | null>(null);
+  const [materialCategoryFilter, setMaterialCategoryFilter] = useState<string>("ALL");
   const [selectedELearningSubject, setSelectedELearningSubject] = useState<string>("All");
   const [showAccessBlockedModal, setShowAccessBlockedModal] = useState(false);
   const [videoSearchQuery, setVideoSearchQuery] = useState("");
   const [videoViewMode, setVideoViewMode] = useState<"grid" | "list">("grid");
   const [activeWatchVideo, setActiveWatchVideo] = useState<any | null>(null);
+  const [termExams, setTermExams] = useState<any[]>([]);
+  const [examSubmissions, setExamSubmissions] = useState<any[]>([]);
+  const [activeExamTaking, setActiveExamTaking] = useState<any | null>(null);
+  const [marksSubTab, setMarksSubTab] = useState<"exams" | "results">("exams");
+  const [studentSelfMarksInput, setStudentSelfMarksInput] = useState<{ obtained: string; total: string; remarks: string }>({
+    obtained: "",
+    total: "100",
+    remarks: ""
+  });
+  const [isSubmittingMarks, setIsSubmittingMarks] = useState(false);
 
   const handleTabSelect = (tabId: string) => {
     const restrictedTabs = ["youtube", "course_materials", "courses", "subjects"];
@@ -301,14 +322,19 @@ export default function StudentDashboard() {
   const [badgeCount, setBadgeCount] = useState(() => {
     return parseInt(localStorage.getItem(`app_badge_count_${studentData?.grade}`) || "0");
   });
+  const [unattendedExamsCount, setUnattendedExamsCount] = useState<number>(0);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   const [menuLabels, setMenuLabels] = useState<StudentMenuLabels>(DEFAULT_STUDENT_MENU_LABELS);
 
+  // Synchronize unattended exams and App Icon badge count
   useEffect(() => {
-    // Initial badge sync on mount/grade change
-    const count = parseInt(localStorage.getItem(`app_badge_count_${studentData?.grade}`) || "0");
-    setBadgeCount(count);
-  }, [studentData?.grade]);
+    if (studentData?.id && studentData?.grade) {
+      const unattended = getUnattendedExams(termExams, examSubmissions, studentData.id, studentData.grade);
+      setUnattendedExamsCount(unattended.length);
+      setBadgeCount(unattended.length);
+      updateAppBadge(unattended.length);
+    }
+  }, [termExams, examSubmissions, studentData?.id, studentData?.grade]);
 
   useEffect(() => {
     if ('Notification' in window) {
@@ -316,14 +342,18 @@ export default function StudentDashboard() {
       
       const handleFocus = () => {
         setNotificationPermission(Notification.permission);
-        const count = parseInt(localStorage.getItem(`app_badge_count_${studentData?.grade}`) || "0");
-        setBadgeCount(count);
+        if (studentData?.id && studentData?.grade) {
+          const unattended = getUnattendedExams(termExams, examSubmissions, studentData.id, studentData.grade);
+          setUnattendedExamsCount(unattended.length);
+          setBadgeCount(unattended.length);
+          updateAppBadge(unattended.length);
+        }
       };
       
       window.addEventListener('focus', handleFocus);
       return () => window.removeEventListener('focus', handleFocus);
     }
-  }, [studentData?.grade]);
+  }, [studentData?.id, studentData?.grade, termExams, examSubmissions]);
 
   // Helper to get consistent vibrant colors for folders
   const getFolderColor = (folderName: string) => {
@@ -457,30 +487,27 @@ export default function StudentDashboard() {
   const clearBadge = () => {
     const badgeKey = `app_badge_count_${studentData?.grade}`;
     localStorage.setItem(badgeKey, "0");
-    setBadgeCount(0);
-    if ('navigator' in window && 'clearAppBadge' in navigator) {
-      (navigator as any).clearAppBadge().catch(() => {});
-    }
+    // Preserve unattended exams in the badge
+    const remaining = unattendedExamsCount;
+    setBadgeCount(remaining);
+    updateAppBadge(remaining);
   };
 
   useEffect(() => {
     if (showNotifications) {
       clearBadge();
     }
-  }, [showNotifications, studentData?.grade]);
+  }, [showNotifications, unattendedExamsCount]);
 
   const requestNotificationPermission = async () => {
-    if ('Notification' in window) {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-      if (permission === 'granted') {
-        new Notification("Agaram Academy", {
-          body: "Notifications are now active! You'll see them like WhatsApp messages.",
-          icon: "/logo.png"
-        });
-      }
-    } else {
-      alert("This browser does not support notifications.");
+    const permission = await requestSystemNotificationPermission();
+    setNotificationPermission(permission);
+    if (permission === 'granted') {
+      showSystemNotification("அகரம் தினைஸ் அகாடமி 🎓", {
+        body: `அறிவிப்புகள் வெற்றிகரமாக செயல்படுத்தப்பட்டுள்ளன! தற்போது ${unattendedExamsCount} பரீட்சை எழுதப்படவுள்ளது.`,
+        badgeCount: unattendedExamsCount || 1,
+        url: '/student-dashboard?tab=marks&subTab=exams'
+      });
     }
   };
   
@@ -525,11 +552,14 @@ export default function StudentDashboard() {
   });
 
   useEffect(() => {
-    // Clear app badge when dashboard is active
-    if ('navigator' in window && 'clearAppBadge' in navigator) {
-      (navigator as any).clearAppBadge().catch((err: any) => console.log('Badge not supported', err));
+    // Keep app badge in sync with unattended exams count
+    if (studentData?.id && studentData?.grade) {
+      const unattended = getUnattendedExams(termExams, examSubmissions, studentData.id, studentData.grade);
+      setUnattendedExamsCount(unattended.length);
+      setBadgeCount(unattended.length);
+      updateAppBadge(unattended.length);
     }
-  }, []);
+  }, [studentData?.id, studentData?.grade, termExams, examSubmissions]);
 
   const handleQrScan = async (decodedText: string) => {
     setShowQrScanner(false);
@@ -786,7 +816,18 @@ export default function StudentDashboard() {
       setClasses(allClasses);
       setAdminSettings(settings);
       
-      const allHomework = await getHomework();
+      const [allHomework, loadedTermExams, loadedSubmissions] = await Promise.all([
+        getHomework(),
+        getTermExams(),
+        getExamSubmissions()
+      ]);
+      setTermExams(loadedTermExams || []);
+      setExamSubmissions(loadedSubmissions || []);
+      
+      const unattended = getUnattendedExams(loadedTermExams || [], loadedSubmissions || [], freshStudentData.id, freshStudentData.grade);
+      setUnattendedExamsCount(unattended.length);
+      setBadgeCount(unattended.length);
+      updateAppBadge(unattended.length);
       
       // Filter homework to only show assignments from the last 7 days
       const sevenDaysAgo = new Date();
@@ -803,7 +844,7 @@ export default function StudentDashboard() {
 
     const handleDbUpdate = (e: CustomEvent) => {
       const key = e.detail?.key;
-      if (['courseMaterials', 'courses', 'zoomLinks', 'youtubeLinks', 'webPosts', 'students', 'classes', 'staffs', 'timetable', 'examMarks', 'homework'].includes(key)) {
+      if (['courseMaterials', 'courses', 'zoomLinks', 'youtubeLinks', 'webPosts', 'students', 'classes', 'staffs', 'timetable', 'examMarks', 'homework', 'termExams', 'examSubmissions'].includes(key)) {
         loadData();
       }
     };
@@ -827,6 +868,30 @@ export default function StudentDashboard() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, [navigate, location.state, activeTab]);
+
+  // Handle direct exam navigation via URL parameter e.g., ?examId=exam_123 or ?tab=marks
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const examIdParam = params.get('examId');
+    const tabParam = params.get('tab');
+    const subTabParam = params.get('subTab');
+
+    if (tabParam) {
+      setActiveTab(tabParam);
+    }
+    if (subTabParam === 'exams' || subTabParam === 'results') {
+      setMarksSubTab(subTabParam as "exams" | "results");
+    }
+
+    if (examIdParam && termExams.length > 0) {
+      const foundExam = termExams.find((ex: any) => ex.id === examIdParam);
+      if (foundExam) {
+        setActiveTab("marks");
+        setMarksSubTab("exams");
+        setActiveExamTaking(foundExam);
+      }
+    }
+  }, [location.search, termExams]);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
@@ -955,6 +1020,90 @@ export default function StudentDashboard() {
     } catch (error) {
       console.error("Error generating Certificate:", error);
       alert("Failed to generate Certificate. Please try again.");
+    }
+  };
+
+  const handleStudentSubmitSelfMarks = async (exam: any) => {
+    if (!studentSelfMarksInput.obtained || isNaN(Number(studentSelfMarksInput.obtained))) {
+      alert("தயவுசெய்து நீங்கள் பெற்ற மதிப்பெண்களை (Marks Obtained) உள்ளிடவும்.");
+      return;
+    }
+
+    const obt = Number(studentSelfMarksInput.obtained);
+    const tot = Number(studentSelfMarksInput.total) || Number(exam.totalMarks) || 100;
+    if (obt < 0 || obt > tot) {
+      alert(`மதிப்பெண் 0 மற்றும் ${tot} க்குள் இருக்க வேண்டும்.`);
+      return;
+    }
+
+    setIsSubmittingMarks(true);
+    try {
+      const percent = (obt / tot) * 100;
+      const gl = percent >= 75 ? 'A' : percent >= 65 ? 'B' : percent >= 50 ? 'C' : percent >= 35 ? 'S' : 'W';
+      
+      const submissionId = `sub_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      const newSubmission = {
+        id: submissionId,
+        examId: exam.id,
+        examName: exam.examName,
+        termName: exam.termName,
+        subject: exam.subject || 'பொது',
+        studentId: studentData.id,
+        studentName: studentData.name,
+        rollNo: studentData.rollNo || studentData.id,
+        grade: studentData.grade,
+        obtained: obt,
+        total: tot,
+        percentage: percent,
+        gradeLetter: gl,
+        remarks: studentSelfMarksInput.remarks || 'மாணவர் உள்ளீடு (Student Submitted)',
+        status: 'submitted' as const,
+        submittedAt: new Date().toISOString()
+      };
+
+      const currentSubs = await getExamSubmissions();
+      const updatedSubs = [
+        newSubmission,
+        ...currentSubs.filter((s: any) => !(s.examId === exam.id && s.studentId === studentData.id))
+      ];
+      await saveExamSubmissions(updatedSubs);
+      setExamSubmissions(updatedSubs);
+
+      // Also sync into examMarks so it immediately reflects in the Report Card!
+      const allMarks = await getExamMarks();
+      const updatedMarks = [
+        {
+          id: submissionId,
+          studentId: studentData.id,
+          grade: studentData.grade,
+          exam: exam.examName,
+          subject: exam.subject || 'பொது',
+          obtained: obt,
+          total: tot,
+          remarks: studentSelfMarksInput.remarks || 'மாணவர் உள்ளீடு (Online Exam)',
+          date: new Date().toISOString().split('T')[0]
+        },
+        ...allMarks.filter((m: any) => !(m.studentId === studentData.id && m.exam === exam.examName && m.subject === (exam.subject || 'பொது')))
+      ];
+      await saveExamMarks(updatedMarks);
+      setExamMarks(updatedMarks);
+
+      // Recalculate unattended exams and immediately update app badge!
+      const remainingUnattended = getUnattendedExams(termExams, updatedSubs, studentData.id, studentData.grade);
+      setUnattendedExamsCount(remainingUnattended.length);
+      setBadgeCount(remainingUnattended.length);
+      updateAppBadge(remainingUnattended.length);
+
+      window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'examSubmissions' } }));
+      window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'examMarks' } }));
+
+      alert(`✅ உங்கள் மதிப்பெண் வெற்றிகரமாகப் பதிவுசெய்யப்பட்டது! பெற்ற புள்ளி: ${obt}/${tot} (${gl})`);
+      setActiveExamTaking(null);
+    } catch (err) {
+      console.error("Error submitting marks:", err);
+      alert("மதிப்பெண்ணைப் பதிவுசெய்வதில் பிழை ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்.");
+    } finally {
+      setIsSubmittingMarks(false);
     }
   };
 
@@ -1444,6 +1593,10 @@ export default function StudentDashboard() {
                             if (notif.type === 'homework') setActiveTab('homework');
                             if (notif.type === 'zoom_class') setActiveTab('home');
                             if (notif.type === 'youtube' || notif.type === 'webpost') setActiveTab('e-learning');
+                            if (notif.type === 'exam') {
+                              setActiveTab('marks');
+                              setMarksSubTab('exams');
+                            }
                             setShowNotifications(false); 
                           }}
                         >
@@ -1451,11 +1604,13 @@ export default function StudentDashboard() {
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                               notif.type === 'zoom_class' ? 'bg-amber-100 text-amber-600' : 
                               notif.type === 'homework' ? 'bg-indigo-100 text-indigo-600' : 
-                              notif.type === 'youtube' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'
+                              notif.type === 'youtube' ? 'bg-rose-100 text-rose-600' : 
+                              notif.type === 'exam' ? 'bg-purple-100 text-purple-600' : 'bg-emerald-100 text-emerald-600'
                             }`}>
                               {notif.type === 'zoom_class' ? <Video size={18} /> : 
                                notif.type === 'homework' ? <Book size={18} /> : 
-                               notif.type === 'youtube' ? <Youtube size={18} /> : <Bell size={18} />}
+                               notif.type === 'youtube' ? <Youtube size={18} /> : 
+                               notif.type === 'exam' ? <Award size={18} /> : <Bell size={18} />}
                             </div>
                             <div className="flex-1">
                               <p className="text-sm font-bold text-gray-800 leading-tight">{notif.title}</p>
@@ -1507,6 +1662,38 @@ export default function StudentDashboard() {
               <p className="text-sm mt-1 text-rose-700">
                 மாதக் கட்டணம் செலுத்தப்படவில்லை. தயவுசெய்து கட்டணத்தைச் செலுத்தி வகுப்புகளில் தொடரவும். (Monthly fee not paid. Please pay the fee to continue joining live classes.)
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Phone Notification & App Badge Enable Banner */}
+        {notificationPermission !== 'granted' && (
+          <div className="mb-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 rounded-2xl shadow-lg border border-amber-400/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+                <Bell size={22} className="animate-bounce" />
+              </div>
+              <div>
+                <h4 className="font-black text-sm text-amber-300 flex items-center gap-2">
+                  <span>ஃபோன் நோட்டிபிகேஷன் & பேட்ஜ் (Instant Phone Notification & Badge)</span>
+                  <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">WhatsApp போன்று</span>
+                </h4>
+                <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                  ஆப் மூடியிருந்தாலும் புதிய எக்ஸாம் வினாத்தாள்கள் வரும்போது உங்கள் மொபைல் நோட்டிபிகேஷன் பார் மற்றும் ஆப் ஐகானில் சிவப்பு பேட்ஜ் காட்டும்.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <button
+                onClick={async () => {
+                  const perm = await requestSystemNotificationPermission();
+                  setNotificationPermission(perm);
+                }}
+                className="px-4 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+              >
+                <Bell size={15} />
+                நோட்டிபிகேஷன் ஆன் செய் (Allow)
+              </button>
             </div>
           </div>
         )}
@@ -1588,8 +1775,14 @@ export default function StudentDashboard() {
 
               <div
                 onClick={() => handleTabSelect("marks")}
-                className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"
+                className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group relative"
               >
+                {unattendedExamsCount > 0 && (
+                  <span className="absolute top-2 right-2 bg-gradient-to-r from-red-600 to-rose-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-md animate-pulse border-2 border-white flex items-center gap-1 z-10">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
+                    {unattendedExamsCount} Exam
+                  </span>
+                )}
                 <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-emerald-100 transition-colors">
                   <Award size={28} />
                 </div>
@@ -2160,7 +2353,10 @@ export default function StudentDashboard() {
                 </div>
                 {selectedMaterialSubject && (
                   <button
-                    onClick={() => setSelectedMaterialSubject(null)}
+                    onClick={() => {
+                      setSelectedMaterialSubject(null);
+                      setMaterialCategoryFilter("ALL");
+                    }}
                     className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-all w-fit shrink-0 border border-slate-200"
                   >
                     ← Back to Subjects
@@ -2205,11 +2401,21 @@ export default function StudentDashboard() {
                             allAvailableSubjectNames.push("General");
                           }
 
+                          const studentGradeNum = (studentData?.grade || "").replace(/[^0-9]/g, '');
+                          const isGrade11 = studentGradeNum === "11";
+                          const has30DaysMaterials = courseMaterials.some((c: any) => {
+                            const t = `${c.subject || ''} ${c.title || ''} ${(c.subjects || []).join(' ')}`.toLowerCase();
+                            return t.includes('30 நாள்') || t.includes('30 day') || t.includes('30day');
+                          });
+
                           return (
                             <>
                               {courseMaterials.length > 0 && allAvailableSubjectNames.length > 1 && (
                                 <div
-                                  onClick={() => setSelectedMaterialSubject("ALL_MATERIALS")}
+                                  onClick={() => {
+                                    setSelectedMaterialSubject("ALL_MATERIALS");
+                                    setMaterialCategoryFilter("ALL");
+                                  }}
                                   className="p-6 rounded-3xl border-2 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between h-48 group relative overflow-hidden bg-gradient-to-br from-red-50 to-orange-50 border-red-200"
                                 >
                                   <div>
@@ -2232,6 +2438,40 @@ export default function StudentDashboard() {
                                 </div>
                               )}
 
+                              {/* Dedicated Highlight Card for 30 Days Tamil Course */}
+                              {(isGrade11 || has30DaysMaterials) && (
+                                <div
+                                  onClick={() => {
+                                    setSelectedMaterialSubject("30 நாள் தமிழ் பாடநெறி");
+                                    setMaterialCategoryFilter("30_DAYS");
+                                  }}
+                                  className="p-6 rounded-3xl border-2 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between h-48 group relative overflow-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100/60 border-amber-300"
+                                >
+                                  <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-amber-400 opacity-20 rounded-full blur-2xl"></div>
+                                  <div>
+                                    <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border text-amber-900 bg-amber-100/90 border-amber-300 flex items-center gap-1 w-fit">
+                                      <Star size={11} className="fill-amber-600 text-amber-600" />
+                                      Special Course (சிறப்பு பாடநெறி)
+                                    </span>
+                                    <h3 className="text-2xl font-black mt-3 leading-tight group-hover:scale-105 transition-transform duration-300 origin-left text-amber-950">
+                                      30 நாள் தமிழ் பாடநெறி
+                                    </h3>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-amber-800">
+                                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                                      {courseMaterials.filter((c: any) => {
+                                        const t = `${c.subject || ''} ${c.title || ''} ${(c.subjects || []).join(' ')}`.toLowerCase();
+                                        return t.includes('30 நாள்') || t.includes('30 day') || t.includes('30day');
+                                      }).length} PDFs available
+                                    </span>
+                                    <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center text-amber-700 shadow-sm border border-amber-200 group-hover:bg-amber-600 group-hover:text-white group-hover:border-amber-600 transition-all duration-300">
+                                      <ChevronRight size={18} />
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
                               {allAvailableSubjectNames.map((subjName: any) => {
                                 const subjectCourses = courseMaterials.filter((c: any) => 
                                   areSubjectsMatching(c.subject, subjName) || 
@@ -2241,7 +2481,10 @@ export default function StudentDashboard() {
                                 return (
                                   <div
                                     key={subjName}
-                                    onClick={() => setSelectedMaterialSubject(subjName)}
+                                    onClick={() => {
+                                      setSelectedMaterialSubject(subjName);
+                                      setMaterialCategoryFilter("ALL");
+                                    }}
                                     className={`p-6 rounded-3xl border-2 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between h-48 group relative overflow-hidden ${colorClasses.bg} ${colorClasses.border}`}
                                   >
                                     <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-40 rounded-full blur-2xl"></div>
@@ -2274,78 +2517,222 @@ export default function StudentDashboard() {
                 </div>
               ) : (
                 // Subject PDF Files View
-                <div>
-                  <div className="mb-6 pb-4 border-b border-slate-100 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold uppercase tracking-wider text-red-600 bg-red-50 border border-red-100 px-3 py-1 rounded-full">
-                        {selectedMaterialSubject === "ALL_MATERIALS" ? "All Subjects (அனைத்து பாடங்கள்)" : selectedMaterialSubject}
-                      </span>
-                      <h3 className="text-xl font-black text-slate-800 mt-2">Available PDF Documents</h3>
-                    </div>
-                    <span className="text-sm font-bold text-slate-400">
-                      {courseMaterials.filter((c: any) => {
-                        if (selectedMaterialSubject === "ALL_MATERIALS") return true;
-                        const targetCat = getCanonicalSubjectCategory(selectedMaterialSubject);
-                        const cCat = getCanonicalSubjectCategory(c.subject);
-                        if (targetCat && cCat) {
-                          return cCat === targetCat;
-                        }
-                        return areSubjectsMatching(c.subject, selectedMaterialSubject) || 
-                          (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, selectedMaterialSubject)));
-                      }).length} File(s)
-                    </span>
-                  </div>
+                (() => {
+                  const getStudentMaterialCategory = (c: any) => {
+                    const allText = `${c.subject || ''} ${c.title || ''} ${(c.subjects || []).join(' ')}`.toLowerCase();
+                    if (allText.includes('30 நாள்') || allText.includes('30 day') || allText.includes('30day')) {
+                      return {
+                        id: '30_DAYS',
+                        name: '30 நாள் பாடநெறி',
+                        shortName: '🌟 30 நாள் பாடநெறி',
+                        badgeClass: 'bg-amber-100 text-amber-900 border-amber-300'
+                      };
+                    }
+                    if (allText.includes('வினா') || allText.includes('விடை') || allText.includes('vina') || allText.includes('q&a') || allText.includes('paper') || allText.includes('வினாத்தாள்')) {
+                      return {
+                        id: 'QNA',
+                        name: 'வினா விடை / Papers',
+                        shortName: '📝 வினா விடை',
+                        badgeClass: 'bg-purple-100 text-purple-900 border-purple-300'
+                      };
+                    }
+                    if (allText.includes('இலக்கிய') || allText.includes('நயம்') || allText.includes('ilakkia')) {
+                      return {
+                        id: 'LITERATURE',
+                        name: 'இலக்கிய நயம்',
+                        shortName: '📖 இலக்கிய நயம்',
+                        badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                      };
+                    }
+                    return {
+                      id: 'GENERAL',
+                      name: 'பொதுவானவை',
+                      shortName: '📁 பாடக் குறிப்புகள்',
+                      badgeClass: 'bg-slate-100 text-slate-700 border-slate-200'
+                    };
+                  };
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {courseMaterials
-                      .filter((c: any) => {
-                        if (selectedMaterialSubject === "ALL_MATERIALS") return true;
-                        const targetCat = getCanonicalSubjectCategory(selectedMaterialSubject);
-                        const cCat = getCanonicalSubjectCategory(c.subject);
-                        if (targetCat && cCat) {
-                          return cCat === targetCat;
-                        }
-                        return areSubjectsMatching(c.subject, selectedMaterialSubject) || 
-                          (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, selectedMaterialSubject)));
-                      })
-                      .map((course: any) => (
-                        <div 
-                          key={course.id}
-                          className="bg-slate-50/40 hover:bg-white p-5 rounded-3xl border border-slate-100 hover:border-red-200 hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative"
-                        >
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2 mb-3">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-red-600 bg-red-50 px-2.5 py-1 rounded-lg border border-red-100">
-                                {course.subject}
-                              </span>
-                              {course.folder && (
-                                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg">
-                                  {course.folder}
-                                </span>
-                              )}
-                            </div>
-                            <h4 className="font-black text-slate-800 text-base leading-snug group-hover:text-red-600 transition-colors">{course.title}</h4>
-                          </div>
-                          
-                          <div className="mt-5 pt-4 border-t border-slate-100/60 flex items-center justify-between gap-4">
-                            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                              PDF Document
-                            </span>
-                            <a 
-                              href={course.link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-red-100 hover:shadow-xl transition-all"
-                            >
-                              <Download size={14} />
-                              Download PDF
-                            </a>
-                          </div>
+                  const subjectBaseMaterials = courseMaterials.filter((c: any) => {
+                    if (selectedMaterialSubject === "ALL_MATERIALS") return true;
+                    if (selectedMaterialSubject === "30 நாள் தமிழ் பாடநெறி") {
+                      const t = `${c.subject || ''} ${c.title || ''} ${(c.subjects || []).join(' ')}`.toLowerCase();
+                      return t.includes('30 நாள்') || t.includes('30 day') || t.includes('30day');
+                    }
+                    const targetCat = getCanonicalSubjectCategory(selectedMaterialSubject);
+                    const cCat = getCanonicalSubjectCategory(c.subject);
+                    if (targetCat && cCat) {
+                      return cCat === targetCat;
+                    }
+                    return areSubjectsMatching(c.subject, selectedMaterialSubject) || 
+                      (Array.isArray(c.subjects) && c.subjects.some((s: any) => areSubjectsMatching(s, selectedMaterialSubject)));
+                  });
+
+                  const count30 = subjectBaseMaterials.filter((c: any) => getStudentMaterialCategory(c).id === '30_DAYS').length;
+                  const countQnA = subjectBaseMaterials.filter((c: any) => getStudentMaterialCategory(c).id === 'QNA').length;
+                  const countLit = subjectBaseMaterials.filter((c: any) => getStudentMaterialCategory(c).id === 'LITERATURE').length;
+                  const countGen = subjectBaseMaterials.filter((c: any) => getStudentMaterialCategory(c).id === 'GENERAL').length;
+
+                  const hasCategories = (count30 > 0 ? 1 : 0) + (countQnA > 0 ? 1 : 0) + (countLit > 0 ? 1 : 0) + (countGen > 0 ? 1 : 0) > 1 || count30 > 0;
+
+                  const displayedMaterials = subjectBaseMaterials.filter((c: any) => {
+                    if (materialCategoryFilter === "ALL") return true;
+                    return getStudentMaterialCategory(c).id === materialCategoryFilter;
+                  });
+
+                  return (
+                    <div>
+                      <div className="mb-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <span className="text-xs font-bold uppercase tracking-wider text-red-600 bg-red-50 border border-red-100 px-3 py-1 rounded-full">
+                            {selectedMaterialSubject === "ALL_MATERIALS" ? "All Subjects (அனைத்து பாடங்கள்)" : selectedMaterialSubject}
+                          </span>
+                          <h3 className="text-xl font-black text-slate-800 mt-2">Available PDF Documents</h3>
                         </div>
-                      ))}
-                  </div>
-                </div>
+                        <span className="text-sm font-bold text-slate-400">
+                          {displayedMaterials.length} File(s)
+                        </span>
+                      </div>
+
+                      {/* Course Category Filter Bar */}
+                      {hasCategories && (
+                        <div className="flex flex-wrap items-center gap-2 mb-6 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                          <span className="text-xs font-black text-slate-500 uppercase tracking-wider px-2 flex items-center gap-1.5">
+                            <Filter size={14} className="text-red-500" />
+                            பாடநெறி வகைப்பாடு:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setMaterialCategoryFilter("ALL")}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                              materialCategoryFilter === "ALL"
+                                ? "bg-red-600 text-white shadow-md shadow-red-500/20"
+                                : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200"
+                            }`}
+                          >
+                            அனைத்தும் ({subjectBaseMaterials.length})
+                          </button>
+                          {count30 > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setMaterialCategoryFilter("30_DAYS")}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                                materialCategoryFilter === "30_DAYS"
+                                  ? "bg-amber-600 text-white shadow-md shadow-amber-500/30"
+                                  : "bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200"
+                              }`}
+                            >
+                              <span>🌟 30 நாள் பாடநெறி</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${materialCategoryFilter === "30_DAYS" ? "bg-white/30 text-white" : "bg-amber-200 text-amber-900"}`}>
+                                {count30}
+                              </span>
+                            </button>
+                          )}
+                          {countQnA > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setMaterialCategoryFilter("QNA")}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                                materialCategoryFilter === "QNA"
+                                  ? "bg-purple-600 text-white shadow-md shadow-purple-500/30"
+                                  : "bg-purple-50 text-purple-900 hover:bg-purple-100 border border-purple-200"
+                              }`}
+                            >
+                              <span>📝 வினா விடை / Papers</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${materialCategoryFilter === "QNA" ? "bg-white/30 text-white" : "bg-purple-200 text-purple-900"}`}>
+                                {countQnA}
+                              </span>
+                            </button>
+                          )}
+                          {countLit > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setMaterialCategoryFilter("LITERATURE")}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                                materialCategoryFilter === "LITERATURE"
+                                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-500/30"
+                                  : "bg-emerald-50 text-emerald-900 hover:bg-emerald-100 border border-emerald-200"
+                              }`}
+                            >
+                              <span>📖 இலக்கிய நயம்</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${materialCategoryFilter === "LITERATURE" ? "bg-white/30 text-white" : "bg-emerald-200 text-emerald-900"}`}>
+                                {countLit}
+                              </span>
+                            </button>
+                          )}
+                          {countGen > 0 && (count30 > 0 || countQnA > 0 || countLit > 0) && (
+                            <button
+                              type="button"
+                              onClick={() => setMaterialCategoryFilter("GENERAL")}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                                materialCategoryFilter === "GENERAL"
+                                  ? "bg-slate-700 text-white shadow-md"
+                                  : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200"
+                              }`}
+                            >
+                              <span>📁 பொதுவானவை</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${materialCategoryFilter === "GENERAL" ? "bg-white/30 text-white" : "bg-slate-200 text-slate-800"}`}>
+                                {countGen}
+                              </span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {displayedMaterials.length === 0 ? (
+                        <div className="text-center py-12 bg-slate-50 rounded-3xl border border-slate-200 border-dashed">
+                          <FileText className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+                          <h4 className="text-base font-bold text-slate-700 mb-1">இந்த வகைப்பாட்டில் குறிப்புகள் இல்லை</h4>
+                          <p className="text-slate-500 text-xs">No PDF materials found for the selected category.</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {displayedMaterials.map((course: any) => {
+                            const catInfo = getStudentMaterialCategory(course);
+                            return (
+                              <div 
+                                key={course.id}
+                                className="bg-slate-50/40 hover:bg-white p-5 rounded-3xl border border-slate-100 hover:border-red-200 hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative"
+                              >
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-red-600 bg-red-50 px-2.5 py-1 rounded-lg border border-red-100">
+                                      {course.subject}
+                                    </span>
+                                    <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${catInfo.badgeClass}`}>
+                                      {catInfo.shortName}
+                                    </span>
+                                    {course.folder && (
+                                      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg">
+                                        {course.folder}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <h4 className="font-black text-slate-800 text-base leading-snug group-hover:text-red-600 transition-colors">{course.title}</h4>
+                                </div>
+                                
+                                <div className="mt-5 pt-4 border-t border-slate-100/60 flex items-center justify-between gap-4">
+                                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                    PDF Document
+                                  </span>
+                                  <a 
+                                    href={course.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-red-100 hover:shadow-xl transition-all"
+                                  >
+                                    <Download size={14} />
+                                    Download PDF
+                                  </a>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
               )}
             </div>
           </div>
@@ -3166,87 +3553,313 @@ export default function StudentDashboard() {
 
         {activeTab === "marks" && (
           <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
-              <h2 className="text-2xl font-bold mb-2 text-slate-800 flex items-center">
-                <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mr-3">
-                  <Award size={20} />
+            {/* Top Header & Sub-tab Switcher */}
+            <div className="bg-gradient-to-r from-indigo-900 via-blue-900 to-indigo-950 rounded-3xl text-white p-6 sm:p-8 shadow-xl relative overflow-hidden">
+              <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-amber-300 border border-white/10 shadow-inner">
+                    <Award size={32} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black tracking-widest text-indigo-300 uppercase">Assessment & Exams</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400 text-indigo-950">Online System</span>
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-black tracking-tight mt-0.5">
+                      பரீட்சைகள் & தேர்வு முடிவுகள் (Examinations & Marks)
+                    </h2>
+                    <p className="text-xs sm:text-sm text-indigo-200 mt-1">
+                      உங்கள் வகுப்புக்கான தவணைப் பரீட்சைகள், கூகுள் ஃபார்ம்ஸ் மற்றும் அறிக்கை அட்டை.
+                    </p>
+                  </div>
                 </div>
-                Exam Marks / Results
-              </h2>
-              <p className="text-slate-500 mb-8 ml-13">View your academic performance and exam results.</p>
-              
-              <div className="space-y-6">
-                {examMarks.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
-                    <Award className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-                    <p>No exam marks found yet.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {examMarks.map((mark: any) => {
-                      const obtained = Number(mark.obtained) || 0;
-                      const total = Number(mark.total) || 100;
-                      const percentage = (obtained / total) * 100;
-                      
-                      const getGrade = (p: number) => {
-                        if (p >= 75) return { text: 'A', color: 'text-emerald-600' };
-                        if (p >= 65) return { text: 'B', color: 'text-blue-600' };
-                        if (p >= 50) return { text: 'C', color: 'text-indigo-600' };
-                        if (p >= 35) return { text: 'S', color: 'text-amber-600' };
-                        return { text: 'W', color: 'text-rose-600' };
-                      };
-                      
-                      const grade = getGrade(percentage);
 
-                      return (
-                        <div key={mark.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
-                          <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
-                            <h3 className="font-bold text-slate-800">{mark.exam || "Term Exam"}</h3>
-                            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100">
-                              {mark.subject}
-                            </span>
-                          </div>
-                          <div className="p-5">
-                            <div className="flex justify-between items-center mb-4">
-                              <div>
-                                <p className="text-sm font-bold text-slate-900">{mark.subject}</p>
-                                <p className="text-xs text-slate-500">{mark.date || new Date().toLocaleDateString()}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-2xl font-black text-indigo-600">{obtained}<span className="text-sm text-slate-400 font-normal">/{total}</span></p>
-                                <p className={`text-xs font-bold ${grade.color}`}>
-                                  Grade: {grade.text} ({percentage.toFixed(1)}%)
-                                </p>
-                              </div>
-                            </div>
-                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                              <motion.div 
-                                initial={{ width: 0 }}
-                                animate={{ width: `${percentage}%` }}
-                                className={`h-full rounded-full ${
-                                  percentage >= 75 ? 'bg-emerald-500' : 
-                                  percentage >= 50 ? 'bg-indigo-500' :
-                                  'bg-rose-500'
-                                }`}
-                              />
-                            </div>
-                            {mark.remarks && (
-                              <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100 italic text-xs text-slate-600">
-                                " {mark.remarks} "
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                {/* Sub-tab pills */}
+                <div className="flex items-center bg-black/30 backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shrink-0">
+                  <button
+                    onClick={() => setMarksSubTab("exams")}
+                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
+                      marksSubTab === "exams"
+                        ? "bg-amber-400 text-indigo-950 shadow-md"
+                        : "text-indigo-100 hover:text-white"
+                    }`}
+                  >
+                    <BookOpen size={16} />
+                    <span>தவணைப் பரீட்சைகள்</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                      marksSubTab === "exams" ? "bg-indigo-950 text-amber-300" : "bg-white/20 text-white"
+                    }`}>
+                      {termExams.filter((ex: any) => {
+                        if (!ex.grades || ex.grades.length === 0) return true;
+                        if (ex.grades.includes("All")) return true;
+                        return ex.grades.some((g: string) => 
+                          g === studentData?.grade || 
+                          normalizeGradeString(g) === normalizeGradeString(studentData?.grade || '')
+                        );
+                      }).length}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => setMarksSubTab("results")}
+                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
+                      marksSubTab === "results"
+                        ? "bg-amber-400 text-indigo-950 shadow-md"
+                        : "text-indigo-100 hover:text-white"
+                    }`}
+                  >
+                    <Award size={16} />
+                    <span>தேர்வு முடிவுகள் (Results)</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                      marksSubTab === "results" ? "bg-indigo-950 text-amber-300" : "bg-white/20 text-white"
+                    }`}>
+                      {examMarks.length}
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
 
-        {activeTab === "marks" && (
+            {/* SUBTAB 1: TERM EXAMS LIST FOR STUDENT */}
+            {marksSubTab === "exams" && (
+              <div className="space-y-6">
+                {/* Notification & App Icon Badge Status Bar */}
+                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-base shadow-sm ${
+                      unattendedExamsCount > 0 ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'
+                    }`}>
+                      {unattendedExamsCount}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-slate-800 text-sm sm:text-base">
+                          எழுதப்படாத பரீட்சைகள் (Pending Exams)
+                        </span>
+                        {unattendedExamsCount > 0 ? (
+                          <span className="bg-rose-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full animate-pulse flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
+                            {unattendedExamsCount} Active
+                          </span>
+                        ) : (
+                          <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            அனைத்தும் முடிந்தது
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        வாட்ஸ்அப் போன்று ஆப் ஐகானில் சிவப்பு பேட்ஜ் காட்டும். பரீட்சை எழுதி முடித்ததும் பேட்ஜ் குறையும்.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    <button
+                      onClick={async () => {
+                        if (notificationPermission !== 'granted') {
+                          const perm = await requestSystemNotificationPermission();
+                          setNotificationPermission(perm);
+                        } else {
+                          showSystemNotification('அகரம் தினைஸ் அகாடமி 🎓', {
+                            body: `🔔 சோதனை அறிவித்தல்: தற்போது ${unattendedExamsCount} பரீட்சை எழுதப்படவுள்ளது!`,
+                            badgeCount: unattendedExamsCount || 1,
+                            url: '/student-dashboard?tab=marks&subTab=exams'
+                          });
+                        }
+                      }}
+                      className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                    >
+                      <Bell size={14} className="text-amber-500" />
+                      {notificationPermission === 'granted' ? 'நோட்டிபிகேஷன் சோதி (Test)' : 'நோட்டிபிகேஷன் ஆன் செய்'}
+                    </button>
+                  </div>
+                </div>
+                {(() => {
+                  const studentGradeStr = (studentData?.grade || '').trim();
+                  const myExams = termExams.filter((exam: any) => {
+                    if (!exam.grades || exam.grades.length === 0) return true;
+                    if (exam.grades.includes("All") || exam.grades.includes("அனைத்தும்")) return true;
+                    return exam.grades.some((g: string) => {
+                      return g === studentGradeStr || 
+                             normalizeGradeString(g) === normalizeGradeString(studentGradeStr);
+                    });
+                  });
+
+                  if (myExams.length === 0) {
+                    return (
+                      <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-sm space-y-4">
+                        <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+                          <Award size={32} />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-black text-slate-800">
+                            புதிய பரீட்சைகள் எதுவும் வெளியிடப்படவில்லை
+                          </h3>
+                          <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mt-1">
+                            உங்கள் வகுப்புக்கான ({studentData?.grade}) பரீட்சைகள் அல்லது வினாத்தாள்கள் ஆசிரியர் சேர்த்தவுடன் இங்கு காட்டப்படும்.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {myExams.map((exam: any) => {
+                        const mySubmission = examSubmissions.find(
+                          (s: any) => s.examId === exam.id && s.studentId === studentData.id
+                        );
+                        const hasSubmitted = Boolean(mySubmission);
+
+                        return (
+                          <div 
+                            key={exam.id}
+                            className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-lg transition-all flex flex-col group"
+                          >
+                            {/* Poster / Thumbnail or Header Banner */}
+                            <div className="relative h-44 bg-gradient-to-br from-indigo-900 to-blue-900 overflow-hidden shrink-0">
+                              {exam.thumbnail ? (
+                                <img 
+                                  src={exam.thumbnail} 
+                                  alt={exam.examName} 
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                />
+                              ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center text-white">
+                                  <Award size={44} className="text-amber-400 mb-2 opacity-90" />
+                                  <span className="text-xs font-bold text-indigo-200 uppercase tracking-wider">{exam.subject || "பாடம்"}</span>
+                                  <span className="text-sm font-black line-clamp-1 mt-1">{exam.termName}</span>
+                                </div>
+                              )}
+
+                              {/* Floating Term Badge */}
+                              <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 max-w-[85%]">
+                                <span className="bg-indigo-900/90 backdrop-blur-md text-amber-300 border border-amber-300/30 text-[10px] font-black px-2.5 py-1 rounded-lg shadow-sm">
+                                  {exam.termName}
+                                </span>
+                              </div>
+
+                              {/* Bottom Date & Duration */}
+                              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white text-[11px] font-bold bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-xl">
+                                <span className="flex items-center gap-1">
+                                  <Calendar size={13} className="text-amber-300" /> {exam.examDate}
+                                </span>
+                                {exam.duration && (
+                                  <span className="flex items-center gap-1">
+                                    <Clock size={13} className="text-amber-300" /> {exam.duration}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Body Content */}
+                            <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
+                                    {exam.subject || "பொது"}
+                                  </span>
+                                  <span className="text-xs font-bold text-slate-500">
+                                    புள்ளிகள்: {exam.totalMarks || 100}
+                                  </span>
+                                </div>
+
+                                <h3 className="font-black text-slate-800 text-base leading-snug line-clamp-2">
+                                  {exam.examName}
+                                </h3>
+
+                                {exam.instructions && (
+                                  <p className="text-xs text-slate-500 line-clamp-2 italic">
+                                    "{exam.instructions}"
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Submission Status & Action Button */}
+                              <div className="space-y-3 pt-3 border-t border-slate-100">
+                                {hasSubmitted ? (
+                                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                                      <div>
+                                        <p className="text-[11px] font-bold text-emerald-800">மதிப்பெண் சமர்ப்பிக்கப்பட்டது</p>
+                                        <p className="text-sm font-black text-emerald-950">
+                                          {mySubmission.obtained} / {mySubmission.total}{" "}
+                                          <span className="text-xs font-bold text-emerald-700">
+                                            (தரம்: {mySubmission.gradeLetter || "A"})
+                                          </span>
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        setActiveExamTaking(exam);
+                                        setStudentSelfMarksInput({
+                                          obtained: String(mySubmission.obtained),
+                                          total: String(mySubmission.total),
+                                          remarks: mySubmission.remarks || ""
+                                        });
+                                      }}
+                                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-colors"
+                                    >
+                                      திருத்து / மீண்டும்
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      setActiveExamTaking(exam);
+                                      setStudentSelfMarksInput({
+                                        obtained: "",
+                                        total: String(exam.totalMarks || 100),
+                                        remarks: ""
+                                      });
+                                    }}
+                                    className="w-full py-3 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs sm:text-sm shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all"
+                                  >
+                                    <BookOpen size={16} /> பரீட்சை எழுது (Attend Exam)
+                                  </button>
+                                )}
+
+                                {/* Question paper / solution downloads if available */}
+                                {(exam.paperPdf || exam.solutionPdf) && (
+                                  <div className="flex gap-2 pt-1">
+                                    {exam.paperPdf && (
+                                      <a
+                                        href={exam.paperPdf}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex-1 py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1 transition-colors"
+                                      >
+                                        <Download size={12} /> வினாத்தாள்
+                                      </a>
+                                    )}
+                                    {exam.solutionPdf && (
+                                      <a
+                                        href={exam.solutionPdf}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex-1 py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1 transition-colors"
+                                      >
+                                        <FileText size={12} /> விடைத்தாள்
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* SUBTAB 2: EXAM RESULTS & REPORT CARD */}
+            {marksSubTab === "results" && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
@@ -3370,7 +3983,140 @@ export default function StudentDashboard() {
           </div>
         )}
 
-        {activeTab === "rules" && (
+        {/* IN-APP EXAM TAKING & MARKS SUBMISSION MODAL */}
+          {activeExamTaking && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+              <div className="bg-white rounded-3xl w-full max-w-6xl h-[94vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+                {/* Top Bar */}
+                <div className="bg-indigo-950 text-white px-5 sm:px-8 py-3.5 flex items-center justify-between shrink-0 border-b border-white/10">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setActiveExamTaking(null)}
+                      className="p-2 text-indigo-200 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+                      title="Close"
+                    >
+                      <X size={20} />
+                    </button>
+                    <div>
+                      <h3 className="font-black text-sm sm:text-base line-clamp-1">{activeExamTaking.examName}</h3>
+                      <p className="text-[11px] text-indigo-300">
+                        {activeExamTaking.termName} • {activeExamTaking.subject || "பாடம்"} • மொத்தப் புள்ளிகள்: {activeExamTaking.totalMarks || 100}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {activeExamTaking.examLink && (
+                      <a
+                        href={activeExamTaking.examLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold flex items-center gap-1.5 transition-colors"
+                      >
+                        <ExternalLink size={13} /> புதிய தாவலில் (New Tab)
+                      </a>
+                    )}
+                    <button
+                      onClick={() => setActiveExamTaking(null)}
+                      className="px-3 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-bold transition-colors"
+                    >
+                      வெளியேறு (Exit)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Embedded Exam Area */}
+                <div className="flex-1 bg-slate-100 relative overflow-hidden flex flex-col">
+                  {activeExamTaking.examLink ? (
+                    <iframe
+                      src={formatEmbedUrl(activeExamTaking.examLink)}
+                      title={activeExamTaking.examName}
+                      className="w-full h-full border-0 flex-1"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  ) : activeExamTaking.paperPdf ? (
+                    <iframe
+                      src={activeExamTaking.paperPdf}
+                      title="Question Paper PDF"
+                      className="w-full h-full border-0 flex-1"
+                    />
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-3">
+                      <Award size={48} className="text-indigo-400" />
+                      <h4 className="text-lg font-bold text-slate-700">பரீட்சை வினாத்தாள் இணைப்பு</h4>
+                      <p className="text-xs text-slate-500 max-w-sm">
+                        {activeExamTaking.instructions || "அனைத்து வினாக்களுக்கும் கவனமாக விடையளிக்கவும்."}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Bottom Marks Submission Dock */}
+                  <div className="bg-white border-t border-slate-200 p-4 sm:p-5 shadow-2xl shrink-0">
+                    <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                      <div className="shrink-0">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <h4 className="text-sm font-black text-slate-800">
+                            பரீட்சை முடிந்துவிட்டதா? உங்கள் புள்ளிகளை (Marks) உள்ளீடு செய்யவும்
+                          </h4>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          பரீட்சையை முடித்துவிட்டு நீங்கள் பெற்ற மதிப்பெண்களை கீழே பதிவிட்டுச் சமர்ப்பிக்கவும்.
+                        </p>
+                      </div>
+
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleStudentSubmitSelfMarks(activeExamTaking);
+                        }}
+                        className="flex flex-wrap items-center gap-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                            பெற்ற புள்ளி:
+                          </label>
+                          <input
+                            type="number"
+                            required
+                            placeholder="85"
+                            value={studentSelfMarksInput.obtained}
+                            onChange={(e) => setStudentSelfMarksInput({ ...studentSelfMarksInput, obtained: e.target.value })}
+                            className="w-24 border-2 border-indigo-300 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 rounded-xl px-3 py-2 text-center text-base font-black text-indigo-700 bg-white"
+                          />
+                          <span className="text-xs font-bold text-slate-400">
+                            / {studentSelfMarksInput.total || activeExamTaking.totalMarks || 100}
+                          </span>
+                        </div>
+
+                        <input
+                          type="text"
+                          placeholder="குறிப்புகள் (Optional)"
+                          value={studentSelfMarksInput.remarks}
+                          onChange={(e) => setStudentSelfMarksInput({ ...studentSelfMarksInput, remarks: e.target.value })}
+                          className="border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700 flex-1 min-w-[140px]"
+                        />
+
+                        <button
+                          type="submit"
+                          disabled={isSubmittingMarks}
+                          className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-600/20 flex items-center gap-1.5 transition-all disabled:opacity-50 whitespace-nowrap"
+                        >
+                          <CheckCircle2 size={16} />
+                          <span>{isSubmittingMarks ? "சமர்ப்பிக்கப்படுகிறது..." : "புள்ளிகளைச் சமர்ப்பி"}</span>
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "rules" && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
               <h2 className="text-2xl font-bold mb-2 text-slate-800 flex items-center">

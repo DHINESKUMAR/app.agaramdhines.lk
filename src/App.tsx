@@ -31,6 +31,7 @@ import AddIncomeExpense from "./pages/Admin/AddIncomeExpense";
 import AccountStatement from "./pages/Admin/AccountStatement";
 import StudentFeeStatement from "./pages/Admin/StudentFeeStatement";
 import ExamMarks from "./pages/Admin/ExamMarks";
+import GradePerformanceDashboard from "./pages/Admin/GradePerformanceDashboard";
 import ExamSettings from "./pages/Admin/ExamSettings";
 import ApprovePassword from "./pages/Admin/ApprovePassword";
 import WhatsApp from "./pages/Admin/WhatsApp";
@@ -42,6 +43,7 @@ import QuestionPaper from "./pages/Admin/QuestionPaper";
 import HomePageSettings from "./pages/Admin/HomePageSettings";
 import Forms from "./pages/Admin/Forms";
 import PublicForm from "./pages/PublicForm";
+import PublicExamPortal from "./pages/PublicExamPortal";
 import ResetPassword from "./pages/ResetPassword";
 import StudentDashboard from "./pages/Student/Dashboard";
 import StaffDashboard from "./pages/Staff/Dashboard";
@@ -69,6 +71,8 @@ export default function App() {
         <Route path="/terms-of-service" element={<TermsOfService />} />
         <Route path="/form/:id" element={<PublicForm />} />
         <Route path="/forms/:id" element={<PublicForm />} />
+        <Route path="/exam/:id" element={<PublicExamPortal />} />
+        <Route path="/exams/:id" element={<PublicExamPortal />} />
 
         <Route path="/admin" element={<AdminDashboard />}>
           <Route index element={<AdminHome />} />
@@ -85,6 +89,7 @@ export default function App() {
           <Route path="course-materials" element={<CourseMaterials />} />
           <Route path="term-exam" element={<TermExam />} />
           <Route path="exam-marks" element={<ExamMarks />} />
+          <Route path="grade-performance" element={<GradePerformanceDashboard />} />
           <Route path="exam-settings" element={<ExamSettings />} />
           <Route path="live-classes" element={<LiveClasses />} />
           <Route path="youtube" element={<Youtube />} />

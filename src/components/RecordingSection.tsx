@@ -254,8 +254,19 @@ export const getCanonicalSubjectCategory = (name: string): string => {
     return "tamil_q_and_a";
   }
 
-  // Literature / இலக்கிய நயம்
-  if (clean.includes("இலக்கிய நயம்") || clean.includes("தமிழ் இலக்கிய நயம்") || clean.includes("இலக்கியம்") || clean.includes("நயம்")) {
+  // Language & Literature combinations (e.g., தமிழ் மொழி இலக்கியம், தமிழ் மொழியும் இலக்கியமும்) -> Standard Tamil
+  if ((clean.includes("மொழி") || clean.includes("மொழியும்")) && clean.includes("இலக்கிய") && !clean.includes("நயம்") && !clean.includes("nayam")) {
+    return "tamil";
+  }
+
+  // Literature / இலக்கிய நயம் (Tamil Literature Aesthetic Appreciation, including 20-day course)
+  if (
+    clean.includes("இலக்கிய நயம்") || 
+    clean.includes("நயம்") || 
+    clean.includes("nayam") || 
+    clean.includes("literature") ||
+    (clean.includes("இலக்கிய") && !clean.includes("மொழி"))
+  ) {
     return "tamil_literature";
   }
 
@@ -424,17 +435,20 @@ export const doesItemMatchStudentSubjects = (item: RecordingItem, studentSubs?: 
 
   if (itemSubs.length === 0) return true;
 
-  // Determine item primary subject category
-  const primaryCat = getCanonicalSubjectCategory(itemPrimarySub);
-  const isSpecialized = SPECIALIZED_SUBJECT_CATEGORIES.has(primaryCat);
+  // Determine item categories across all assigned subjects on this item
+  const itemCats = itemSubs.map(s => getCanonicalSubjectCategory(s)).filter(Boolean);
+  const isSpecialized = itemCats.some(cat => SPECIALIZED_SUBJECT_CATEGORIES.has(cat));
 
   // If item is a specialized course package (e.g., 30 Days Course, 2026 Q&A, Literature, Game):
   // The student MUST have an explicitly enrolled subject that matches this specialized category!
   // Generic "tamil" enrollment does NOT grant access to specialized course packages.
   if (isSpecialized) {
-    return cleanStudentSubs.some(stSub => {
-      const stCat = getCanonicalSubjectCategory(stSub);
-      return stCat === primaryCat;
+    return itemCats.some(iCat => {
+      if (!SPECIALIZED_SUBJECT_CATEGORIES.has(iCat)) return false;
+      return cleanStudentSubs.some(stSub => {
+        const stCat = getCanonicalSubjectCategory(stSub);
+        return stCat === iCat;
+      });
     });
   }
 
@@ -480,9 +494,12 @@ export const isSubjectValidForGrade = (subjectName: string, gradeStr: string): b
     return gradeNum === 11;
   }
 
-  // Literature & Q&A are for Grade 10 and Grade 11 only in O/L academy
-  if (cat === "tamil_literature" || cat === "tamil_q_and_a") {
-    return gradeNum === 10 || gradeNum === 11;
+  // Literature & Q&A are for secondary / O/L academy
+  if (cat === "tamil_literature") {
+    return isNaN(gradeNum) || gradeNum >= 6;
+  }
+  if (cat === "tamil_q_and_a") {
+    return isNaN(gradeNum) || gradeNum === 10 || gradeNum === 11;
   }
 
   // Specialized Tamil Game is for Grade 11 or explicitly matched grade
@@ -511,13 +528,15 @@ export const filterSubjectsForStudentGrade = (rawSubjects: string[], gradeStr: s
     });
 
   // Canonical Deduplication:
-  // e.g. "tamil" and "தமிழ்" -> single "தமிழ்"
+  // e.g. "tamil" and "தமிழ்" -> single "தமிழ்", literature variants -> "தமிழ் இலக்கிய நயம்"
   const catMap = new Map<string, string>();
   validSubjects.forEach(s => {
     const cat = getCanonicalSubjectCategory(s) || s.toLowerCase().trim();
     if (!catMap.has(cat)) {
       if (cat === "tamil") {
         catMap.set(cat, "தமிழ்");
+      } else if (cat === "tamil_literature") {
+        catMap.set(cat, "தமிழ் இலக்கிய நயம்");
       } else if (cat === "science") {
         catMap.set(cat, "விஞ்ஞானம் (Science)");
       } else if (cat === "maths") {

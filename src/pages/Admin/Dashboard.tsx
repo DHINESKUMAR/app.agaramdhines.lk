@@ -136,6 +136,7 @@ export default function AdminDashboard() {
       subItems: [
         { name: "Exams", path: "/admin/term-exam" },
         { name: "Exam Marks", path: "/admin/exam-marks" },
+        { name: "Grade Performance (6-11)", path: "/admin/grade-performance" },
         { name: "Class Tests", path: "/admin/test-results" },
         { name: "Question Paper", path: "/admin/question-paper" },
       ]

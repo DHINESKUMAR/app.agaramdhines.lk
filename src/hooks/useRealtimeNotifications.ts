@@ -1,28 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { db, isFirebaseConfigured } from '../lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { updateAppBadge, showSystemNotification } from '../lib/badgeManager';
 
 export function useRealtimeNotifications(grade: string | undefined, onNewNotification?: (notif: any) => void) {
   useEffect(() => {
     if (!isFirebaseConfigured || !grade) return;
 
-    // Request permission for browser notifications - though this might be better on a user click
-    if ('Notification' in window && Notification.permission === 'default') {
+    // Request permission for browser notifications on first user interaction if default
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
       const askPermission = () => {
-        Notification.requestPermission();
+        Notification.requestPermission().catch(() => {});
         document.removeEventListener('click', askPermission);
       };
       document.addEventListener('click', askPermission);
     }
 
-    // Get last seen timestamp from localStorage
-    const lastSeenKey = `last_notification_seen_${grade}`;
     const badgeKey = `app_badge_count_${grade}`;
     
     // Initial badge from storage
-    const currentBadge = parseInt(localStorage.getItem(badgeKey) || "0");
-    if (currentBadge > 0 && 'navigator' in window && 'setAppBadge' in navigator) {
-      (navigator as any).setAppBadge(currentBadge).catch(() => {});
+    const currentBadge = parseInt(localStorage.getItem(badgeKey) || "0", 10);
+    if (currentBadge > 0) {
+      updateAppBadge(currentBadge);
     }
 
     // Create a timestamp to only trigger alerts for truly "new" notifications arriving while app is open
@@ -43,26 +42,21 @@ export function useRealtimeNotifications(grade: string | undefined, onNewNotific
             console.log("Real-time notification received:", notification);
             
             // Increment and set badge
-            const newBadge = parseInt(localStorage.getItem(badgeKey) || "0") + 1;
+            const newBadge = parseInt(localStorage.getItem(badgeKey) || "0", 10) + 1;
             localStorage.setItem(badgeKey, newBadge.toString());
-            if ('navigator' in window && 'setAppBadge' in navigator) {
-              (navigator as any).setAppBadge(newBadge).catch(() => {});
-            }
+            updateAppBadge(newBadge);
 
-            // Browser Notification
-            if ('Notification' in window && Notification.permission === 'granted') {
-              try {
-                const n = new Notification(notification.title, {
-                  body: notification.message,
-                  icon: '/logo.png',
-                  tag: notification.id,
-                  renotify: true
-                } as any);
-                n.onclick = () => { window.focus(); n.close(); };
-              } catch (e) {}
-            }
-
-            if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
+            // Trigger System Notification (Notification Bar / Lock screen)
+            showSystemNotification(notification.title || 'அகரம் தினைஸ் அகாடமி', {
+              body: notification.message || 'புதிய அறிவிப்பு வந்துள்ளது',
+              icon: '/logo-192.png',
+              badge: '/logo-192.png',
+              tag: notification.id || 'agaram-realtime-alert',
+              url: notification.type === 'exam' 
+                ? '/student-dashboard?tab=marks&subTab=exams' 
+                : '/student-dashboard?tab=notices',
+              badgeCount: newBadge
+            });
           }
 
           // Always report to the callback so the UI can decide what to do
@@ -72,7 +66,9 @@ export function useRealtimeNotifications(grade: string | undefined, onNewNotific
         }
       });
     }, (error) => {
-      console.error("Notification listener error:", error);
+      if (error?.code !== 'unavailable') {
+        console.warn("Notification listener notice:", error?.message || error);
+      }
     });
 
     return () => unsubscribe();

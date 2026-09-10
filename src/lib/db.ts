@@ -37,8 +37,10 @@ const setupRealtimeListener = (key: string) => {
         const serverData = snapPayload.data;
         window.dispatchEvent(new CustomEvent('db_updated', { detail: { key, data: serverData } }));
       }
-    }, (err) => {
-      console.warn(`Realtime snapshot error for ${key}:`, err);
+    }, (err: any) => {
+      if (err?.code !== 'unavailable') {
+        console.warn(`Realtime snapshot error for ${key}:`, err?.message || err);
+      }
     });
 
     // Also listen to collection changes for dailyWorkUploads
@@ -68,8 +70,10 @@ const setupRealtimeListener = (key: string) => {
 
           window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'dailyWorkUploads', data: merged } }));
         }
-      }, (err) => {
-        console.warn("Realtime dailyWorkUploads collection error:", err);
+      }, (err: any) => {
+        if (err?.code !== 'unavailable') {
+          console.warn("Realtime dailyWorkUploads collection error:", err?.message || err);
+        }
       });
       activeListeners[`${key}_col`] = colUnsub;
     }
@@ -105,8 +109,10 @@ const setupRealtimeListener = (key: string) => {
 
           window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'courses', data: merged } }));
         }
-      }, (err) => {
-        console.warn("Realtime courses collection error:", err);
+      }, (err: any) => {
+        if (err?.code !== 'unavailable') {
+          console.warn("Realtime courses collection error:", err?.message || err);
+        }
       });
       activeListeners[`${key}_col`] = colUnsub;
     }
@@ -137,8 +143,10 @@ const setupRealtimeListener = (key: string) => {
 
           window.dispatchEvent(new CustomEvent('db_updated', { detail: { key: 'staffs', data: merged } }));
         }
-      }, (err) => {
-        console.warn("Realtime staffs collection error:", err);
+      }, (err: any) => {
+        if (err?.code !== 'unavailable') {
+          console.warn("Realtime staffs collection error:", err?.message || err);
+        }
       });
       activeListeners[`${key}_col`] = colUnsub;
     }
@@ -265,8 +273,11 @@ const getData = async (key: string, defaultValue: any) => {
             const snapData = singletonSnap.data();
             return snapData.data;
           }
-        } catch (singErr) {
-          console.warn(`Error fetching singleton ${key}:`, singErr);
+        } catch (singErr: any) {
+          if (singErr?.code === 'unavailable' || singErr?.message?.includes('offline')) {
+            return null;
+          }
+          console.warn(`Error fetching singleton ${key}:`, singErr?.message || singErr);
         }
 
         // 2. Fetch from direct collection if singleton is not present
@@ -281,15 +292,17 @@ const getData = async (key: string, defaultValue: any) => {
                 return colData;
               }
             }
-          } catch (colErr) {
-            console.warn(`Error fetching collection ${key}:`, colErr);
+          } catch (colErr: any) {
+            if (colErr?.code !== 'unavailable') {
+              console.warn(`Error fetching collection ${key}:`, colErr?.message || colErr);
+            }
           }
         }
 
         return null;
       };
 
-      const timeoutMs = 8000;
+      const timeoutMs = 2500;
       const fbData = await Promise.race([
         fetchFirebase(),
         new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs))
@@ -626,7 +639,19 @@ export const getCanonicalSubject = (s: string): string => {
     return "tamil_q_and_a";
   }
 
-  if (clean.includes("இலக்கிய நயம்") || clean.includes("தமிழ் இலக்கிய நயம்") || clean.includes("இலக்கியம்") || clean.includes("நயம்")) {
+  // Language & Literature combinations (e.g., தமிழ் மொழி இலக்கியம், தமிழ் மொழியும் இலக்கியமும்) -> Standard Tamil
+  if ((clean.includes("மொழி") || clean.includes("மொழியும்")) && clean.includes("இலக்கிய") && !clean.includes("நயம்") && !clean.includes("nayam")) {
+    return "tamil";
+  }
+
+  // Literature / இலக்கிய நயம் (Tamil Literature Aesthetic Appreciation, including 20-day course)
+  if (
+    clean.includes("இலக்கிய நயம்") || 
+    clean.includes("நயம்") || 
+    clean.includes("nayam") || 
+    clean.includes("literature") ||
+    (clean.includes("இலக்கிய") && !clean.includes("மொழி"))
+  ) {
     return "tamil_literature";
   }
 
@@ -736,6 +761,19 @@ export const sanitizeSubjectList = (subs: any[]): string[] => {
     if (!name) return;
     if (name.toLowerCase() === "tamil") {
       name = "தமிழ்";
+    }
+    const lower = name.toLowerCase();
+    if (
+      lower === "இலக்கிய நயம்" ||
+      lower === "இலக்கிய நயம் (தரம் 11)" ||
+      lower === "தமிழ் இலக்கிய நயம் (தரம் 11)" ||
+      lower === "தமிழ் இலக்கிய நயம் 20 நாள் பாடநெறி" ||
+      lower === "தமிழ் இலக்கிய நயம் 20 நாள்" ||
+      lower === "இலக்கிய நயம் 20 நாள் பாடநெறி" ||
+      lower === "இலக்கிய நயம் 20 நாள்" ||
+      lower.includes("இலக்கிய நயம் 20 நாள்")
+    ) {
+      name = "தமிழ் இலக்கிய நயம்";
     }
     const lowerKey = name.toLowerCase();
     if (!map.has(lowerKey)) {
@@ -1672,7 +1710,12 @@ export const getSubjects = async (): Promise<any[]> => {
   const redundantIlakkiaNayamVariants = new Set([
     "இலக்கிய நயம்",
     "இலக்கிய நயம் (தரம் 11)",
-    "தமிழ் இலக்கிய நயம் (தரம் 11)"
+    "தமிழ் இலக்கிய நயம் (தரம் 11)",
+    "தமிழ் இலக்கிய நயம் 20 நாள் பாடநெறி",
+    "தமிழ் இலக்கிய நயம் 20 நாள்",
+    "இலக்கிய நயம் 20 நாள் பாடநெறி",
+    "இலக்கிய நயம் 20 நாள்",
+    "இலக்கிய நயம் 20 நாள் பாடநெறி (தரம் 11)"
   ]);
 
   const map = new Map<string, any>();
@@ -1931,6 +1974,53 @@ export const saveBehaviourRecords = (records: any) => saveData('behaviourRecords
 
 export const getQuestionPapers = () => getData('questionPapers', []);
 export const saveQuestionPapers = (papers: any) => saveData('questionPapers', papers);
+
+export interface TermExamItem {
+  id: string;
+  termName: string;
+  examName: string;
+  subject?: string;
+  grades: string[]; // e.g. ["தரம் 06", "தரம் 07"] or ["All"]
+  examDate: string;
+  startTime?: string;
+  endTime?: string;
+  duration?: string;
+  totalMarks?: number;
+  passMarks?: number;
+  examLink?: string; // Google Drive, Google Forms, YouTube, Web Post, External
+  linkType?: 'google_form' | 'google_drive' | 'youtube' | 'webpost' | 'external' | 'pdf';
+  thumbnail?: string; // image url or base64 poster
+  paperPdf?: string; // paper pdf file / url
+  solutionPdf?: string; // solution/results pdf file / url
+  instructions?: string;
+  createdAt: string;
+}
+
+export interface ExamSubmissionItem {
+  id: string;
+  examId: string;
+  examName: string;
+  termName: string;
+  subject: string;
+  studentId: string;
+  studentName: string;
+  rollNo?: string;
+  grade: string;
+  obtained: number;
+  total: number;
+  percentage: number;
+  gradeLetter: string;
+  remarks?: string;
+  status: 'submitted' | 'verified';
+  submittedAt: string;
+}
+
+export const getTermExams = async (): Promise<TermExamItem[]> => (await getData('termExams', [])) as TermExamItem[];
+export const saveTermExams = (exams: TermExamItem[]) => saveData('termExams', exams);
+
+export const getExamSubmissions = async (): Promise<ExamSubmissionItem[]> => (await getData('examSubmissions', [])) as ExamSubmissionItem[];
+export const saveExamSubmissions = (submissions: ExamSubmissionItem[]) => saveData('examSubmissions', submissions);
+
 
 export const SRI_LANKA_DISTRICTS = [
   "யாழ்ப்பாணம் (Jaffna)",

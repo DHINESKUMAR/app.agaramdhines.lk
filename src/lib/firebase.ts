@@ -1,7 +1,18 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { initializeFirestore, getFirestore } from "firebase/firestore";
+import { 
+  initializeFirestore, 
+  getFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager,
+  setLogLevel 
+} from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+
+// Suppress transient backend unreachable / offline warnings from cluttering console
+try {
+  setLogLevel('error');
+} catch (_) {}
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -20,15 +31,24 @@ export const isFirebaseConfigured = true;
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-let firestoreDb;
+let firestoreDb: any;
 try {
   firestoreDb = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    }),
     experimentalAutoDetectLongPolling: true,
-    experimentalForceLongPolling: true,
     ignoreUndefinedProperties: true
   });
 } catch (_) {
-  firestoreDb = getFirestore(app);
+  try {
+    firestoreDb = initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
+      ignoreUndefinedProperties: true
+    });
+  } catch (__) {
+    firestoreDb = getFirestore(app);
+  }
 }
 export const db = firestoreDb;
 

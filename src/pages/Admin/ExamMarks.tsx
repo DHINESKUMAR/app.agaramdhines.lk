@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import { getStudents, getClasses, saveExamMarks, getExamMarks, getExamSettings } from "../../lib/db";
-import { Award, Search, FileSpreadsheet, Download, CheckCircle, AlertCircle, ChevronDown, Filter, Printer, X, FileText, Image as ImageIcon } from "lucide-react";
+import { Award, Search, FileSpreadsheet, Download, CheckCircle, AlertCircle, ChevronDown, Filter, Printer, X, FileText, Image as ImageIcon, BarChart3 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
@@ -259,9 +260,19 @@ export default function ExamMarks() {
             </div>
           </div>
           
-          <button className="bg-white border-2 border-indigo-100 text-indigo-600 px-6 py-3 rounded-xl font-bold hover:bg-indigo-50 hover:border-indigo-200 transition-all flex items-center gap-2 shadow-sm">
-            <FileSpreadsheet size={20} /> Export to Excel
-          </button>
+          <div className="flex items-center gap-3">
+            <Link
+              to="/admin/grade-performance"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl font-black text-sm transition-all flex items-center gap-2 shadow-md shadow-indigo-600/20 active:scale-95"
+            >
+              <BarChart3 size={18} />
+              வகுப்பு வாரியான பகுப்பாய்வு (Grade 6-11 Dashboard)
+            </Link>
+
+            <button className="bg-white border-2 border-indigo-100 text-indigo-600 px-5 py-3 rounded-xl font-bold hover:bg-indigo-50 hover:border-indigo-200 transition-all flex items-center gap-2 shadow-sm text-sm">
+              <FileSpreadsheet size={18} /> Export to Excel
+            </button>
+          </div>
         </div>
       </div>
 

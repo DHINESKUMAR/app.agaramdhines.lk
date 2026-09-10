@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Youtube as YoutubeIcon, PlayCircle, Trash2, ArrowLeft, Plus, ExternalLink, BookOpen, Folder, Globe, FileText, LayoutGrid, List, Share2, ChevronDown } from 'lucide-react';
 import { getYoutubeLinks, saveYoutubeLinks, getWebPosts, saveWebPosts, addNotification, getSubjects, saveSubjects, deleteSubject, getClasses, saveClasses } from '../../lib/db';
+import { getCanonicalSubjectCategory } from '../../components/RecordingSection';
 
 export default function Youtube() {
   const [activeTab, setActiveTab] = useState<'youtube' | 'webposts'>('youtube');
@@ -210,9 +211,27 @@ export default function Youtube() {
       ...postSubjects,
       ...dbGradeSubjects,
       ...allDbSubjects
-    ])).sort();
+    ]));
 
-    return combined;
+    // Consolidate redundant literature variants into "தமிழ் இலக்கிய நயம்"
+    const consolidated = Array.from(new Set(combined.map(s => {
+      const lower = s.toLowerCase().trim();
+      if (
+        lower === "இலக்கிய நயம்" ||
+        lower === "இலக்கிய நயம் (தரம் 11)" ||
+        lower === "தமிழ் இலக்கிய நயம் (தரம் 11)" ||
+        lower === "தமிழ் இலக்கிய நயம் 20 நாள் பாடநெறி" ||
+        lower === "தமிழ் இலக்கிய நயம் 20 நாள்" ||
+        lower === "இலக்கிய நயம் 20 நாள் பாடநெறி" ||
+        lower === "இலக்கிய நயம் 20 நாள்" ||
+        lower.includes("இலக்கிய நயம் 20 நாள்")
+      ) {
+        return "தமிழ் இலக்கிய நயம்";
+      }
+      return s;
+    }))).sort();
+
+    return consolidated;
   };
 
   const subjectOptions = getGradeSubjectOptions();
@@ -440,14 +459,30 @@ export default function Youtube() {
     const rawGradeLinks = links.filter(l => l && (isGradePublic ? l.isPublic : l.grade === selectedGrade));
     const rawGradePosts = webPosts.filter(p => p && (isGradePublic ? p.isPublic : p.grade === selectedGrade));
 
-    // Filter by selectedAdminSubject
+    // Filter by selectedAdminSubject with category awareness
+    const doesMatchSelectedAdminSubject = (item: any, targetSubject: string) => {
+      if (targetSubject === "All") return true;
+      const allSubs = [
+        item.subject,
+        ...(Array.isArray(item.subjects) ? item.subjects : [])
+      ].filter(Boolean).map((s: any) => String(s).trim());
+
+      return allSubs.some((s: string) => {
+        if (s.toLowerCase() === targetSubject.toLowerCase()) return true;
+        const sCat = getCanonicalSubjectCategory(s);
+        const tCat = getCanonicalSubjectCategory(targetSubject);
+        if (sCat && tCat && sCat === tCat) return true;
+        return false;
+      });
+    };
+
     const gradeLinks = selectedAdminSubject === "All"
       ? rawGradeLinks
-      : rawGradeLinks.filter(l => l.subject === selectedAdminSubject || (Array.isArray(l.subjects) && l.subjects.includes(selectedAdminSubject)));
+      : rawGradeLinks.filter(l => doesMatchSelectedAdminSubject(l, selectedAdminSubject));
 
     const gradePosts = selectedAdminSubject === "All"
       ? rawGradePosts
-      : rawGradePosts.filter(p => p.subject === selectedAdminSubject || (Array.isArray(p.subjects) && p.subjects.includes(selectedAdminSubject)));
+      : rawGradePosts.filter(p => doesMatchSelectedAdminSubject(p, selectedAdminSubject));
     
     // Group links by folder
     const folders: { [key: string]: any[] } = {};
@@ -528,8 +563,8 @@ export default function Youtube() {
             {(subjectOptions as string[]).map(subName => {
               const subTheme = getSubjectColorClasses(subName);
               const isSelected = selectedAdminSubject === subName;
-              const subVideos = rawGradeLinks.filter(l => l.subject === subName || (Array.isArray(l.subjects) && l.subjects.includes(subName)));
-              const subPosts = rawGradePosts.filter(p => p.subject === subName || (Array.isArray(p.subjects) && p.subjects.includes(subName)));
+              const subVideos = rawGradeLinks.filter(l => doesMatchSelectedAdminSubject(l, subName));
+              const subPosts = rawGradePosts.filter(p => doesMatchSelectedAdminSubject(p, subName));
 
               return (
                 <button
